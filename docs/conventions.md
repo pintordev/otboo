@@ -42,7 +42,7 @@
 대분류는 `domain` / `global` / `external` 세 가지입니다(사전기간 ADR로 확정).
 
 ```
-com.otboo.otboo/
+com.sprint.mission.otboo/
 ├── global/
 │   ├── config/
 │   │   ├── JpaConfig.java               # @EnableJpaAuditing
@@ -64,17 +64,21 @@ com.otboo.otboo/
 │   │   └── JwtAuthenticationFilter.java # Authorization: Bearer 파싱
 │   └── sse/
 │       └── SseEmitterRepository.java    # 사용자별 SseEmitter 관리 (LastEventId 재연결 포함)
-├── domain/
-│   ├── user/                            # 회원가입/로그인/권한/계정잠금 — 인증 관리 + 프로필 관리 태그
-│   │   └── profile/                     # 프로필(위치·온도민감도 등) — user와 1:1
-│   ├── clothes/
-│   │   └── attributedef/                # 의상 속성 정의(어드민)
-│   ├── feed/                            # OOTD 피드, 댓글, 좋아요
-│   ├── follow/
-│   ├── directmessage/                   # event/ — DirectMessageSentEvent
-│   ├── notification/                    # event/ — NotificationEventListener (SSE + Kafka 발행)
-│   ├── weather/                         # 날씨 조회, 위치(좌표) 변환, 배치
-│   └── recommendation/                  # 추천 알고리즘, (선택) LLM 챗봇
+├── domain/                              # 대분류는 GitHub 도메인 라벨(auth-user/clothes-recommend/weather-notification/social) 기준
+│   ├── authuser/                        # 라벨: auth-user
+│   │   ├── user/                        # 회원가입/로그인/권한/계정잠금 — 인증 관리 태그
+│   │   └── profile/                     # 프로필(위치·온도민감도 등) — user와 1:1, 프로필 관리 태그
+│   ├── clothesrecommend/                # 라벨: clothes-recommend
+│   │   ├── clothes/                     # 의상 관리 태그
+│   │   ├── attributedef/                # 의상 속성 정의(어드민) 태그
+│   │   └── recommendation/              # 추천 알고리즘, (선택) LLM 챗봇 태그
+│   ├── weathernotification/             # 라벨: weather-notification
+│   │   ├── weather/                     # 날씨 조회, 위치(좌표) 변환, 배치 태그
+│   │   └── notification/                # 알림 태그, event/ — NotificationEventListener (SSE + Kafka 발행)
+│   └── social/                          # 라벨: social
+│       ├── feed/                        # OOTD 피드, 댓글, 좋아요 태그 (Comment는 별도 태그가 없어 feed/ 안에 포함)
+│       ├── follow/                      # 팔로우 관리 태그
+│       └── directmessage/               # DirectMessage 태그, event/ — DirectMessageSentEvent
 └── external/
     ├── kma/                             # 기상청 단기예보 Open API
     │   ├── KmaWeatherClient.java        # Feign
@@ -90,25 +94,26 @@ com.otboo.otboo/
         └── dto/
 ```
 
-> 도메인 목록은 `docs/api-docs.json`의 태그 기준(41개 엔드포인트)으로 구성했습니다. 정확한 서브패키지·연관관계는 사전기간 ERD ADR 결과에 따라 조정합니다.
+> `domain/` 하위 각 유닛(user, profile, clothes, attributedef, recommendation, weather, notification, feed, follow, directmessage)은 `docs/api-docs.json`에 자기 API 태그가 별도로 있는 단위 기준입니다 — 태그가 없는 것(Comment 등)은 태그를 공유하는 유닛 안에 포함됩니다. 각 유닛은 아래 [도메인 구조](#도메인-구조)와 동일한 전 레이어(controller/dto/entity/exception/mapper/repository/service)를 갖고, `event/`는 REST 엔드포인트가 없는 내부 이벤트 발행/구독 클래스에만 예외적으로 사용합니다.
 
 ### 테스트 구조
 
 main 패키지 구조를 그대로 미러링합니다. 테스트 유형별 어노테이션은 위치로 구분합니다.
 
 ```
-src/test/java/com/otboo/otboo/
+src/test/java/com/sprint/mission/otboo/
 ├── global/
 │   └── exception/
 │       └── GlobalExceptionHandlerTest.java
 ├── domain/
-│   ├── user/
-│   │   ├── controller/
-│   │   │   └── UserControllerTest.java       # @WebMvcTest
-│   │   ├── repository/
-│   │   │   └── UserRepositoryTest.java       # @DataJpaTest (Testcontainers PostgreSQL)
-│   │   └── service/
-│   │       └── UserServiceTest.java          # @ExtendWith(MockitoExtension.class)
+│   ├── authuser/
+│   │   └── user/
+│   │       ├── controller/
+│   │       │   └── UserControllerTest.java   # @WebMvcTest
+│   │       ├── repository/
+│   │       │   └── UserRepositoryTest.java   # @DataJpaTest (Testcontainers PostgreSQL)
+│   │       └── service/
+│   │           └── UserServiceTest.java      # @ExtendWith(MockitoExtension.class)
 │   └── ...
 └── external/
     └── kma/
@@ -128,31 +133,34 @@ src/test/java/com/otboo/otboo/
 
 ```
 domain/
-  clothes/
-    controller/
-      api/
-        ClothesApi.java           # Swagger 인터페이스 (@Tag, @Operation)
-      ClothesController.java      # implements ClothesApi
-    dto/
-      ClothesCreateRequest.java
-      ClothesUpdateRequest.java
-      ClothesListParams.java      # 목록 조회 조건 (커서 + 필터)
-      ClothesDto.java
-    entity/
-      Clothes.java                 # JPA Entity
-      ClothesAttribute.java        # Clothes-AttributeDef 값 매핑
-    exception/
-      ClothesException.java        # 추상 중간 예외
-      ClothesNotFoundException.java
-    mapper/
-      ClothesMapper.java
-    repository/
-      querydsl/
-        impl/ClothesCustomRepositoryImpl.java
-        ClothesCustomRepository.java
-      ClothesRepository.java       # extends JpaRepository + ClothesCustomRepository
-    service/
-      ClothesService.java
+  clothesrecommend/
+    clothes/
+      controller/
+        api/
+          ClothesApi.java           # Swagger 인터페이스 (@Tag, @Operation)
+          examples/
+            ClothesExamples.java    # @ExampleObject에 쓰는 예시 JSON 상수 모음
+        ClothesController.java      # implements ClothesApi
+      dto/
+        ClothesCreateRequest.java
+        ClothesUpdateRequest.java
+        ClothesListParams.java      # 목록 조회 조건 (커서 + 필터)
+        ClothesDto.java
+      entity/
+        Clothes.java                 # JPA Entity
+        ClothesAttribute.java        # Clothes-AttributeDef 값 매핑
+      exception/
+        ClothesException.java        # 추상 중간 예외
+        ClothesNotFoundException.java
+      mapper/
+        ClothesMapper.java
+      repository/
+        querydsl/
+          impl/ClothesCustomRepositoryImpl.java
+          ClothesCustomRepository.java
+        ClothesRepository.java       # extends JpaRepository + ClothesCustomRepository
+      service/
+        ClothesService.java
 ```
 
 Swagger 어노테이션(`@Tag`, `@Operation`, `@ApiResponses`)은 `controller/api/*Api` 인터페이스에만 작성합니다. `@Operation` summary/description과 `@ApiResponse` responseCode·description은 `docs/api-docs.json`의 해당 엔드포인트 기준으로 정확히 일치시킵니다(자유 변경 금지 — FE가 이 스펙 그대로 구현돼 있음).
@@ -351,7 +359,7 @@ public class Clothes {
 `UserDto.linkedOAuthProviders`는 FE 타입엔 있지만 `api-docs.json` 스키마엔 없는 필드입니다(수행계획서 [알려진 계약 차이] 참고). `User`에 배열 컬럼을 추가하는 대신, 별도 `SocialAccount` 엔티티(`user_id`, `provider`, `provider_id`)로 관리하고 **응답 생성 시점에 조회해서 파생**시킵니다.
 
 ```java
-// domain/user/entity/SocialAccount.java
+// domain/authuser/user/entity/SocialAccount.java
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
@@ -492,8 +500,8 @@ public class GlobalExceptionHandler {
 상태 코드는 `ErrorCode`가 아니라 **예외 자신이 들고 있습니다**(아래 5번) — `GlobalExceptionHandler`는 `e.getStatus()`만 읽으면 되므로 도메인이 늘어나도 수정할 필요가 없습니다. 도메인에 일반 `ErrorResponse` 포맷을 벗어나는 특수 케이스(추가 헤더, 다른 응답 바디 등)가 있으면 해당 도메인 `exception/` 패키지에 별도 `@RestControllerAdvice(basePackages = "...")`를 두어 그 케이스만 먼저 처리하고, 나머지는 `GlobalExceptionHandler`가 그대로 처리합니다.
 
 ```java
-// domain/clothes/exception/ClothesExceptionHandler.java — 특수 케이스만 도메인에서 처리
-@RestControllerAdvice(basePackages = "com.otboo.otboo.domain.clothes")
+// domain/clothesrecommend/clothes/exception/ClothesExceptionHandler.java — 특수 케이스만 도메인에서 처리
+@RestControllerAdvice(basePackages = "com.sprint.mission.otboo.domain.clothesrecommend.clothes")
 public class ClothesExceptionHandler {
 
     @ExceptionHandler(ClothesAttributeDefInUseException.class)
@@ -512,7 +520,7 @@ public class ClothesExceptionHandler {
 `ErrorCode`는 전역 enum 하나가 아니라 **도메인별로 분리**해서 관리합니다(`{도메인}ErrorCode`, 도메인 `exception/` 패키지). 메시지만 들고 있고, 상태 코드는 여기 두지 않습니다 — 상태 코드는 예외 생성 시점에 지정합니다.
 
 ```java
-// domain/clothes/exception/ClothesErrorCode.java
+// domain/clothesrecommend/clothes/exception/ClothesErrorCode.java
 @Getter
 @RequiredArgsConstructor
 public enum ClothesErrorCode {
@@ -666,15 +674,13 @@ public interface KmaWeatherClient {
 
 클래스명은 `{대상클래스}Test`, 메서드명과 `@DisplayName`은 한글로 작성합니다. `@Nested` + `given / when / then` 구조를 유지합니다.
 
-**테스트 픽스처는 EasyRandom 또는 FixtureMonkey로 생성**(멘토 피드백 #2, 사전기간에 하나로 확정 — 수동 빌더/생성자 나열 지양):
+**테스트 픽스처는 FixtureMonkey로 생성**(멘토 피드백 #2, ADR로 EasyRandom 대신 확정 — 수동 빌더/생성자 나열 지양):
 
 ```java
-// EasyRandom 예시
-EasyRandom easyRandom = new EasyRandom();
-ClothesCreateRequest request = easyRandom.nextObject(ClothesCreateRequest.class);
-
-// FixtureMonkey 예시 (필드 제약이 많은 도메인에 유리)
-FixtureMonkey fixtureMonkey = FixtureMonkey.create();
+// FixtureMonkey 예시 (jakarta-validation 플러그인으로 제약 인지 생성)
+FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
+    .plugin(new JakartaValidationPlugin())
+    .build();
 ClothesCreateRequest request = fixtureMonkey.giveMeBuilder(ClothesCreateRequest.class)
     .set("type", ClothesType.TOP)
     .sample();
@@ -862,7 +868,7 @@ sseEmitter.send(SseEmitter.event()
 ### 테스트
 - `@SpringBootTest` 남발 금지 → 슬라이스 테스트
 - 테스트 간 상태 공유 금지 → `@BeforeEach`로 매 테스트 초기화
-- 수동으로 필드 하나씩 채운 픽스처 다수 생성 금지 → EasyRandom/FixtureMonkey (멘토 피드백 #2)
+- 수동으로 필드 하나씩 채운 픽스처 다수 생성 금지 → FixtureMonkey (멘토 피드백 #2)
 
 ### 로깅
 - `System.out.println` 금지 → `@Slf4j` + `log.info/debug/error`
