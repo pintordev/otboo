@@ -37,7 +37,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 	implementation "io.github.openfeign.querydsl:querydsl-jpa:7.5"
-	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.springframework.boot:spring-boot-flyway'
 
 	annotationProcessor 'org.projectlombok:lombok'
 	annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:7.5:jpa"
