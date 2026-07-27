@@ -90,6 +90,27 @@ class KmaForecastParserTest {
       assertThat(result).hasSize(1);
       assertThat(result.get(0).temperatureCurrent()).isEqualTo(28.0);
     }
+
+    @Test
+    @DisplayName("PCP_텍스트_표현을_파싱해서_하루_합계로_집계한다")
+    void PCP_텍스트_표현을_파싱해서_하루_합계로_집계한다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("PCP", "20260730", "0600", "1.0mm"),
+          item("PCP", "20260730", "0900", "강수없음"),
+          item("PCP", "20260730", "1200", "1mm 미만"),
+          item("PCP", "20260730", "1500", "30.0~50.0mm")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).precipitationAmount()).isEqualTo(31.9);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
