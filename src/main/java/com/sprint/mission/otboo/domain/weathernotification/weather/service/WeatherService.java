@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDt
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
@@ -67,7 +68,7 @@ public class WeatherService {
   }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
-    KmaGridPoint grid = KmaGridConverter.toGrid(latitude, longitude);
+    KmaGridPoint grid = toGrid(latitude, longitude);
     Location location = findOrCreateLocation(grid, latitude, longitude);
 
     LocalDate today = LocalDate.now(clock.withZone(KST));
@@ -90,6 +91,14 @@ public class WeatherService {
             .toList();
 
     return result.stream().map(weatherMapper::toDto).toList();
+  }
+
+  private KmaGridPoint toGrid(double latitude, double longitude) {
+    try {
+      return KmaGridConverter.toGrid(latitude, longitude);
+    } catch (IllegalArgumentException e) {
+      throw InvalidCoordinateException.of(latitude, longitude);
+    }
   }
 
   private Location findOrCreateLocation(KmaGridPoint grid, double latitude, double longitude) {
