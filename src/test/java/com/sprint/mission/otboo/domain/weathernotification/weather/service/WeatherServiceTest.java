@@ -148,5 +148,50 @@ class WeatherServiceTest {
           eq(longitude), any());
       verify(weatherRepository).save(any(Weather.class));
     }
+
+    @Test
+    @DisplayName("기존_위치의_오늘_데이터가_stale하면_전날_데이터로_diff를_계산해서_재조회한다")
+    void 기존_위치의_오늘_데이터가_stale하면_전날_데이터로_diff를_계산해서_재조회한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      Location location = Location.create(latitude, longitude, 60, 127, List.of("서울특별시"));
+      given(locationRepository.findByXAndY(60, 127)).willReturn(Optional.of(location));
+
+      // 어제(D-1) 데이터만 존재, 오늘 데이터는 없음(stale)
+      Weather yesterdayWeather = Weather.create(location, Instant.parse("2026-07-26T08:00:00Z"),
+          Instant.parse("2026-07-26T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK);
+      given(weatherRepository.findLatestRevisions(eq(location), any()))
+          .willReturn(List.of(yesterdayWeather));
+
+      KmaWeatherResponse kmaResponse = new KmaWeatherResponse(null);
+      given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
+          "1700", 60, 127)).willReturn(kmaResponse);
+
+      DailyWeatherForecastDto todayForecast = new DailyWeatherForecastDto(
+          LocalDate.of(2026, 7, 27), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 10.0, 65.0,
+          28.0, 25.0, 31.0, 2.0);
+      given(kmaForecastParser.parseDailyForecast(eq(kmaResponse), any()))
+          .willReturn(List.of(todayForecast));
+
+      given(weatherRepository.save(any(Weather.class)))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(weatherMapper.toDto(any(Weather.class))).willAnswer(
+          invocation -> new WeatherDto(null, null, null, null,
+              ((Weather) invocation.getArgument(0)).getSkyStatus(), null, null, null, null));
+
+      // when
+      weatherService.getWeather(latitude, longitude);
+
+      // then
+      org.mockito.ArgumentCaptor<Weather> captor = org.mockito.ArgumentCaptor.forClass(
+          Weather.class);
+      verify(weatherRepository).save(captor.capture());
+      Weather savedTodayWeather = captor.getValue();
+      assertThat(savedTodayWeather.getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
+      assertThat(savedTodayWeather.getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
+      verifyNoInteractions(kakaoLocalClient);
+    }
   }
 }
