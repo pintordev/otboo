@@ -35,5 +35,12 @@ class KmaGridConverterTest {
       assertThatThrownBy(() -> KmaGridConverter.toGrid(10.0, 127.0))
           .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("한반도_범위를_벗어난_경도는_예외가_발생한다")
+    void 한반도_범위를_벗어난_경도는_예외가_발생한다() {
+      assertThatThrownBy(() -> KmaGridConverter.toGrid(36.0, 100.0))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
   }
 }
