@@ -72,6 +72,7 @@ public class WeatherService {
     this.kakaoRestApiKey = kakaoRestApiKey;
   }
 
+  @Transactional
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
     Location location = findOrCreateLocation(grid, latitude, longitude);
