@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -192,6 +193,14 @@ class WeatherServiceTest {
       assertThat(savedTodayWeather.getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
       assertThat(savedTodayWeather.getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
       verifyNoInteractions(kakaoLocalClient);
+    }
+
+    @Test
+    @DisplayName("한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다")
+    void 한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다() {
+      assertThatThrownBy(() -> weatherService.getWeather(10.0, 127.0))
+          .isInstanceOf(
+              com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException.class);
     }
   }
 }
