@@ -11,6 +11,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -57,5 +58,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse(e.getClass().getSimpleName(), "필수 파라미터가 누락되었습니다.", details));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        Map<String, Object> details = Map.of(
+            e.getName(),
+            e.getRequiredType() != null ? e.getRequiredType().getSimpleName() + " 타입이어야 합니다." : "잘못된 타입입니다."
+        );
+        log.warn("[{}] {}", e.getClass().getSimpleName(), details);
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse(e.getClass().getSimpleName(), "파라미터 타입이 올바르지 않습니다.", details));
     }
 }
