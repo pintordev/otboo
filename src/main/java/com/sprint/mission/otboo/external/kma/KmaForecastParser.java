@@ -99,6 +99,7 @@ public class KmaForecastParser {
           double value = Double.parseDouble(item.fcstValue());
           precipitationProbability = Math.max(precipitationProbability, value);
         }
+        case "PCP" -> precipitationAmount += parsePrecipitationAmount(item.fcstValue());
         default -> {
         }
       }
@@ -106,6 +107,20 @@ public class KmaForecastParser {
 
     return new DailyWeatherForecastDto(date, skyStatus, precipitationType, precipitationAmount,
         precipitationProbability, humidityCurrent, tempCurrent, tempMin, tempMax, windSpeed);
+  }
+
+  private double parsePrecipitationAmount(String fcstValue) {
+    if (fcstValue == null || fcstValue.isBlank() || fcstValue.contains("강수없음")) {
+      return 0.0;
+    }
+    String cleaned = fcstValue.replace("mm", "").replace(" ", "");
+    if (cleaned.contains("미만")) {
+      return Math.max(0.0, Double.parseDouble(cleaned.replace("미만", "")) - 0.1);
+    }
+    if (cleaned.contains("~")) {
+      return Double.parseDouble(cleaned.split("~")[0]);
+    }
+    return Double.parseDouble(cleaned);
   }
 
   private SkyStatus toSkyStatus(String skyCode) {
