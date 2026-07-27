@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -93,6 +94,19 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("파라미터 타입이 일치하지 않을 때")
+    class TypeMismatch_처리 {
+
+        @Test
+        @DisplayName("400을 반환한다")
+        void _400을_반환한다() throws Exception {
+            mockMvc.perform(get("/test/type-mismatch").param("id", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.exceptionName").value("MethodArgumentTypeMismatchException"));
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
@@ -111,6 +125,10 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/param")
         public void param(@RequestParam String name) {
+        }
+
+        @GetMapping("/type-mismatch")
+        public void typeMismatch(@RequestParam UUID id) {
         }
     }
 
