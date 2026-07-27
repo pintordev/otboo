@@ -14,10 +14,20 @@ public final class KmaGridConverter {
   private static final int X_OFFSET = 43;
   private static final int Y_OFFSET = 136;
 
+  private static final double MIN_LAT_DEG = 33.0;
+  private static final double MAX_LAT_DEG = 38.5;
+  private static final double MIN_LON_DEG = 124.5;
+  private static final double MAX_LON_DEG = 131.9;
+
   private KmaGridConverter() {
   }
 
   public static KmaGridPoint toGrid(double latitude, double longitude) {
+    if (latitude < MIN_LAT_DEG || latitude > MAX_LAT_DEG) {
+      throw new IllegalArgumentException(
+          "한반도 범위를 벗어난 위도입니다: latitude=" + latitude);
+    }
+
     double degrad = Math.PI / 180.0;
     double slat1 = STD_LAT_1_DEG * degrad;
     double slat2 = STD_LAT_2_DEG * degrad;
