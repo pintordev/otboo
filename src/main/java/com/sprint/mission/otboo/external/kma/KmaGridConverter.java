@@ -27,6 +27,10 @@ public final class KmaGridConverter {
       throw new IllegalArgumentException(
           "한반도 범위를 벗어난 위도입니다: latitude=" + latitude);
     }
+    if (longitude < MIN_LON_DEG || longitude > MAX_LON_DEG) {
+      throw new IllegalArgumentException(
+          "한반도 범위를 벗어난 경도입니다: longitude=" + longitude);
+    }
 
     double degrad = Math.PI / 180.0;
     double slat1 = STD_LAT_1_DEG * degrad;
