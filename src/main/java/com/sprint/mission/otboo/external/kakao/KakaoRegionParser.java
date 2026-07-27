@@ -3,7 +3,9 @@ package com.sprint.mission.otboo.external.kakao;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse.Document;
 import java.util.List;
+import org.springframework.stereotype.Component;
 
+@Component
 public class KakaoRegionParser {
 
   private static final String ADMINISTRATIVE_DONG_TYPE = "H";

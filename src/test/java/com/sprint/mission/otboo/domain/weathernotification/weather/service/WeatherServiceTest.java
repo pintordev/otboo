@@ -8,7 +8,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -65,7 +64,7 @@ class WeatherServiceTest {
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
     weatherService = new WeatherService(locationRepository, weatherRepository, kmaWeatherClient,
         kmaForecastParser, kakaoLocalClient, kakaoRegionParser, weatherMapper,
-        new ObjectMapper(), clock, "kma-service-key", "kakao-rest-api-key");
+        clock, "kma-service-key", "kakao-rest-api-key");
   }
 
   @Nested

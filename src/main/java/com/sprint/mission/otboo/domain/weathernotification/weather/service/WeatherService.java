@@ -32,11 +32,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Transactional(readOnly = true)
+@Service
 public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int FORECAST_NUM_OF_ROWS = 1000;
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   private final LocationRepository locationRepository;
   private final WeatherRepository weatherRepository;
@@ -45,7 +51,6 @@ public class WeatherService {
   private final KakaoLocalClient kakaoLocalClient;
   private final KakaoRegionParser kakaoRegionParser;
   private final WeatherMapper weatherMapper;
-  private final ObjectMapper objectMapper;
   private final Clock clock;
   private final String kmaServiceKey;
   private final String kakaoRestApiKey;
@@ -53,8 +58,9 @@ public class WeatherService {
   public WeatherService(LocationRepository locationRepository, WeatherRepository weatherRepository,
       KmaWeatherClient kmaWeatherClient, KmaForecastParser kmaForecastParser,
       KakaoLocalClient kakaoLocalClient, KakaoRegionParser kakaoRegionParser,
-      WeatherMapper weatherMapper, ObjectMapper objectMapper, Clock clock, String kmaServiceKey,
-      String kakaoRestApiKey) {
+      WeatherMapper weatherMapper, Clock clock,
+      @Value("${weather.kma.service-key}") String kmaServiceKey,
+      @Value("${weather.kakao.rest-api-key}") String kakaoRestApiKey) {
     this.locationRepository = locationRepository;
     this.weatherRepository = weatherRepository;
     this.kmaWeatherClient = kmaWeatherClient;
@@ -62,7 +68,6 @@ public class WeatherService {
     this.kakaoLocalClient = kakaoLocalClient;
     this.kakaoRegionParser = kakaoRegionParser;
     this.weatherMapper = weatherMapper;
-    this.objectMapper = objectMapper;
     this.clock = clock;
     this.kmaServiceKey = kmaServiceKey;
     this.kakaoRestApiKey = kakaoRestApiKey;
@@ -173,7 +178,7 @@ public class WeatherService {
 
   private String toJson(List<String> locationNames) {
     try {
-      return objectMapper.writeValueAsString(locationNames);
+      return OBJECT_MAPPER.writeValueAsString(locationNames);
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("locationNames 직렬화 실패", e);
     }
