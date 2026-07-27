@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.global.config.JpaConfig;
@@ -14,6 +15,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -48,6 +50,19 @@ class LocationRepositoryTest {
       assertThat(found.get().getY()).isEqualTo(127);
       assertThat(found.get().getLocationNames()).containsExactly("서울특별시", "중구", "명동");
       assertThat(found.get().getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("이미_존재하는_x_y_격자로_저장하면_무결성_제약_예외가_발생한다")
+    void 이미_존재하는_x_y_격자로_저장하면_무결성_제약_예외가_발생한다() {
+      Location location1 = Location.create(37.5674783, 126.9884121, 60, 127, List.of("서울특별시"));
+      locationRepository.save(location1);
+      testEntityManager.flush();
+
+      Location location2 = Location.create(37.5674784, 126.9884122, 60, 127, List.of("서울특별시"));
+
+      assertThatThrownBy(() -> locationRepository.saveAndFlush(location2))
+          .isInstanceOf(DataIntegrityViolationException.class);
     }
   }
 }
