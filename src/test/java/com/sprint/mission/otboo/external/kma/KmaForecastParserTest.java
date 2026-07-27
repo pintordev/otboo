@@ -70,6 +70,26 @@ class KmaForecastParserTest {
       assertThat(dto.temperatureMax()).isEqualTo(32.0);
       assertThat(dto.windSpeed()).isEqualTo(3.0);
     }
+
+    @Test
+    @DisplayName("오늘_날짜는_지금_시각과_가장_가까운_슬롯_값을_current로_사용한다")
+    void 오늘_날짜는_지금_시각과_가장_가까운_슬롯_값을_current로_사용한다() {
+      // given - now: 2026-07-27 20:00 KST
+      Instant now = Instant.parse("2026-07-27T11:00:00Z");
+      List<Item> items = List.of(
+          item("TMP", "20260727", "1800", "31"),
+          item("TMP", "20260727", "2000", "28"),
+          item("TMP", "20260727", "2100", "27")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).temperatureCurrent()).isEqualTo(28.0);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
