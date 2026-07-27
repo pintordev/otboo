@@ -31,10 +31,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Transactional(readOnly = true)
 @Service
 public class WeatherService {
@@ -74,6 +76,7 @@ public class WeatherService {
 
   @Transactional
   public List<WeatherDto> getWeather(double latitude, double longitude) {
+    log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);
     KmaGridPoint grid = toGrid(latitude, longitude);
     Location location = findOrCreateLocation(grid, latitude, longitude);
 
@@ -103,6 +106,7 @@ public class WeatherService {
     try {
       return KmaGridConverter.toGrid(latitude, longitude);
     } catch (IllegalArgumentException e) {
+      log.warn("한반도 범위를 벗어난 좌표 요청: latitude={}, longitude={}", latitude, longitude);
       throw InvalidCoordinateException.of(latitude, longitude);
     }
   }
@@ -122,6 +126,8 @@ public class WeatherService {
 
   private List<Weather> fetchLiveAndSave(Location location, KmaGridPoint grid,
       BaseTime baseTime, Map<LocalDate, Weather> existingByDate) {
+    log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
+        baseTime.baseDate(), baseTime.baseTime());
     KmaWeatherResponse response = kmaWeatherClient.getVillageForecast(kmaServiceKey,
         FORECAST_NUM_OF_ROWS, 1, "JSON", baseTime.baseDate(), baseTime.baseTime(), grid.nx(),
         grid.ny());
@@ -155,6 +161,7 @@ public class WeatherService {
       previousTemp = dto.temperatureCurrent();
       previousHumidity = dto.humidityCurrent();
     }
+    log.info("기상청 라이브 재조회 저장 완료: nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(), saved.size());
     return saved;
   }
 
