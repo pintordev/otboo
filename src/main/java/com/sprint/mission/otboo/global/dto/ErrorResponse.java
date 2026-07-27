@@ -6,4 +6,6 @@ public record ErrorResponse(
     String exceptionName,
     String message,
     Map<String, Object> details
-) {}
+) {
+
+}

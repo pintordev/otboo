@@ -28,176 +28,176 @@ import org.springframework.web.bind.annotation.RestController;
 @WebMvcTest(controllers = GlobalExceptionHandlerTest.FakeController.class)
 class GlobalExceptionHandlerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+  @Autowired
+  private MockMvc mockMvc;
 
-    @Nested
-    @DisplayName("존재하지 않는 리소스 요청 시")
-    class NoResourceFound_처리 {
+  @RestController
+  @RequestMapping("/test")
+  static class FakeController {
 
-        @Test
-        @DisplayName("404를 반환한다")
-        void _404를_반환한다() throws Exception {
-            mockMvc.perform(get("/test/does-not-exist"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.exceptionName").value("NoResourceFoundException"));
-        }
+    @GetMapping("/ping")
+    public void ping() {
     }
 
-    @Nested
-    @DisplayName("지원하지 않는 HTTP 메서드로 요청 시")
-    class MethodNotSupported_처리 {
-
-        @Test
-        @DisplayName("405를 반환한다")
-        void _405를_반환한다() throws Exception {
-            mockMvc.perform(post("/test/ping"))
-                .andExpect(status().isMethodNotAllowed())
-                .andExpect(jsonPath("$.exceptionName").value("HttpRequestMethodNotSupportedException"));
-        }
+    @GetMapping("/unexpected")
+    public void unexpected() {
+      throw new IllegalStateException("예상하지 못한 오류");
     }
 
-    @Nested
-    @DisplayName("요청 바디를 파싱할 수 없을 때")
-    class MessageNotReadable_처리 {
-
-        @Test
-        @DisplayName("400을 반환한다")
-        void _400을_반환한다() throws Exception {
-            mockMvc.perform(post("/test/body")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("not-json"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.exceptionName").value("HttpMessageNotReadableException"));
-        }
+    @GetMapping("/otboo-exception")
+    public void otbooException() {
+      throw new FakeNotFoundException();
     }
 
-    @Nested
-    @DisplayName("필수 헤더가 없을 때")
-    class MissingRequestHeader_처리 {
-
-        @Test
-        @DisplayName("400을 반환한다")
-        void _400을_반환한다() throws Exception {
-            mockMvc.perform(get("/test/header"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.exceptionName").value("MissingRequestHeaderException"));
-        }
+    @PostMapping("/body")
+    public void body(@Valid @RequestBody FakeRequest request) {
     }
 
-    @Nested
-    @DisplayName("필수 파라미터가 없을 때")
-    class MissingRequestParam_처리 {
-
-        @Test
-        @DisplayName("400을 반환한다")
-        void _400을_반환한다() throws Exception {
-            mockMvc.perform(get("/test/param"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.exceptionName").value("MissingServletRequestParameterException"));
-        }
+    @GetMapping("/header")
+    public void header(@RequestHeader("X-Test-Header") String header) {
     }
 
-    @Nested
-    @DisplayName("파라미터 타입이 일치하지 않을 때")
-    class TypeMismatch_처리 {
-
-        @Test
-        @DisplayName("400을 반환한다")
-        void _400을_반환한다() throws Exception {
-            mockMvc.perform(get("/test/type-mismatch").param("id", "not-a-uuid"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.exceptionName").value("MethodArgumentTypeMismatchException"));
-        }
+    @GetMapping("/param")
+    public void param(@RequestParam String name) {
     }
 
-    @Nested
-    @DisplayName("@Valid 검증에 실패했을 때")
-    class Validation_처리 {
-
-        @Test
-        @DisplayName("400과 필드별 메시지를 반환한다")
-        void _400과_필드별_메시지를_반환한다() throws Exception {
-            mockMvc.perform(post("/test/body")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"name\":\"\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.exceptionName").value("MethodArgumentNotValidException"))
-                .andExpect(jsonPath("$.details.name").exists());
-        }
+    @GetMapping("/type-mismatch")
+    public void typeMismatch(@RequestParam UUID id) {
     }
+  }
 
-    @Nested
-    @DisplayName("OtbooException이 발생했을 때")
-    class OtbooException_처리 {
+  record FakeRequest(@NotBlank String name) {
 
-        @Test
-        @DisplayName("예외의 상태 코드와 ErrorResponse를 반환한다")
-        void 예외의_상태_코드와_ErrorResponse를_반환한다() throws Exception {
-            mockMvc.perform(get("/test/otboo-exception"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.exceptionName").value("FakeNotFoundException"))
-                .andExpect(jsonPath("$.message").value("찾을 수 없습니다"))
-                .andExpect(jsonPath("$.details.id").value("test-id"));
-        }
+  }
+
+  static class FakeNotFoundException extends OtbooException {
+
+    FakeNotFoundException() {
+      super(HttpStatus.NOT_FOUND, "찾을 수 없습니다", Map.of("id", "test-id"));
     }
+  }
 
-    @Nested
-    @DisplayName("예상하지 못한 예외가 발생했을 때")
-    class Exception_처리 {
+  @Nested
+  @DisplayName("존재하지 않는 리소스 요청 시")
+  class NoResourceFound_처리 {
 
-        @Test
-        @DisplayName("500을 반환한다")
-        void _500을_반환한다() throws Exception {
-            mockMvc.perform(get("/test/unexpected"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.exceptionName").value("IllegalStateException"));
-        }
+    @Test
+    @DisplayName("404를 반환한다")
+    void _404를_반환한다() throws Exception {
+      mockMvc.perform(get("/test/does-not-exist"))
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.exceptionName").value("NoResourceFoundException"));
     }
+  }
 
-    @RestController
-    @RequestMapping("/test")
-    static class FakeController {
+  @Nested
+  @DisplayName("지원하지 않는 HTTP 메서드로 요청 시")
+  class MethodNotSupported_처리 {
 
-        @GetMapping("/ping")
-        public void ping() {
-        }
-
-        @GetMapping("/unexpected")
-        public void unexpected() {
-            throw new IllegalStateException("예상하지 못한 오류");
-        }
-
-        @GetMapping("/otboo-exception")
-        public void otbooException() {
-            throw new FakeNotFoundException();
-        }
-
-        @PostMapping("/body")
-        public void body(@Valid @RequestBody FakeRequest request) {
-        }
-
-        @GetMapping("/header")
-        public void header(@RequestHeader("X-Test-Header") String header) {
-        }
-
-        @GetMapping("/param")
-        public void param(@RequestParam String name) {
-        }
-
-        @GetMapping("/type-mismatch")
-        public void typeMismatch(@RequestParam UUID id) {
-        }
+    @Test
+    @DisplayName("405를 반환한다")
+    void _405를_반환한다() throws Exception {
+      mockMvc.perform(post("/test/ping"))
+          .andExpect(status().isMethodNotAllowed())
+          .andExpect(jsonPath("$.exceptionName").value("HttpRequestMethodNotSupportedException"));
     }
+  }
 
-    record FakeRequest(@NotBlank String name) {
+  @Nested
+  @DisplayName("요청 바디를 파싱할 수 없을 때")
+  class MessageNotReadable_처리 {
 
+    @Test
+    @DisplayName("400을 반환한다")
+    void _400을_반환한다() throws Exception {
+      mockMvc.perform(post("/test/body")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content("not-json"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").value("HttpMessageNotReadableException"));
     }
+  }
 
-    static class FakeNotFoundException extends OtbooException {
+  @Nested
+  @DisplayName("필수 헤더가 없을 때")
+  class MissingRequestHeader_처리 {
 
-        FakeNotFoundException() {
-            super(HttpStatus.NOT_FOUND, "찾을 수 없습니다", Map.of("id", "test-id"));
-        }
+    @Test
+    @DisplayName("400을 반환한다")
+    void _400을_반환한다() throws Exception {
+      mockMvc.perform(get("/test/header"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").value("MissingRequestHeaderException"));
     }
+  }
+
+  @Nested
+  @DisplayName("필수 파라미터가 없을 때")
+  class MissingRequestParam_처리 {
+
+    @Test
+    @DisplayName("400을 반환한다")
+    void _400을_반환한다() throws Exception {
+      mockMvc.perform(get("/test/param"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").value("MissingServletRequestParameterException"));
+    }
+  }
+
+  @Nested
+  @DisplayName("파라미터 타입이 일치하지 않을 때")
+  class TypeMismatch_처리 {
+
+    @Test
+    @DisplayName("400을 반환한다")
+    void _400을_반환한다() throws Exception {
+      mockMvc.perform(get("/test/type-mismatch").param("id", "not-a-uuid"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").value("MethodArgumentTypeMismatchException"));
+    }
+  }
+
+  @Nested
+  @DisplayName("@Valid 검증에 실패했을 때")
+  class Validation_처리 {
+
+    @Test
+    @DisplayName("400과 필드별 메시지를 반환한다")
+    void _400과_필드별_메시지를_반환한다() throws Exception {
+      mockMvc.perform(post("/test/body")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content("{\"name\":\"\"}"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").value("MethodArgumentNotValidException"))
+          .andExpect(jsonPath("$.details.name").exists());
+    }
+  }
+
+  @Nested
+  @DisplayName("OtbooException이 발생했을 때")
+  class OtbooException_처리 {
+
+    @Test
+    @DisplayName("예외의 상태 코드와 ErrorResponse를 반환한다")
+    void 예외의_상태_코드와_ErrorResponse를_반환한다() throws Exception {
+      mockMvc.perform(get("/test/otboo-exception"))
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.exceptionName").value("FakeNotFoundException"))
+          .andExpect(jsonPath("$.message").value("찾을 수 없습니다"))
+          .andExpect(jsonPath("$.details.id").value("test-id"));
+    }
+  }
+
+  @Nested
+  @DisplayName("예상하지 못한 예외가 발생했을 때")
+  class Exception_처리 {
+
+    @Test
+    @DisplayName("500을 반환한다")
+    void _500을_반환한다() throws Exception {
+      mockMvc.perform(get("/test/unexpected"))
+          .andExpect(status().isInternalServerError())
+          .andExpect(jsonPath("$.exceptionName").value("IllegalStateException"));
+    }
+  }
 }

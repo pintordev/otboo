@@ -8,13 +8,13 @@ import lombok.Getter;
 @Embeddable
 public class SoftDeletable {
 
-    private Instant deletedAt;
+  private Instant deletedAt;
 
-    public void delete() {
-        this.deletedAt = Instant.now();
-    }
+  public void delete() {
+    this.deletedAt = Instant.now();
+  }
 
-    public boolean isDeleted() {
-        return deletedAt != null;
-    }
+  public boolean isDeleted() {
+    return deletedAt != null;
+  }
 }

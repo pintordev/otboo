@@ -11,18 +11,18 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SwaggerConfig {
 
-    @Value("${otboo.base-url}")
-    private String baseUrl;
+  @Value("${otboo.base-url}")
+  private String baseUrl;
 
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("Otboo API Documentation")
-                .description("Swagger API Documentation for Otboo Project.")
-            )
-            .servers(List.of(
-                new Server().url(baseUrl).description("Server")
-            ));
-    }
+  @Bean
+  public OpenAPI customOpenAPI() {
+    return new OpenAPI()
+        .info(new Info()
+            .title("Otboo API Documentation")
+            .description("Swagger API Documentation for Otboo Project.")
+        )
+        .servers(List.of(
+            new Server().url(baseUrl).description("Server")
+        ));
+  }
 }

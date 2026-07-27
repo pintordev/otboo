@@ -11,4 +11,6 @@ public record CursorPageResponse<T>(
     long totalCount,
     String sortBy,
     SortDirection sortDirection
-) {}
+) {
+
+}
