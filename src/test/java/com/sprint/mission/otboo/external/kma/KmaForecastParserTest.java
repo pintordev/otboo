@@ -111,6 +111,25 @@ class KmaForecastParserTest {
       assertThat(result).hasSize(1);
       assertThat(result.get(0).precipitationAmount()).isEqualTo(31.9);
     }
+
+    @Test
+    @DisplayName("대표시각에_강수가_없어도_다른_시각에_강수가_있으면_그_타입을_채택한다")
+    void 대표시각에_강수가_없어도_다른_시각에_강수가_있으면_그_타입을_채택한다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("PTY", "20260730", "0900", "1"),
+          item("PTY", "20260730", "1500", "0")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).precipitationType()).isEqualTo(PrecipitationType.RAIN);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
