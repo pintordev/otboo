@@ -10,6 +10,8 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.repository.We
 import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
 import com.sprint.mission.otboo.external.kakao.KakaoRegionParser;
 import com.sprint.mission.otboo.external.kma.KmaForecastParser;
+import com.sprint.mission.otboo.external.kma.KmaGridConverter;
+import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.KmaWeatherClient;
 import java.time.Clock;
 import java.time.Instant;
@@ -47,11 +49,9 @@ public class WeatherService {
   }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
-    // TODO: 격자 변환은 다음 단계에서 연결
-    int x = 60;
-    int y = 127;
+    KmaGridPoint grid = KmaGridConverter.toGrid(latitude, longitude);
 
-    Location location = locationRepository.findByXAndY(x, y).orElseThrow();
+    Location location = locationRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
 
     LocalDate yesterday = LocalDate.now(clock.withZone(KST)).minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
