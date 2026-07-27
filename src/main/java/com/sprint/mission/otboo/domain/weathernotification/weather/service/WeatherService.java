@@ -1,27 +1,40 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
 import com.sprint.mission.otboo.external.kakao.KakaoRegionParser;
+import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastParser;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.KmaWeatherClient;
+import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  private static final int FORECAST_NUM_OF_ROWS = 1000;
 
   private final LocationRepository locationRepository;
   private final WeatherRepository weatherRepository;
@@ -32,11 +45,14 @@ public class WeatherService {
   private final WeatherMapper weatherMapper;
   private final ObjectMapper objectMapper;
   private final Clock clock;
+  private final String kmaServiceKey;
+  private final String kakaoRestApiKey;
 
   public WeatherService(LocationRepository locationRepository, WeatherRepository weatherRepository,
       KmaWeatherClient kmaWeatherClient, KmaForecastParser kmaForecastParser,
       KakaoLocalClient kakaoLocalClient, KakaoRegionParser kakaoRegionParser,
-      WeatherMapper weatherMapper, ObjectMapper objectMapper, Clock clock) {
+      WeatherMapper weatherMapper, ObjectMapper objectMapper, Clock clock, String kmaServiceKey,
+      String kakaoRestApiKey) {
     this.locationRepository = locationRepository;
     this.weatherRepository = weatherRepository;
     this.kmaWeatherClient = kmaWeatherClient;
@@ -46,19 +62,102 @@ public class WeatherService {
     this.weatherMapper = weatherMapper;
     this.objectMapper = objectMapper;
     this.clock = clock;
+    this.kmaServiceKey = kmaServiceKey;
+    this.kakaoRestApiKey = kakaoRestApiKey;
   }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     KmaGridPoint grid = KmaGridConverter.toGrid(latitude, longitude);
+    Location location = findOrCreateLocation(grid, latitude, longitude);
 
-    Location location = locationRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
-
-    LocalDate yesterday = LocalDate.now(clock.withZone(KST)).minusDays(1);
+    LocalDate today = LocalDate.now(clock.withZone(KST));
+    LocalDate yesterday = today.minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
     List<Weather> latestRevisions = weatherRepository.findLatestRevisions(location, from);
 
-    return latestRevisions.stream()
-        .map(weatherMapper::toDto)
+    Map<LocalDate, Weather> existingByDate = latestRevisions.stream()
+        .collect(Collectors.toMap(w -> w.getForecastAt().atZone(KST).toLocalDate(), w -> w));
+
+    BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
+    Weather todayWeather = existingByDate.get(today);
+    boolean stale = todayWeather == null
+        || todayWeather.getForecastedAt().isBefore(latestBaseTime.toInstant());
+
+    List<Weather> result = stale
+        ? fetchLiveAndSave(location, grid, latestBaseTime, existingByDate)
+        : latestRevisions.stream()
+            .filter(w -> !w.getForecastAt().atZone(KST).toLocalDate().isBefore(today))
+            .toList();
+
+    return result.stream().map(weatherMapper::toDto).toList();
+  }
+
+  private Location findOrCreateLocation(KmaGridPoint grid, double latitude, double longitude) {
+    return locationRepository.findByXAndY(grid.nx(), grid.ny())
+        .orElseGet(() -> {
+          KakaoRegionResponse kakaoResponse = kakaoLocalClient.getRegionCode(
+              "KakaoAK " + kakaoRestApiKey, longitude, latitude);
+          List<String> locationNames = kakaoRegionParser.toLocationNames(kakaoResponse);
+
+          locationRepository.insertIfAbsent(UUID.randomUUID(), grid.nx(), grid.ny(), latitude,
+              longitude, toJson(locationNames));
+          return locationRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
+        });
+  }
+
+  private List<Weather> fetchLiveAndSave(Location location, KmaGridPoint grid,
+      BaseTime baseTime, Map<LocalDate, Weather> existingByDate) {
+    KmaWeatherResponse response = kmaWeatherClient.getVillageForecast(kmaServiceKey,
+        FORECAST_NUM_OF_ROWS, 1, "JSON", baseTime.baseDate(), baseTime.baseTime(), grid.nx(),
+        grid.ny());
+    List<DailyWeatherForecastDto> dailyForecasts = kmaForecastParser
+        .parseDailyForecast(response, clock.instant()).stream()
+        .sorted(Comparator.comparing(DailyWeatherForecastDto::date))
         .toList();
+
+    Weather previousDayWeather = dailyForecasts.isEmpty() ? null
+        : existingByDate.get(dailyForecasts.get(0).date().minusDays(1));
+    Double previousTemp =
+        previousDayWeather != null ? previousDayWeather.getTemperatureCurrent() : null;
+    Double previousHumidity =
+        previousDayWeather != null ? previousDayWeather.getHumidityCurrent() : null;
+
+    List<Weather> saved = new ArrayList<>();
+    for (DailyWeatherForecastDto dto : dailyForecasts) {
+      double temperatureCompared =
+          previousTemp != null ? dto.temperatureCurrent() - previousTemp : 0.0;
+      double humidityCompared =
+          previousHumidity != null ? dto.humidityCurrent() - previousHumidity : 0.0;
+
+      Weather weather = Weather.create(location, baseTime.toInstant(),
+          dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
+          dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
+          humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),
+          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed()));
+
+      saved.add(weatherRepository.save(weather));
+
+      previousTemp = dto.temperatureCurrent();
+      previousHumidity = dto.humidityCurrent();
+    }
+    return saved;
+  }
+
+  private WindStrength toWindStrength(double speed) {
+    if (speed < 4.0) {
+      return WindStrength.WEAK;
+    }
+    if (speed < 9.0) {
+      return WindStrength.MODERATE;
+    }
+    return WindStrength.STRONG;
+  }
+
+  private String toJson(List<String> locationNames) {
+    try {
+      return objectMapper.writeValueAsString(locationNames);
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("locationNames 직렬화 실패", e);
+    }
   }
 }
