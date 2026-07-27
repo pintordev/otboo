@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -107,6 +109,22 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("@Valid 검증에 실패했을 때")
+    class Validation_처리 {
+
+        @Test
+        @DisplayName("400과 필드별 메시지를 반환한다")
+        void _400과_필드별_메시지를_반환한다() throws Exception {
+            mockMvc.perform(post("/test/body")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.exceptionName").value("MethodArgumentNotValidException"))
+                .andExpect(jsonPath("$.details.name").exists());
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
@@ -116,7 +134,7 @@ class GlobalExceptionHandlerTest {
         }
 
         @PostMapping("/body")
-        public void body(@RequestBody FakeRequest request) {
+        public void body(@Valid @RequestBody FakeRequest request) {
         }
 
         @GetMapping("/header")
@@ -132,7 +150,7 @@ class GlobalExceptionHandlerTest {
         }
     }
 
-    record FakeRequest(String name) {
+    record FakeRequest(@NotBlank String name) {
 
     }
 }
