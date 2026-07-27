@@ -199,7 +199,7 @@ public ResponseEntity<ClothesDto> create(
 
 ## 2. JPA Entity
 
-PK는 UUID, 시간 타입은 `Instant`로 통일합니다(`LocalDateTime` 금지). Spring Data Auditing(`@EnableJpaAuditing`) 사용.
+PK는 UUID, 시간 타입은 `Instant`로 통일합니다(`LocalDateTime` 금지). Spring Data Auditing(`@EnableJpaAuditing`) 사용. PK 생성은 **`@GeneratedValue(strategy = GenerationType.UUID)`**(JPA/Hibernate 자동 생성)로 통일합니다 — 애플리케이션에서 직접 `UUID.randomUUID()`를 필드에 할당하지 않습니다. Hibernate 6+는 UUID 생성을 DB 왕복 없이 메모리에서 처리하므로 `save()`/`persist()` 호출 시점에 이미 ID가 채워집니다.
 
 > **설계 노트**: 상속 계층(`BaseEntity`/`BaseUpdatableEntity`/`BaseSoftDeletableEntity`) 자체를 두지 않습니다(팀원 리뷰로 확정). `id`/`createdAt`/`updatedAt`은 필드 1~2개짜리라 굳이 `@Embeddable`로 감싸지 않고 **각 엔티티가 직접 선언**합니다 — `@Embeddable`은 `SoftDeletable`처럼 상태+행동이 있는 값 객체에만 사용합니다(단일 필드 래핑은 실무에서도 잘 안 씀).
 
@@ -227,8 +227,9 @@ public class SoftDeletable {
 public class User {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "uuid", nullable = false, updatable = false)
-    private UUID id = UUID.randomUUID();
+    private UUID id;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -274,8 +275,12 @@ public class User {
 public class Profile {
 
     @Id
-    @Column(columnDefinition = "uuid", nullable = false, updatable = false)
-    private UUID userId;   // User와 1:1, PK가 곧 FK
+    private UUID id;
+
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;   // User와 1:1, PK가 곧 FK — @MapsId로 User의 PK를 그대로 공유(별도 UUID 채번 없음)
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -288,7 +293,7 @@ public class Profile {
 
     @Builder(access = AccessLevel.PRIVATE)
     private Profile(User user, int temperatureSensitivity) {
-        this.userId = user.getId();
+        this.user = user;
         this.temperatureSensitivity = temperatureSensitivity;
     }
 
@@ -332,8 +337,9 @@ public class Profile {
 public class Clothes {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "uuid", nullable = false, updatable = false)
-    private UUID id = UUID.randomUUID();
+    private UUID id;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -367,8 +373,9 @@ public class Clothes {
 public class SocialAccount {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(columnDefinition = "uuid", nullable = false, updatable = false)
-    private UUID id = UUID.randomUUID();
+    private UUID id;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -426,6 +433,12 @@ public void like(UUID feedId, UUID userId) {
 | Index | `IDX_{table}_{columns}` | `IDX_feeds_author_created` |
 
 같은 테이블에서 같은 참조 테이블로 FK가 여러 개면(`FOLLOW.follower_id`/`followee_id`처럼 둘 다 `users` 참조) `{순번}`으로 구분합니다(`FK_users_TO_follows_1`, `FK_users_TO_follows_2`).
+
+### 2-3. Flyway 마이그레이션
+
+스키마는 Flyway가 관리합니다(`ddl-auto: validate`, Hibernate 자동 DDL 미사용). 마이그레이션 파일은 `src/main/resources/db/migration/V{n}__{설명}.sql`에 둡니다.
+
+**이미 적용된(커밋된) 마이그레이션 파일은 절대 수정하지 않습니다** — 스키마를 바꿔야 하면 새 버전 파일(`V{n+1}__...`)을 추가합니다. 기존 파일을 고치면 이미 적용받은 팀원/환경과 체크섬이 어긋나 Flyway가 마이그레이션을 거부합니다.
 
 ---
 
@@ -515,26 +528,9 @@ public class ClothesExceptionHandler {
 
 ---
 
-## 5. 커스텀 예외 & 에러 코드
+## 5. 커스텀 예외
 
-`ErrorCode`는 전역 enum 하나가 아니라 **도메인별로 분리**해서 관리합니다(`{도메인}ErrorCode`, 도메인 `exception/` 패키지). 메시지만 들고 있고, 상태 코드는 여기 두지 않습니다 — 상태 코드는 예외 생성 시점에 지정합니다.
-
-```java
-// domain/clothesrecommend/clothes/exception/ClothesErrorCode.java
-@Getter
-@RequiredArgsConstructor
-public enum ClothesErrorCode {
-
-    CLOTHES_NOT_FOUND("의상을 찾을 수 없습니다."),
-    CLOTHES_NOT_OWNER("본인 소유의 의상만 수정할 수 있습니다."),
-    CLOTHES_ATTRIBUTE_DEF_NOT_FOUND("의상 속성 정의를 찾을 수 없습니다."),
-    CLOTHES_ATTRIBUTE_DEF_IN_USE("사용 중인 의상 속성 정의는 삭제할 수 없습니다.");
-
-    private final String message;
-}
-```
-
-도메인별 구체 예외는 팩토리 메서드로 원인을 명시하고, 자신의 HTTP 상태 코드를 직접 지정합니다.
+도메인별 구체 예외는 자신의 HTTP 상태 코드와 메시지를 `private static final` 필드로 직접 들고, 팩토리 메서드로 원인을 명시합니다. 별도 `ErrorCode` enum은 두지 않습니다.
 
 ```java
 public abstract class OtbooException extends RuntimeException {
@@ -555,8 +551,12 @@ public abstract class ClothesException extends OtbooException {
 }
 
 public class ClothesNotFoundException extends ClothesException {
+
+    private static final HttpStatus STATUS = HttpStatus.NOT_FOUND;  
+    private static final String MESSAGE = "이미 사용 중인 이메일입니다.";
+  
     private ClothesNotFoundException(Map<String, Object> details) {
-        super(HttpStatus.NOT_FOUND, ClothesErrorCode.CLOTHES_NOT_FOUND.getMessage(), details);
+        super(STATUS, MESSAGE, details);
     }
 
     public static ClothesNotFoundException withId(UUID clothesId) {
@@ -672,7 +672,7 @@ public interface KmaWeatherClient {
 
 ## 9. 테스트
 
-클래스명은 `{대상클래스}Test`, 메서드명과 `@DisplayName`은 한글로 작성합니다. `@Nested` + `given / when / then` 구조를 유지합니다.
+클래스명은 `{대상클래스}Test`, 메서드명과 `@DisplayName`은 한글로 작성합니다. `@Nested` + `given / when / then` 구조를 유지합니다. **`@Nested` 블록의 클래스명은 영어로 작성**합니다(한글 식별자는 테스트 오류 가능성을 높임) — `@DisplayName`과 테스트 메서드명은 계속 한글 유지.
 
 **테스트 픽스처는 FixtureMonkey로 생성**(멘토 피드백 #2, ADR로 EasyRandom 대신 확정 — 수동 빌더/생성자 나열 지양):
 
@@ -695,7 +695,7 @@ class ClothesServiceTest {
 
     @Nested
     @DisplayName("의상 등록")
-    class 의상_등록 {
+    class RegisterClothes {
 
         @Test
         @DisplayName("소유자가 아니면 예외 발생")
@@ -710,11 +710,10 @@ class ClothesServiceTest {
 
 // Repository 테스트 — Testcontainers 실제 PostgreSQL
 @DataJpaTest
-@Testcontainers
+@ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(JpaConfig.class)
 class ClothesRepositoryTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
     @Autowired ClothesRepository clothesRepository;
 }

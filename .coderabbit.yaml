@@ -1,0 +1,145 @@
+language: "ko-KR"
+
+tone_instructions: |
+  친절하고 건설적인 피드백을 제공하되, 아래 팀 규칙 위반은 반드시 명확히 지적하세요.
+  개선 방법도 함께 제시해주세요.
+
+reviews:
+  profile: "assertive"
+  auto_fix_enabled: false
+
+  auto_review:
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - "main"
+      - "dev"
+
+  high_level_summary: true
+  high_level_summary_instructions: |
+    다음 항목을 포함해 요약하세요:
+    - 변경 내용 (한 줄)
+    - 영향받는 도메인/API
+    - Breaking change 여부
+  changed_files_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  estimate_code_review_effort: true
+  suggested_labels: true
+  suggested_reviewers: true
+  poem: false
+
+  path_filters:
+    - "!target/**"
+    - "!build/**"
+    - "!**/*.class"
+    - "!**/*.lock"
+    - "!gradle/wrapper/gradle-wrapper.jar"
+    - "!**/.gitkeep"
+
+  path_instructions:
+    - path: "src/main/java/**/controller/**"
+      instructions: |
+        [Controller 규칙] (docs/conventions.md §3, §4)
+        금지:
+        - @Transactional 사용 → Service 레이어에서만 허용
+        - @Autowired 필드 주입 → @RequiredArgsConstructor + 생성자 주입 사용
+        - 비즈니스 로직 → Service에 위임
+        - System.out.println / e.printStackTrace() → @Slf4j 사용
+        - 성공 응답을 커스텀 래퍼(ApiResponse<T> 등)로 감싸는 것 → DTO 직접 반환, 에러만 ErrorResponse. ResponseEntity는 상태코드 제어 목적으로 허용
+
+        필수:
+        - 요청 파라미터 유효성 검사 (@Valid)
+        - UUID 파라미터는 String이 아닌 UUID 타입 직접 사용
+        - 인증 사용자 식별은 JWT(SecurityContext)에서 추출 — 요청 바디의 authorId/ownerId/followerId 등을 그대로 신뢰하지 말고 서버에서 검증
+        - 커서 페이지네이션 응답은 CursorPageResponse<T> 사용 (docs/conventions.md §6)
+
+    - path: "src/main/java/**/entity/**"
+      instructions: |
+        [Entity 규칙 — 가장 엄격하게 검토] (docs/conventions.md §2)
+        금지:
+        - setter 메서드 → 상태 변경은 의도를 드러내는 메서드명 사용
+        - @Builder → 정적 팩토리 메서드 사용
+        - Long 타입 PK → UUID만 허용
+        - FetchType.EAGER → LAZY + fetch join 필수
+        - isDeleted 필드 → deletedAt(Instant) null 여부로만 소프트딜리트 처리
+
+        필수:
+        - UUID PK, Instant 타입 시간 필드
+        - @EnableJpaAuditing 활용 (createdAt, updatedAt)
+        - LAZY fetch 기본
+        - 스키마 변경은 Flyway 마이그레이션(V{n}__{설명}.sql)으로 반영, 이미 적용된 마이그레이션 파일 수정 금지 (docs/conventions.md §2-3)
+
+    - path: "src/main/java/**/service/**"
+      instructions: |
+        [Service 규칙] (docs/conventions.md §5, §7)
+        금지:
+        - Entity → DTO 직접 변환 → mapper/ 패키지의 수동 Mapper 클래스 사용(MapStruct 미사용)
+        - Optional.get() 직접 호출 → orElseThrow() 사용
+        - @Transactional in Controller → Service에서만
+        - save() 반환값 무시 → 반환된 영속 엔티티 사용
+        - 외부 API 호출에 RestTemplate 사용 → Feign Client 사용 (멘토 피드백 #1)
+
+        필수:
+        - 클래스 레벨 @Transactional(readOnly=true) 기본
+        - 변경 메서드만 @Transactional 재정의
+        - 예외: OtbooException을 상속하는 도메인 예외, 자신의 HTTP 상태 코드/메시지를 private static final로 직접 보유, 팩토리 메서드로 생성 (별도 ErrorCode enum 없음)
+
+    - path: "src/main/java/**/repository/**"
+      instructions: |
+        [Repository 규칙] (docs/guide/querydsl.md)
+        - N+1 쿼리 발생 여부 반드시 확인 → fetch join 또는 @EntityGraph 사용
+        - 목록 조회는 Spring Pageable이 아니라 커서 페이지네이션(QueryDSL, limit+1 조회로 hasNext 판단, tie-break는 id로 보정) 사용
+        - 동적 조건은 null을 반환하는 BooleanExpression 메서드로 분리
+        - 소프트 삭제 테이블은 조회 조건에 deletedAt IS NULL 포함
+
+    - path: "src/main/java/**/dto/**"
+      instructions: |
+        [DTO 규칙] (docs/conventions.md §4)
+        - setter 금지
+        - 요청 DTO는 유효성 검사 애노테이션 포함 (@NotNull, @NotBlank 등)
+        - 성공 응답 DTO는 별도 래퍼 클래스로 감싸지 말 것
+
+    - path: "src/main/java/**/mapper/**"
+      instructions: |
+        [Mapper 규칙 — 수동 변환] (docs/conventions.md §10)
+        - MapStruct 등 어노테이션 프로세서 사용 금지 — 수동 매퍼 클래스로 작성
+        - mapper/ 패키지에 @Component 클래스로 두고 Service에서 생성자 주입
+        - Service 안에서 직접 변환 로직 작성 금지 — 이 Mapper를 통해서만 변환
+
+    - path: "src/main/java/**/batch/**"
+      instructions: |
+        [Batch 규칙]
+        - @Scheduled 메서드에 직접 로직 금지 → Service에 위임
+        - Spring Batch Job/Step 구조 준수
+
+    - path: "src/test/java/**"
+      instructions: |
+        [Test 규칙] (docs/conventions.md §9)
+        - @SpringBootTest 남발 금지 → 슬라이스 테스트 사용 (@WebMvcTest, @DataJpaTest 등)
+        - Repository 테스트는 @ActiveProfiles("test") + @AutoConfigureTestDatabase(replace = NONE) + @Import(JpaConfig.class) 사용
+        - 테스트 간 상태 공유 금지 → @BeforeEach 초기화 필수
+        - given/when/then 구조 확인
+        - @Nested 블록의 클래스명은 영어, @DisplayName과 테스트 메서드명은 한글인지 확인
+        - 테스트 픽스처는 FixtureMonkey 사용 (수동 빌더/생성자 나열 지양)
+
+    - path: "scripts/**"
+      instructions: |
+        [Shell 스크립트 규칙]
+        - bash 3.2(macOS 기본)에서도 동작해야 함 — declare -A 등 bash 4+ 전용 문법 금지
+        - set -euo pipefail 유지
+        - 시크릿(웹훅 URL, 저장소 주소 등)은 하드코딩 금지 → .env에서 로드
+
+  instructions: |
+    [전역 규칙] (docs/conventions.md 전반)
+    - System.out.println / e.printStackTrace() 사용 금지 → @Slf4j + log 레벨 사용
+    - @Autowired 필드 주입 금지 → @RequiredArgsConstructor + 생성자 주입
+    - String으로 UUID 파라미터 받는 것 금지 → UUID 타입 직접 사용
+    - 커밋에 AI co-author 문구 포함 금지 (Co-authored-by 등)
+    - jakarta.* 임포트 사용 (javax.* 금지, Spring Boot 3.x)
+    - 성공 응답을 커스텀 래퍼(ApiResponse<T> 등)로 감싸지 말 것 → DTO 직접 반환. ResponseEntity는 상태코드 제어 목적으로 허용
+    - 외부 API 호출은 RestTemplate 대신 Feign Client 사용 (멘토 피드백 #1)
+    - 요청 바디의 authorId/ownerId/followerId는 클라이언트 값을 신뢰하지 말고 반드시 서버에서 검증
+
+chat:
+  auto_reply: true
