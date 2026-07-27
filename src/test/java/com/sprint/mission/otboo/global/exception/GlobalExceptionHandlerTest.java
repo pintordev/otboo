@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.global.exception;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,6 +31,19 @@ class GlobalExceptionHandlerTest {
             mockMvc.perform(get("/test/does-not-exist"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.exceptionName").value("NoResourceFoundException"));
+        }
+    }
+
+    @Nested
+    @DisplayName("지원하지 않는 HTTP 메서드로 요청 시")
+    class MethodNotSupported_처리 {
+
+        @Test
+        @DisplayName("405를 반환한다")
+        void _405를_반환한다() throws Exception {
+            mockMvc.perform(post("/test/ping"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.exceptionName").value("HttpRequestMethodNotSupportedException"));
         }
     }
 
