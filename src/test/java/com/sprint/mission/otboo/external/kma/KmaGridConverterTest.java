@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +27,13 @@ class KmaGridConverterTest {
       // then
       assertThat(point.nx()).isEqualTo(60);
       assertThat(point.ny()).isEqualTo(127);
+    }
+
+    @Test
+    @DisplayName("한반도_범위를_벗어난_위도는_예외가_발생한다")
+    void 한반도_범위를_벗어난_위도는_예외가_발생한다() {
+      assertThatThrownBy(() -> KmaGridConverter.toGrid(10.0, 127.0))
+          .isInstanceOf(IllegalArgumentException.class);
     }
   }
 }
