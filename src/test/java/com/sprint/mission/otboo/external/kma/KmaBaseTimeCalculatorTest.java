@@ -42,4 +42,22 @@ class KmaBaseTimeCalculatorTest {
       assertThat(baseTime.baseTime()).isEqualTo("2300");
     }
   }
+
+  @Nested
+  @DisplayName("BaseTimeToInstant")
+  class BaseTimeToInstant {
+
+    @Test
+    @DisplayName("17시_발표는_KST_17시_Instant로_변환된다")
+    void 십칠시_발표는_KST_십칠시_Instant로_변환된다() {
+      // given
+      BaseTime baseTime = new BaseTime("20260727", "1700");
+
+      // when
+      Instant instant = baseTime.toInstant();
+
+      // then - 2026-07-27 17:00 KST = 2026-07-27T08:00:00Z
+      assertThat(instant).isEqualTo(Instant.parse("2026-07-27T08:00:00Z"));
+    }
+  }
 }
