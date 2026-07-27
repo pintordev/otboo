@@ -21,6 +21,14 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(OtbooException.class)
+    public ResponseEntity<ErrorResponse> handleOtbooException(OtbooException e) {
+        log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
+        return ResponseEntity
+            .status(e.getStatus())
+            .body(new ErrorResponse(e.getClass().getSimpleName(), e.getMessage(), e.getDetails()));
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
         log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
