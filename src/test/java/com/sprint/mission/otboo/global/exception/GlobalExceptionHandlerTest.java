@@ -142,12 +142,30 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("예상하지 못한 예외가 발생했을 때")
+    class Exception_처리 {
+
+        @Test
+        @DisplayName("500을 반환한다")
+        void _500을_반환한다() throws Exception {
+            mockMvc.perform(get("/test/unexpected"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.exceptionName").value("IllegalStateException"));
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
 
         @GetMapping("/ping")
         public void ping() {
+        }
+
+        @GetMapping("/unexpected")
+        public void unexpected() {
+            throw new IllegalStateException("예상하지 못한 오류");
         }
 
         @GetMapping("/otboo-exception")
