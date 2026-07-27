@@ -69,6 +69,7 @@ public class KmaForecastParser {
     PrecipitationType precipitationType = PrecipitationType.NONE;
     double precipitationAmount = 0.0;
     double precipitationProbability = 0.0;
+    int precipitationPriority = -1;
 
     for (Item item : dayItems) {
       switch (item.category()) {
@@ -100,6 +101,13 @@ public class KmaForecastParser {
           precipitationProbability = Math.max(precipitationProbability, value);
         }
         case "PCP" -> precipitationAmount += parsePrecipitationAmount(item.fcstValue());
+        case "PTY" -> {
+          int priority = parsePtyPriority(item.fcstValue(), item.fcstTime(), representativeTime);
+          if (priority > precipitationPriority) {
+            precipitationPriority = priority;
+            precipitationType = toPrecipitationType(item.fcstValue());
+          }
+        }
         default -> {
         }
       }
@@ -121,6 +129,24 @@ public class KmaForecastParser {
       return Double.parseDouble(cleaned.split("~")[0]);
     }
     return Double.parseDouble(cleaned);
+  }
+
+  private int parsePtyPriority(String pty, String fcstTime, String representativeTime) {
+    if (pty == null || "0".equals(pty)) {
+      return -1;
+    }
+    int timePriority = representativeTime.equals(fcstTime) ? 100 : 0;
+    return timePriority + Integer.parseInt(pty);
+  }
+
+  private PrecipitationType toPrecipitationType(String pty) {
+    return switch (pty) {
+      case "1" -> PrecipitationType.RAIN;
+      case "2" -> PrecipitationType.RAIN_SNOW;
+      case "3" -> PrecipitationType.SNOW;
+      case "4" -> PrecipitationType.SHOWER;
+      default -> PrecipitationType.NONE;
+    };
   }
 
   private SkyStatus toSkyStatus(String skyCode) {
