@@ -79,7 +79,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("존재하지 않는 리소스 요청 시")
-  class NoResourceFound_처리 {
+  class NoResourceFoundHandling {
 
     @Test
     @DisplayName("404를 반환한다")
@@ -92,7 +92,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("지원하지 않는 HTTP 메서드로 요청 시")
-  class MethodNotSupported_처리 {
+  class MethodNotSupportedHandling {
 
     @Test
     @DisplayName("405를 반환한다")
@@ -105,7 +105,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("요청 바디를 파싱할 수 없을 때")
-  class MessageNotReadable_처리 {
+  class MessageNotReadableHandling {
 
     @Test
     @DisplayName("400을 반환한다")
@@ -120,7 +120,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("필수 헤더가 없을 때")
-  class MissingRequestHeader_처리 {
+  class MissingRequestHeaderHandling {
 
     @Test
     @DisplayName("400을 반환한다")
@@ -133,7 +133,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("필수 파라미터가 없을 때")
-  class MissingRequestParam_처리 {
+  class MissingRequestParamHandling {
 
     @Test
     @DisplayName("400을 반환한다")
@@ -146,7 +146,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("파라미터 타입이 일치하지 않을 때")
-  class TypeMismatch_처리 {
+  class TypeMismatchHandling {
 
     @Test
     @DisplayName("400을 반환한다")
@@ -159,7 +159,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("@Valid 검증에 실패했을 때")
-  class Validation_처리 {
+  class ValidationHandling {
 
     @Test
     @DisplayName("400과 필드별 메시지를 반환한다")
@@ -175,7 +175,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("OtbooException이 발생했을 때")
-  class OtbooException_처리 {
+  class OtbooExceptionHandling {
 
     @Test
     @DisplayName("예외의 상태 코드와 ErrorResponse를 반환한다")
@@ -190,7 +190,7 @@ class GlobalExceptionHandlerTest {
 
   @Nested
   @DisplayName("예상하지 못한 예외가 발생했을 때")
-  class Exception_처리 {
+  class UnexpectedExceptionHandling {
 
     @Test
     @DisplayName("500을 반환한다")
