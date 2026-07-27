@@ -7,12 +7,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -125,12 +127,32 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("OtbooException이 발생했을 때")
+    class OtbooException_처리 {
+
+        @Test
+        @DisplayName("예외의 상태 코드와 ErrorResponse를 반환한다")
+        void 예외의_상태_코드와_ErrorResponse를_반환한다() throws Exception {
+            mockMvc.perform(get("/test/otboo-exception"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.exceptionName").value("FakeNotFoundException"))
+                .andExpect(jsonPath("$.message").value("찾을 수 없습니다"))
+                .andExpect(jsonPath("$.details.id").value("test-id"));
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
 
         @GetMapping("/ping")
         public void ping() {
+        }
+
+        @GetMapping("/otboo-exception")
+        public void otbooException() {
+            throw new FakeNotFoundException();
         }
 
         @PostMapping("/body")
@@ -152,5 +174,12 @@ class GlobalExceptionHandlerTest {
 
     record FakeRequest(@NotBlank String name) {
 
+    }
+
+    static class FakeNotFoundException extends OtbooException {
+
+        FakeNotFoundException() {
+            super(HttpStatus.NOT_FOUND, "찾을 수 없습니다", Map.of("id", "test-id"));
+        }
     }
 }
