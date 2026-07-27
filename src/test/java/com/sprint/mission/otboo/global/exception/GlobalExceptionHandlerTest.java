@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @WebMvcTest(controllers = GlobalExceptionHandlerTest.FakeController.class)
@@ -79,6 +80,19 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("필수 파라미터가 없을 때")
+    class MissingRequestParam_처리 {
+
+        @Test
+        @DisplayName("400을 반환한다")
+        void _400을_반환한다() throws Exception {
+            mockMvc.perform(get("/test/param"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.exceptionName").value("MissingServletRequestParameterException"));
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
@@ -93,6 +107,10 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/header")
         public void header(@RequestHeader("X-Test-Header") String header) {
+        }
+
+        @GetMapping("/param")
+        public void param(@RequestParam String name) {
         }
     }
 
