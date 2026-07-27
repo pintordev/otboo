@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Locati
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,30 @@ class LocationRepositoryTest {
 
       assertThatThrownBy(() -> locationRepository.saveAndFlush(location2))
           .isInstanceOf(DataIntegrityViolationException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("InsertIfAbsent")
+  class InsertIfAbsent {
+
+    @Test
+    @DisplayName("같은_x_y로_두_번_삽입해도_먼저_삽입된_행만_유지된다")
+    void 같은_x_y로_두_번_삽입해도_먼저_삽입된_행만_유지된다() {
+      UUID firstId = UUID.randomUUID();
+      UUID secondId = UUID.randomUUID();
+
+      locationRepository.insertIfAbsent(firstId, 60, 127, 37.5674783, 126.9884121,
+          "[\"서울특별시\"]");
+      locationRepository.insertIfAbsent(secondId, 60, 127, 37.0, 127.0, "[\"다른값\"]");
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      Optional<Location> found = locationRepository.findByXAndY(60, 127);
+
+      assertThat(found).isPresent();
+      assertThat(found.get().getId()).isEqualTo(firstId);
+      assertThat(found.get().getLocationNames()).containsExactly("서울특별시");
     }
   }
 }
