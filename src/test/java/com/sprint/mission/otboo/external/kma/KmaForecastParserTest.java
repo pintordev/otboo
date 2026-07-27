@@ -78,6 +78,7 @@ class KmaForecastParserTest {
       Instant now = Instant.parse("2026-07-27T11:00:00Z");
       List<Item> items = List.of(
           item("TMP", "20260727", "1800", "31"),
+          item("TMP", "20260727", "1900", "30"),
           item("TMP", "20260727", "2000", "28"),
           item("TMP", "20260727", "2100", "27")
       );
@@ -118,7 +119,9 @@ class KmaForecastParserTest {
       // given
       Instant now = Instant.parse("2026-07-27T08:00:00Z");
       List<Item> items = List.of(
+          item("PTY", "20260730", "0000", "0"),
           item("PTY", "20260730", "0900", "1"),
+          item("PTY", "20260730", "1200", "0"),
           item("PTY", "20260730", "1500", "0")
       );
       KmaWeatherResponse response = responseOf(items);
@@ -129,6 +132,29 @@ class KmaForecastParserTest {
       // then
       assertThat(result).hasSize(1);
       assertThat(result.get(0).precipitationType()).isEqualTo(PrecipitationType.RAIN);
+    }
+
+    @Test
+    @DisplayName("슬롯이_1개뿐인_응답_창_끝단_날짜는_결과에서_제외된다")
+    void 슬롯이_1개뿐인_응답_창_끝단_날짜는_결과에서_제외된다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("TMP", "20260729", "0000", "24"),
+          item("TMP", "20260729", "0300", "23"),
+          item("TMP", "20260729", "0600", "24"),
+          item("TMP", "20260729", "0900", "27"),
+          // 응답 창 끝단 - 슬롯 1개뿐인 부실한 날짜
+          item("TMP", "20260801", "0000", "26")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).date()).isEqualTo(LocalDate.of(2026, 7, 29));
     }
   }
 
