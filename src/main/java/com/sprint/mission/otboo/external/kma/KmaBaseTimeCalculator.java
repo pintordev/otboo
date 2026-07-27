@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.external.kma;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -48,5 +50,10 @@ public final class KmaBaseTimeCalculator {
 
   public record BaseTime(String baseDate, String baseTime) {
 
+    public Instant toInstant() {
+      LocalDate date = LocalDate.parse(baseDate, DATE_FORMATTER);
+      LocalTime time = LocalTime.parse(baseTime, DateTimeFormatter.ofPattern("HHmm"));
+      return date.atTime(time).atZone(KST).toInstant();
+    }
   }
 }
