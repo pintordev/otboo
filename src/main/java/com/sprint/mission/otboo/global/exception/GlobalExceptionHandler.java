@@ -21,14 +21,6 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(OtbooException.class)
-    public ResponseEntity<ErrorResponse> handleOtbooException(OtbooException e) {
-        log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
-        return ResponseEntity
-            .status(e.getStatus())
-            .body(new ErrorResponse(e.getClass().getSimpleName(), e.getMessage(), e.getDetails()));
-    }
-
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
         log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
@@ -95,6 +87,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse(e.getClass().getSimpleName(), "요청 값이 유효하지 않습니다.", details));
+    }
+
+    @ExceptionHandler(OtbooException.class)
+    public ResponseEntity<ErrorResponse> handleOtbooException(OtbooException e) {
+        log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
+        return ResponseEntity
+            .status(e.getStatus())
+            .body(new ErrorResponse(e.getClass().getSimpleName(), e.getMessage(), e.getDetails()));
     }
 
     @ExceptionHandler(Exception.class)
