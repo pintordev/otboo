@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
@@ -19,6 +21,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class KmaForecastParserTest {
+
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   private final KmaForecastParser parser = new KmaForecastParser();
 
@@ -159,7 +165,16 @@ class KmaForecastParserTest {
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
-    return new Item("20260727", "1700", category, fcstDate, fcstTime, fcstValue, 60, 127);
+    return FIXTURE_MONKEY.giveMeBuilder(Item.class)
+        .set("baseDate", "20260727")
+        .set("baseTime", "1700")
+        .set("category", category)
+        .set("fcstDate", fcstDate)
+        .set("fcstTime", fcstTime)
+        .set("fcstValue", fcstValue)
+        .set("nx", 60)
+        .set("ny", 127)
+        .sample();
   }
 
   private KmaWeatherResponse responseOf(List<Item> items) {

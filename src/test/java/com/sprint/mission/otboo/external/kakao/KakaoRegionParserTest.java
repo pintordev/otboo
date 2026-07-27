@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.external.kakao;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse.Document;
 import java.util.List;
@@ -10,6 +12,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class KakaoRegionParserTest {
+
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   private final KakaoRegionParser parser = new KakaoRegionParser();
 
@@ -21,10 +27,10 @@ class KakaoRegionParserTest {
     @DisplayName("행정동_문서에서_지역명_4단계를_추출한다")
     void 행정동_문서에서_지역명_4단계를_추출한다() {
       // given
-      KakaoRegionResponse response = new KakaoRegionResponse(List.of(
-          new Document("B", "서울특별시 중구 명동", "서울특별시", "중구", "명동", ""),
-          new Document("H", "서울특별시 중구 명동", "서울특별시", "중구", "명동", "")
-      ));
+      Document legalDongDocument = document("B", "명동");
+      Document administrativeDongDocument = document("H", "명동");
+      KakaoRegionResponse response = new KakaoRegionResponse(
+          List.of(legalDongDocument, administrativeDongDocument));
 
       // when
       List<String> locationNames = parser.toLocationNames(response);
@@ -32,5 +38,16 @@ class KakaoRegionParserTest {
       // then
       assertThat(locationNames).containsExactly("서울특별시", "중구", "명동", "");
     }
+  }
+
+  private Document document(String regionType, String region3depthName) {
+    return FIXTURE_MONKEY.giveMeBuilder(Document.class)
+        .set("regionType", regionType)
+        .set("addressName", "서울특별시 중구 " + region3depthName)
+        .set("region1depthName", "서울특별시")
+        .set("region2depthName", "중구")
+        .set("region3depthName", region3depthName)
+        .set("region4depthName", "")
+        .sample();
   }
 }

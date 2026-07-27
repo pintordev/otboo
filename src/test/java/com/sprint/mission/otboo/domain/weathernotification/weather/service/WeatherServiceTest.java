@@ -8,6 +8,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -40,6 +42,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherServiceTest {
+
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   @Mock
   private LocationRepository locationRepository;
@@ -87,8 +93,12 @@ class WeatherServiceTest {
       given(weatherRepository.findLatestRevisions(eq(location), any()))
           .willReturn(List.of(todayWeather));
 
-      WeatherDto expectedDto = new WeatherDto(todayWeather.getId(), freshForecastedAt,
-          todayWeather.getForecastAt(), null, SkyStatus.CLEAR, null, null, null, null);
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("id", todayWeather.getId())
+          .set("forecastedAt", freshForecastedAt)
+          .set("forecastAt", todayWeather.getForecastAt())
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
       given(weatherMapper.toDto(todayWeather)).willReturn(expectedDto);
 
       // when
@@ -126,17 +136,25 @@ class WeatherServiceTest {
       given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
           "1700", 60, 127)).willReturn(kmaResponse);
 
-      DailyWeatherForecastDto todayForecast = new DailyWeatherForecastDto(
-          LocalDate.of(2026, 7, 27), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 10.0, 65.0,
-          28.0, 25.0, 31.0, 2.0);
+      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
+              DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .set("temperatureCurrent", 28.0)
+          .set("temperatureMin", 25.0)
+          .set("temperatureMax", 31.0)
+          .set("humidityCurrent", 65.0)
+          .sample();
       given(kmaForecastParser.parseDailyForecast(eq(kmaResponse), any()))
           .willReturn(List.of(todayForecast));
 
       given(weatherRepository.save(any(Weather.class)))
           .willAnswer(invocation -> invocation.getArgument(0));
 
-      WeatherDto expectedDto = new WeatherDto(null, null, null, null, SkyStatus.CLEAR, null, null,
-          null, null);
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
       given(weatherMapper.toDto(any(Weather.class))).willReturn(expectedDto);
 
       // when
@@ -169,17 +187,25 @@ class WeatherServiceTest {
       given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
           "1700", 60, 127)).willReturn(kmaResponse);
 
-      DailyWeatherForecastDto todayForecast = new DailyWeatherForecastDto(
-          LocalDate.of(2026, 7, 27), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 10.0, 65.0,
-          28.0, 25.0, 31.0, 2.0);
+      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
+              DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .set("temperatureCurrent", 28.0)
+          .set("temperatureMin", 25.0)
+          .set("temperatureMax", 31.0)
+          .set("humidityCurrent", 65.0)
+          .sample();
       given(kmaForecastParser.parseDailyForecast(eq(kmaResponse), any()))
           .willReturn(List.of(todayForecast));
 
       given(weatherRepository.save(any(Weather.class)))
           .willAnswer(invocation -> invocation.getArgument(0));
       given(weatherMapper.toDto(any(Weather.class))).willAnswer(
-          invocation -> new WeatherDto(null, null, null, null,
-              ((Weather) invocation.getArgument(0)).getSkyStatus(), null, null, null, null));
+          invocation -> FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+              .set("skyStatus", ((Weather) invocation.getArgument(0)).getSkyStatus())
+              .sample());
 
       // when
       weatherService.getWeather(latitude, longitude);
