@@ -78,4 +78,43 @@ class WeatherRepositoryTest {
       assertThat(found.get().getCreatedAt()).isNotNull();
     }
   }
+
+  @Nested
+  @DisplayName("FindLatestRevisions")
+  class FindLatestRevisions {
+
+    @Test
+    @DisplayName("같은_forecastAt에_여러_revision이_있으면_가장_최근_forecastedAt_행만_반환한다")
+    void 같은_forecastAt에_여러_revision이_있으면_가장_최근_forecastedAt_행만_반환한다() {
+      Location location = locationRepository.save(
+          Location.create(37.5674783, 126.9884121, 60, 127, List.of("서울특별시")));
+      testEntityManager.flush();
+
+      Instant day1 = Instant.parse("2026-07-27T00:00:00Z");
+      Instant day2 = Instant.parse("2026-07-28T00:00:00Z");
+
+      Weather day1OldRevision = weatherRepository.save(
+          weatherOf(location, Instant.parse("2026-07-27T02:10:00Z"), day1, 25.0));
+      Weather day1NewRevision = weatherRepository.save(
+          weatherOf(location, Instant.parse("2026-07-27T17:10:00Z"), day1, 28.0));
+      Weather day2Revision = weatherRepository.save(
+          weatherOf(location, Instant.parse("2026-07-27T17:10:00Z"), day2, 27.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<Weather> latestRevisions = weatherRepository.findLatestRevisions(location, day1);
+
+      assertThat(latestRevisions).hasSize(2);
+      assertThat(latestRevisions).extracting(Weather::getId)
+          .containsExactlyInAnyOrder(day1NewRevision.getId(), day2Revision.getId())
+          .doesNotContain(day1OldRevision.getId());
+    }
+
+    private Weather weatherOf(Location location, Instant forecastedAt, Instant forecastAt,
+        double temperatureCurrent) {
+      return Weather.create(location, forecastedAt, forecastAt, SkyStatus.CLEAR,
+          PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, temperatureCurrent, 0.0, 25.0, 31.0, 2.5,
+          WindStrength.WEAK);
+    }
+  }
 }
