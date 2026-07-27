@@ -96,4 +96,12 @@ public class GlobalExceptionHandler {
             .status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse(e.getClass().getSimpleName(), "요청 값이 유효하지 않습니다.", details));
     }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleException(Exception e) {
+        log.error("[{}] {}", e.getClass().getSimpleName(), e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse(e.getClass().getSimpleName(), "서버 내부 오류가 발생했습니다.", null));
+    }
 }
