@@ -22,6 +22,7 @@ public class KmaForecastParser {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
   private static final String FUTURE_REPRESENTATIVE_TIME = "1500";
+  private static final int MIN_SLOT_COUNT = 4;
 
   public List<DailyWeatherForecastDto> parseDailyForecast(KmaWeatherResponse response,
       Instant now) {
@@ -32,13 +33,23 @@ public class KmaForecastParser {
 
     List<DailyWeatherForecastDto> result = new ArrayList<>();
     for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
+      List<Item> dayItems = entry.getValue();
+      if (!hasEnoughSlots(dayItems)) {
+        continue;
+      }
+
       LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
       String representativeTime = date.isEqual(today)
-          ? closestFcstTime(entry.getValue(), now)
+          ? closestFcstTime(dayItems, now)
           : FUTURE_REPRESENTATIVE_TIME;
-      result.add(toDailyForecast(date, entry.getValue(), representativeTime));
+      result.add(toDailyForecast(date, dayItems, representativeTime));
     }
     return result;
+  }
+
+  private boolean hasEnoughSlots(List<Item> dayItems) {
+    long distinctSlotCount = dayItems.stream().map(Item::fcstTime).distinct().count();
+    return distinctSlotCount >= MIN_SLOT_COUNT;
   }
 
   private String closestFcstTime(List<Item> dayItems, Instant now) {
