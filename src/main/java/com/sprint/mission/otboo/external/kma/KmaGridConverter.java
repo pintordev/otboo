@@ -38,16 +38,16 @@ public final class KmaGridConverter {
     double olon = BASE_LON_DEG * degrad;
     double olat = BASE_LAT_DEG * degrad;
 
-    double sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+    double sn = conicFactor(slat2) / conicFactor(slat1);
     sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
 
-    double sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+    double sf = conicFactor(slat1);
     sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
 
-    double ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+    double ro = conicFactor(olat);
     ro = RE * sf / Math.pow(ro, sn);
 
-    double ra = Math.tan(Math.PI * 0.25 + latitude * degrad * 0.5);
+    double ra = conicFactor(latitude * degrad);
     ra = RE * sf / Math.pow(ra, sn);
 
     double theta = longitude * degrad - olon;
@@ -63,6 +63,11 @@ public final class KmaGridConverter {
     int ny = (int) Math.floor(ro - ra * Math.cos(theta) + Y_OFFSET + 0.5);
 
     return new KmaGridPoint(nx, ny);
+  }
+
+  // LCC 투영법 공식에서 반복 등장하는 tan(π/4 + φ/2) 항(정형위도 계수)
+  private static double conicFactor(double angleRad) {
+    return Math.tan(Math.PI * 0.25 + angleRad * 0.5);
   }
 
   public record KmaGridPoint(int nx, int ny) {

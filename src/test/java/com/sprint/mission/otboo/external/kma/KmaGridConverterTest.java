@@ -12,7 +12,7 @@ class KmaGridConverterTest {
 
   @Nested
   @DisplayName("위경도를_격자로_변환")
-  class 위경도를_격자로_변환 {
+  class ToGrid {
 
     @Test
     @DisplayName("서울_중구_좌표는_기상청_격자_nx_60_ny_127로_변환된다")
