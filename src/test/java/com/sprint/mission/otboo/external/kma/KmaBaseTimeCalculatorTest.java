@@ -27,5 +27,19 @@ class KmaBaseTimeCalculatorTest {
       assertThat(baseTime.baseDate()).isEqualTo("20260727");
       assertThat(baseTime.baseTime()).isEqualTo("1700");
     }
+
+    @Test
+    @DisplayName("자정_직후면_전날_23시_발표로_계산한다")
+    void 자정_직후면_전날_23시_발표로_계산한다() {
+      // given - 2026-07-27 01:30 KST
+      Instant now = Instant.parse("2026-07-26T16:30:00Z");
+
+      // when
+      BaseTime baseTime = KmaBaseTimeCalculator.calculate(now);
+
+      // then
+      assertThat(baseTime.baseDate()).isEqualTo("20260726");
+      assertThat(baseTime.baseTime()).isEqualTo("2300");
+    }
   }
 }
