@@ -15,6 +15,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WindSpeed
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherService;
 import java.time.Instant;
 import java.util.List;
@@ -64,6 +65,20 @@ class WeatherControllerTest {
           .andExpect(jsonPath("$[0].skyStatus").value("CLEAR"))
           .andExpect(jsonPath("$[0].location.x").value(60))
           .andExpect(jsonPath("$[0].temperature.current").value(28.0));
+    }
+
+    @Test
+    @DisplayName("한반도_범위_밖_좌표로_조회하면_400을_반환한다")
+    void 한반도_범위_밖_좌표로_조회하면_400을_반환한다() throws Exception {
+      // given
+      given(weatherService.getWeather(anyDouble(), anyDouble()))
+          .willThrow(InvalidCoordinateException.of(10.0, 127.0));
+
+      // when & then
+      mockMvc.perform(get("/api/weathers")
+              .param("longitude", "127.0")
+              .param("latitude", "10.0"))
+          .andExpect(status().isBadRequest());
     }
   }
 }
