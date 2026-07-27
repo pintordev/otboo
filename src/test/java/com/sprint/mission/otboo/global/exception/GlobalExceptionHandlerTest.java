@@ -10,8 +10,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,6 +50,21 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("요청 바디를 파싱할 수 없을 때")
+    class MessageNotReadable_처리 {
+
+        @Test
+        @DisplayName("400을 반환한다")
+        void _400을_반환한다() throws Exception {
+            mockMvc.perform(post("/test/body")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("not-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.exceptionName").value("HttpMessageNotReadableException"));
+        }
+    }
+
     @RestController
     @RequestMapping("/test")
     static class FakeController {
@@ -54,5 +72,13 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/ping")
         public void ping() {
         }
+
+        @PostMapping("/body")
+        public void body(@RequestBody FakeRequest request) {
+        }
+    }
+
+    record FakeRequest(String name) {
+
     }
 }
