@@ -202,31 +202,4 @@ class WeatherServiceTest {
               com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException.class);
     }
   }
-
-  @Nested
-  @DisplayName("GetLocation")
-  class GetLocation {
-
-    @Test
-    @DisplayName("좌표를_격자와_행정동명으로_변환해서_반환한다")
-    void 좌표를_격자와_행정동명으로_변환해서_반환한다() {
-      // given
-      double latitude = 37.5674783;
-      double longitude = 126.9884121;
-      KakaoRegionResponse kakaoResponse = new KakaoRegionResponse(List.of());
-      given(kakaoLocalClient.getRegionCode("KakaoAK kakao-rest-api-key", longitude, latitude))
-          .willReturn(kakaoResponse);
-      given(kakaoRegionParser.toLocationNames(kakaoResponse))
-          .willReturn(List.of("서울특별시", "중구", "명동", ""));
-
-      // when
-      var result = weatherService.getLocation(latitude, longitude);
-
-      // then
-      assertThat(result.x()).isEqualTo(60);
-      assertThat(result.y()).isEqualTo(127);
-      assertThat(result.locationNames()).containsExactly("서울특별시", "중구", "명동", "");
-      verifyNoInteractions(locationRepository, weatherRepository, kmaWeatherClient);
-    }
-  }
 }

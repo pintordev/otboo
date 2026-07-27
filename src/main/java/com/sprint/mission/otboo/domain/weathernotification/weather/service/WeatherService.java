@@ -2,7 +2,6 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherAPILocation;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -97,14 +96,6 @@ public class WeatherService {
             .toList();
 
     return result.stream().map(weatherMapper::toDto).toList();
-  }
-
-  public WeatherAPILocation getLocation(double latitude, double longitude) {
-    KmaGridPoint grid = toGrid(latitude, longitude);
-    KakaoRegionResponse kakaoResponse = kakaoLocalClient.getRegionCode(
-        "KakaoAK " + kakaoRestApiKey, longitude, latitude);
-    List<String> locationNames = kakaoRegionParser.toLocationNames(kakaoResponse);
-    return new WeatherAPILocation(latitude, longitude, grid.nx(), grid.ny(), locationNames);
   }
 
   private KmaGridPoint toGrid(double latitude, double longitude) {
