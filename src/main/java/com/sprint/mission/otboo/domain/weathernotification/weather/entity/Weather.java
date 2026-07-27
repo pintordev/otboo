@@ -1,0 +1,138 @@
+package com.sprint.mission.otboo.domain.weathernotification.weather.entity;
+
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+@Entity
+@Table(name = "weathers")
+@EntityListeners(AuditingEntityListener.class)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Weather {
+
+  @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
+  @Column(name = "id", nullable = false, updatable = false)
+  private UUID id;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "location_id", nullable = false)
+  private Location location;
+
+  @Column(name = "forecasted_at", nullable = false)
+  private Instant forecastedAt;
+
+  @Column(name = "forecast_at", nullable = false)
+  private Instant forecastAt;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "sky_status", nullable = false)
+  private SkyStatus skyStatus;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "precipitation_type", nullable = false)
+  private PrecipitationType precipitationType;
+
+  @Column(name = "precipitation_amount", nullable = false)
+  private double precipitationAmount;
+
+  @Column(name = "precipitation_probability", nullable = false)
+  private double precipitationProbability;
+
+  @Column(name = "humidity_current", nullable = false)
+  private double humidityCurrent;
+
+  @Column(name = "humidity_compared", nullable = false)
+  private double humidityCompared;
+
+  @Column(name = "temperature_current", nullable = false)
+  private double temperatureCurrent;
+
+  @Column(name = "temperature_compared", nullable = false)
+  private double temperatureCompared;
+
+  @Column(name = "temperature_min", nullable = false)
+  private double temperatureMin;
+
+  @Column(name = "temperature_max", nullable = false)
+  private double temperatureMax;
+
+  @Column(name = "wind_speed", nullable = false)
+  private double windSpeed;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "wind_as_word", nullable = false)
+  private WindStrength windAsWord;
+
+  @CreatedDate
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
+
+  @Builder(access = AccessLevel.PRIVATE)
+  private Weather(Location location, Instant forecastedAt, Instant forecastAt,
+      SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
+      double precipitationProbability, double humidityCurrent, double humidityCompared,
+      double temperatureCurrent, double temperatureCompared, double temperatureMin,
+      double temperatureMax, double windSpeed, WindStrength windAsWord) {
+    this.location = location;
+    this.forecastedAt = forecastedAt;
+    this.forecastAt = forecastAt;
+    this.skyStatus = skyStatus;
+    this.precipitationType = precipitationType;
+    this.precipitationAmount = precipitationAmount;
+    this.precipitationProbability = precipitationProbability;
+    this.humidityCurrent = humidityCurrent;
+    this.humidityCompared = humidityCompared;
+    this.temperatureCurrent = temperatureCurrent;
+    this.temperatureCompared = temperatureCompared;
+    this.temperatureMin = temperatureMin;
+    this.temperatureMax = temperatureMax;
+    this.windSpeed = windSpeed;
+    this.windAsWord = windAsWord;
+  }
+
+  public static Weather create(Location location, Instant forecastedAt, Instant forecastAt,
+      SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
+      double precipitationProbability, double humidityCurrent, double humidityCompared,
+      double temperatureCurrent, double temperatureCompared, double temperatureMin,
+      double temperatureMax, double windSpeed, WindStrength windAsWord) {
+    return Weather.builder()
+        .location(location)
+        .forecastedAt(forecastedAt)
+        .forecastAt(forecastAt)
+        .skyStatus(skyStatus)
+        .precipitationType(precipitationType)
+        .precipitationAmount(precipitationAmount)
+        .precipitationProbability(precipitationProbability)
+        .humidityCurrent(humidityCurrent)
+        .humidityCompared(humidityCompared)
+        .temperatureCurrent(temperatureCurrent)
+        .temperatureCompared(temperatureCompared)
+        .temperatureMin(temperatureMin)
+        .temperatureMax(temperatureMax)
+        .windSpeed(windSpeed)
+        .windAsWord(windAsWord)
+        .build();
+  }
+}
