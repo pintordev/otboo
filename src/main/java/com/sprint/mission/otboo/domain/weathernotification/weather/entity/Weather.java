@@ -37,8 +37,8 @@ public class Weather {
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "location_id", nullable = false)
-  private Location location;
+  @JoinColumn(name = "weather_grid_id", nullable = false)
+  private WeatherGrid weatherGrid;
 
   @Column(name = "forecasted_at", nullable = false)
   private Instant forecastedAt;
@@ -90,12 +90,12 @@ public class Weather {
   private Instant createdAt;
 
   @Builder(access = AccessLevel.PRIVATE)
-  private Weather(Location location, Instant forecastedAt, Instant forecastAt,
+  private Weather(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
       SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
       double precipitationProbability, double humidityCurrent, double humidityCompared,
       double temperatureCurrent, double temperatureCompared, double temperatureMin,
       double temperatureMax, double windSpeed, WindStrength windAsWord) {
-    this.location = location;
+    this.weatherGrid = weatherGrid;
     this.forecastedAt = forecastedAt;
     this.forecastAt = forecastAt;
     this.skyStatus = skyStatus;
@@ -112,13 +112,13 @@ public class Weather {
     this.windAsWord = windAsWord;
   }
 
-  public static Weather create(Location location, Instant forecastedAt, Instant forecastAt,
+  public static Weather create(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
       SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
       double precipitationProbability, double humidityCurrent, double humidityCompared,
       double temperatureCurrent, double temperatureCompared, double temperatureMin,
       double temperatureMax, double windSpeed, WindStrength windAsWord) {
     return Weather.builder()
-        .location(location)
+        .weatherGrid(weatherGrid)
         .forecastedAt(forecastedAt)
         .forecastAt(forecastAt)
         .skyStatus(skyStatus)

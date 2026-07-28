@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
@@ -75,15 +75,15 @@ class WeatherServiceTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      Location location = Location.create(latitude, longitude, 60, 127, null);
-      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
-          .willReturn(location);
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
 
       Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
-      Weather todayWeather = Weather.create(location, freshForecastedAt,
+      Weather todayWeather = Weather.create(weatherGrid, freshForecastedAt,
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE,
           0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
-      given(weatherRepository.findLatestRevisions(eq(location), any()))
+      given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(todayWeather));
 
       List<String> locationNames = List.of("서울특별시", "중구", "명동");
@@ -114,11 +114,11 @@ class WeatherServiceTest {
       double latitude = 37.5674783;
       double longitude = 126.9884121;
 
-      Location createdLocation = Location.create(latitude, longitude, 60, 127, null);
-      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
-          .willReturn(createdLocation);
+      WeatherGrid createdWeatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(createdWeatherGrid);
 
-      given(weatherRepository.findLatestRevisions(eq(createdLocation), any()))
+      given(weatherRepository.findLatestRevisions(eq(createdWeatherGrid), any()))
           .willReturn(List.of());
 
       KmaWeatherResponse kmaResponse = new KmaWeatherResponse(null);
@@ -164,15 +164,15 @@ class WeatherServiceTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      Location location = Location.create(latitude, longitude, 60, 127, null);
-      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
-          .willReturn(location);
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
 
       // 어제(D-1) 데이터만 존재, 오늘 데이터는 없음(stale)
-      Weather yesterdayWeather = Weather.create(location, Instant.parse("2026-07-26T08:00:00Z"),
+      Weather yesterdayWeather = Weather.create(weatherGrid, Instant.parse("2026-07-26T08:00:00Z"),
           Instant.parse("2026-07-26T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
           0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK);
-      given(weatherRepository.findLatestRevisions(eq(location), any()))
+      given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 
       KmaWeatherResponse kmaResponse = new KmaWeatherResponse(null);

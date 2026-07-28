@@ -1,7 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -14,9 +14,9 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID> {
   @Query(value = """
       SELECT DISTINCT ON (forecast_at) *
       FROM weathers
-      WHERE location_id = :#{#location.id} AND forecast_at >= :from
+      WHERE weather_grid_id = :#{#weatherGrid.id} AND forecast_at >= :from
       ORDER BY forecast_at, forecasted_at DESC
       """, nativeQuery = true)
-  List<Weather> findLatestRevisions(@Param("location") Location location,
+  List<Weather> findLatestRevisions(@Param("weatherGrid") WeatherGrid weatherGrid,
       @Param("from") Instant from);
 }

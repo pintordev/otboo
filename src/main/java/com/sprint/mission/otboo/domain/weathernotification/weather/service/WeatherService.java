@@ -1,7 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
@@ -63,12 +63,12 @@ public class WeatherService {
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);
     KmaGridPoint grid = toGrid(latitude, longitude);
-    Location location = locationResolver.resolveLocation(grid, latitude, longitude);
+    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
 
     LocalDate today = LocalDate.now(clock.withZone(KST));
     LocalDate yesterday = today.minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
-    List<Weather> latestRevisions = weatherRepository.findLatestRevisions(location, from);
+    List<Weather> latestRevisions = weatherRepository.findLatestRevisions(weatherGrid, from);
 
     Map<LocalDate, Weather> existingByDate = latestRevisions.stream()
         .collect(Collectors.toMap(this::toForecastDate, w -> w));
@@ -79,7 +79,7 @@ public class WeatherService {
         || todayWeather.getForecastedAt().isBefore(latestBaseTime.toInstant());
 
     List<Weather> result = stale
-        ? fetchLiveAndSave(location, grid, latestBaseTime, existingByDate)
+        ? fetchLiveAndSave(weatherGrid, grid, latestBaseTime, existingByDate)
         : latestRevisions.stream()
             .filter(w -> !toForecastDate(w).isBefore(today))
             .toList();
@@ -103,7 +103,7 @@ public class WeatherService {
     }
   }
 
-  private List<Weather> fetchLiveAndSave(Location location, KmaGridPoint grid,
+  private List<Weather> fetchLiveAndSave(WeatherGrid weatherGrid, KmaGridPoint grid,
       BaseTime baseTime, Map<LocalDate, Weather> existingByDate) {
     log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
         baseTime.baseDate(), baseTime.baseTime());
@@ -129,7 +129,7 @@ public class WeatherService {
       double humidityCompared =
           previousHumidity != null ? dto.humidityCurrent() - previousHumidity : 0.0;
 
-      Weather weather = Weather.create(location, baseTime.toInstant(),
+      Weather weather = Weather.create(weatherGrid, baseTime.toInstant(),
           dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
           dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
           humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),

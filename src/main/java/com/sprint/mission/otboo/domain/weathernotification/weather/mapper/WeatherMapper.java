@@ -6,8 +6,8 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.dto.Precipita
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.TemperatureDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WindSpeedDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -16,13 +16,13 @@ public class WeatherMapper {
 
   public WeatherDto toDto(Weather weather, double latitude, double longitude,
       List<String> locationNames) {
-    Location location = weather.getLocation();
+    WeatherGrid weatherGrid = weather.getWeatherGrid();
 
     LocationDto locationDto = new LocationDto(
         latitude,
         longitude,
-        location.getX(),
-        location.getY(),
+        weatherGrid.getX(),
+        weatherGrid.getY(),
         locationNames
     );
 

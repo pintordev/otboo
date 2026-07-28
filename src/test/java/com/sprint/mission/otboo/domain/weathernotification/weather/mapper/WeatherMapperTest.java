@@ -3,8 +3,8 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
@@ -26,9 +26,9 @@ class WeatherMapperTest {
     @DisplayName("Weather와_Location을_WeatherDto로_정확히_변환한다")
     void Weather와_Location을_WeatherDto로_정확히_변환한다() {
       // given
-      Location location = Location.create(37.5674783, 126.9884121, 60, 127, null);
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Weather weather = Weather.create(
-          location,
+          weatherGrid,
           Instant.parse("2026-07-27T08:00:00Z"),
           Instant.parse("2026-07-27T00:00:00Z"),
           SkyStatus.CLEAR,

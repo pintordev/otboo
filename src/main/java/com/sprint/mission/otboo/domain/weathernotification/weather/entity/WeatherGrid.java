@@ -9,37 +9,27 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(
-    name = "locations",
-    uniqueConstraints = @UniqueConstraint(name = "UQ_locations_x_y", columnNames = {"x", "y"})
+    name = "weather_grids",
+    uniqueConstraints = @UniqueConstraint(name = "UQ_weather_grids_x_y", columnNames = {"x", "y"})
 )
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Location {
+public class WeatherGrid {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   @Column(name = "id", nullable = false, updatable = false)
   private UUID id;
-
-  @Column(name = "latitude", nullable = false)
-  private double latitude;
-
-  @Column(name = "longitude", nullable = false)
-  private double longitude;
 
   @Column(name = "x", nullable = false)
   private int x;
@@ -47,28 +37,16 @@ public class Location {
   @Column(name = "y", nullable = false)
   private int y;
 
-  @JdbcTypeCode(SqlTypes.JSON)
-  @Column(name = "location_names")
-  private List<String> locationNames;
-
   @CreatedDate
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
-  @LastModifiedDate
-  @Column(name = "updated_at", nullable = false)
-  private Instant updatedAt;
-
-  private Location(double latitude, double longitude, int x, int y, List<String> locationNames) {
-    this.latitude = latitude;
-    this.longitude = longitude;
+  private WeatherGrid(int x, int y) {
     this.x = x;
     this.y = y;
-    this.locationNames = locationNames;
   }
 
-  public static Location create(double latitude, double longitude, int x, int y,
-      List<String> locationNames) {
-    return new Location(latitude, longitude, x, y, locationNames);
+  public static WeatherGrid create(int x, int y) {
+    return new WeatherGrid(x, y);
   }
 }

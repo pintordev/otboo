@@ -2,7 +2,6 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -10,10 +9,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.LocationBlock;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationBlockRepository;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
 import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
@@ -34,7 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LocationResolverTest {
 
   @Mock
-  private LocationRepository locationRepository;
+  private WeatherGridRepository weatherGridRepository;
   @Mock
   private LocationBlockRepository locationBlockRepository;
   @Mock
@@ -46,29 +45,28 @@ class LocationResolverTest {
 
   @BeforeEach
   void setUp() {
-    locationResolver = new LocationResolver(locationRepository, locationBlockRepository,
+    locationResolver = new LocationResolver(weatherGridRepository, locationBlockRepository,
         kakaoLocalClient, kakaoRegionParser, "kakao-rest-api-key");
   }
 
   @Nested
-  @DisplayName("ResolveLocation")
-  class ResolveLocation {
+  @DisplayName("ResolveWeatherGrid")
+  class ResolveWeatherGrid {
 
     @Test
-    @DisplayName("기존_위치가_있으면_그대로_반환한다")
-    void 기존_위치가_있으면_그대로_반환한다() {
+    @DisplayName("기존_격자가_있으면_그대로_반환한다")
+    void 기존_격자가_있으면_그대로_반환한다() {
       // given
       KmaGridPoint grid = new KmaGridPoint(60, 127);
-      Location location = Location.create(37.5674783, 126.9884121, 60, 127, null);
-      given(locationRepository.findByXAndY(60, 127)).willReturn(Optional.of(location));
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(weatherGridRepository.findByXAndY(60, 127)).willReturn(Optional.of(weatherGrid));
 
       // when
-      Location result = locationResolver.resolveLocation(grid, 37.5674783, 126.9884121);
+      WeatherGrid result = locationResolver.resolveWeatherGrid(grid);
 
       // then
-      assertThat(result).isEqualTo(location);
-      verify(locationRepository, never()).insertIfAbsent(any(), anyInt(), anyInt(), anyDouble(),
-          anyDouble());
+      assertThat(result).isEqualTo(weatherGrid);
+      verify(weatherGridRepository, never()).insertIfAbsent(any(), anyInt(), anyInt());
     }
 
     @Test
@@ -76,17 +74,16 @@ class LocationResolverTest {
     void 없으면_생성_후_반환한다() {
       // given
       KmaGridPoint grid = new KmaGridPoint(60, 127);
-      Location createdLocation = Location.create(37.5674783, 126.9884121, 60, 127, null);
-      given(locationRepository.findByXAndY(60, 127))
-          .willReturn(Optional.empty(), Optional.of(createdLocation));
+      WeatherGrid createdWeatherGrid = WeatherGrid.create(60, 127);
+      given(weatherGridRepository.findByXAndY(60, 127))
+          .willReturn(Optional.empty(), Optional.of(createdWeatherGrid));
 
       // when
-      Location result = locationResolver.resolveLocation(grid, 37.5674783, 126.9884121);
+      WeatherGrid result = locationResolver.resolveWeatherGrid(grid);
 
       // then
-      assertThat(result).isEqualTo(createdLocation);
-      verify(locationRepository).insertIfAbsent(any(), eq(60), eq(127), eq(37.5674783),
-          eq(126.9884121));
+      assertThat(result).isEqualTo(createdWeatherGrid);
+      verify(weatherGridRepository).insertIfAbsent(any(), eq(60), eq(127));
       verifyNoInteractions(kakaoLocalClient);
     }
   }

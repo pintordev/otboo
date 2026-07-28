@@ -2,10 +2,10 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.LocationBlock;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationBlockRepository;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
 import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
@@ -21,29 +21,28 @@ import org.springframework.stereotype.Component;
 public class LocationResolver {
 
   private final ObjectMapper mapper = new ObjectMapper();
-  private final LocationRepository locationRepository;
+  private final WeatherGridRepository weatherGridRepository;
   private final LocationBlockRepository locationBlockRepository;
   private final KakaoLocalClient kakaoLocalClient;
   private final KakaoRegionParser kakaoRegionParser;
   private final String kakaoRestApiKey;
 
-  public LocationResolver(LocationRepository locationRepository,
+  public LocationResolver(WeatherGridRepository weatherGridRepository,
       LocationBlockRepository locationBlockRepository, KakaoLocalClient kakaoLocalClient,
       KakaoRegionParser kakaoRegionParser,
       @Value("${weather.kakao.rest-api-key}") String kakaoRestApiKey) {
-    this.locationRepository = locationRepository;
+    this.weatherGridRepository = weatherGridRepository;
     this.locationBlockRepository = locationBlockRepository;
     this.kakaoLocalClient = kakaoLocalClient;
     this.kakaoRegionParser = kakaoRegionParser;
     this.kakaoRestApiKey = kakaoRestApiKey;
   }
 
-  public Location resolveLocation(KmaGridPoint grid, double latitude, double longitude) {
-    return locationRepository.findByXAndY(grid.nx(), grid.ny())
+  public WeatherGrid resolveWeatherGrid(KmaGridPoint grid) {
+    return weatherGridRepository.findByXAndY(grid.nx(), grid.ny())
         .orElseGet(() -> {
-          locationRepository.insertIfAbsent(UUID.randomUUID(), grid.nx(), grid.ny(), latitude,
-              longitude);
-          return locationRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
+          weatherGridRepository.insertIfAbsent(UUID.randomUUID(), grid.nx(), grid.ny());
+          return weatherGridRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
         });
   }
 
