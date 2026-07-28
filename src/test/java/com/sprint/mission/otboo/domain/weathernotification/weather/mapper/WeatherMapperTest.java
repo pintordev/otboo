@@ -26,7 +26,7 @@ class WeatherMapperTest {
     @DisplayName("Weather와_Location을_WeatherDto로_정확히_변환한다")
     void Weather와_Location을_WeatherDto로_정확히_변환한다() {
       // given
-      Location location = Location.create(37.5674783, 126.9884121, 60, 127, List.of("서울특별시"));
+      Location location = Location.create(37.5674783, 126.9884121, 60, 127, null);
       Weather weather = Weather.create(
           location,
           Instant.parse("2026-07-27T08:00:00Z"),
@@ -45,15 +45,22 @@ class WeatherMapperTest {
           WindStrength.WEAK
       );
 
+      double requestLatitude = 37.1234567;
+      double requestLongitude = 127.1234567;
+      List<String> requestLocationNames = List.of("서울특별시", "종로구", "청운동");
+
       // when
-      WeatherDto dto = weatherMapper.toDto(weather);
+      WeatherDto dto = weatherMapper.toDto(weather, requestLatitude, requestLongitude,
+          requestLocationNames);
 
       // then
       assertThat(dto.forecastedAt()).isEqualTo(Instant.parse("2026-07-27T08:00:00Z"));
       assertThat(dto.forecastAt()).isEqualTo(Instant.parse("2026-07-27T00:00:00Z"));
+      assertThat(dto.location().latitude()).isEqualTo(requestLatitude);
+      assertThat(dto.location().longitude()).isEqualTo(requestLongitude);
       assertThat(dto.location().x()).isEqualTo(60);
       assertThat(dto.location().y()).isEqualTo(127);
-      assertThat(dto.location().locationNames()).containsExactly("서울특별시");
+      assertThat(dto.location().locationNames()).containsExactly("서울특별시", "종로구", "청운동");
       assertThat(dto.skyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(dto.precipitation().type()).isEqualTo(PrecipitationType.NONE);
       assertThat(dto.precipitation().probability()).isEqualTo(10.0);

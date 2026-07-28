@@ -189,7 +189,17 @@ erDiagram
         string wind_as_word
         instant created_at
     }
+
+    LOCATION_BLOCK {
+        uuid id PK
+        int lat_block "위도 ~50m 단위 양자화 인덱스"
+        int lon_block "경도 ~50m 단위 양자화 인덱스"
+        json location_names "행정구역명 배열"
+        instant created_at
+    }
 ```
+
+> `LOCATION_BLOCK`은 `LOCATION`과 관계(FK)가 없습니다 — 설계 노트 15 참고.
 
 > `RECOMMENDATION`은 테이블이 아닙니다 — `GET /api/recommendations`는 저장된 데이터를 조회하는 게 아니라 날씨+프로필+의상 데이터를 기반으로 그때그때 계산하는 응답이라 영속 엔티티가 필요 없습니다.
 
@@ -209,3 +219,4 @@ erDiagram
 12. **DB 제약/인덱스 네이밍 규칙** — `PK_{TABLE}`, `FK_{참조테이블}_TO_{현재테이블}_{순번}`, `CHK_{table}_{column}`, `UQ_{table}_{columns}`, `IDX_{table}_{columns}` 형식으로 통일합니다(`conventions.md` §2-2 참고).
 13. **`CLOTHES_ATTRIBUTE_DEF`의 선택 가능 값은 JSONB 대신 별도 테이블로 분리** — `selectable_values` JSON 배열 컬럼을 없애고 `CLOTHES_ATTRIBUTE_DEF_VALUE`(값 1개당 1행)로 분리합니다. 값 추가/삭제/순서 변경이 UPDATE 없이 행 단위로 가능해지고, 특정 값이 실제 사용 중인지도 SQL로 바로 확인할 수 있습니다.
 14. **`CLOTHES_ATTRIBUTE`의 정의당 다중 값 허용 여부 — 미결정** ⚠️ 현재는 `(clothes_id, definition_id)` UNIQUE로 정의당 값 1개만 허용하지만, 색상처럼 다중 값이 자연스러운 속성도 있어 1:N 허용 여부를 팀 결정 필요. 허용하기로 하면 유니크 제약을 `(clothes_id, definition_id, value)`로 변경.
+15. **`LOCATION_BLOCK` 신설 — 응답용 행정구역명을 `LOCATION`(5km 격자)과 분리 캐싱** — 기상청 격자는 5km 단위라 하나의 격자에 여러 행정동(많게는 4개 자치구, 최대 28개 동)이 걸칠 수 있어, `LOCATION.location_names`를 응답에 그대로 쓰면 같은 격자를 공유하는 다른 위치의 사용자에게 엉뚱한 행정구역명이 내려갑니다. `GET /api/weathers` 응답의 `latitude`/`longitude`는 요청 좌표를 그대로 반환하고, `location_names`는 `LOCATION`이 아니라 위경도를 ~50m 단위로 양자화한 `LOCATION_BLOCK`에서 조회/캐싱합니다. `LOCATION`은 날씨 중복 저장 방지(설계 노트 8)라는 원래 목적만 유지하고, `LOCATION_BLOCK`은 카카오 좌표→행정구역 변환 결과를 좌표 해상도에 맞게 캐싱하는 별도 책임으로 분리했습니다. `WEATHER`/`LOCATION`과는 FK 관계가 없는 독립 캐시 테이블입니다. `LOCATION.location_names`는 더 이상 애플리케이션에서 채우지 않습니다(항상 `NULL`) — 응답에서 안 쓰는 값을 위해 카카오를 중복 호출하지 않기 위함이며, 컬럼은 스키마 호환을 위해 남겨두되 사실상 deprecated입니다.

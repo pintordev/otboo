@@ -8,20 +8,22 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDt
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WindSpeedDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
 public class WeatherMapper {
 
-  public WeatherDto toDto(Weather weather) {
+  public WeatherDto toDto(Weather weather, double latitude, double longitude,
+      List<String> locationNames) {
     Location location = weather.getLocation();
 
     LocationDto locationDto = new LocationDto(
-        location.getLatitude(),
-        location.getLongitude(),
+        latitude,
+        longitude,
         location.getX(),
         location.getY(),
-        location.getLocationNames()
+        locationNames
     );
 
     PrecipitationDto precipitation = new PrecipitationDto(

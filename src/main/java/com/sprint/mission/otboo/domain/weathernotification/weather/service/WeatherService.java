@@ -1,18 +1,12 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
-import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
-import com.sprint.mission.otboo.external.kakao.KakaoRegionParser;
-import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastParser;
@@ -29,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,42 +37,33 @@ public class WeatherService {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int FORECAST_NUM_OF_ROWS = 1000;
   private static final int FORECAST_PAGE_NO = 1;
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  private final LocationRepository locationRepository;
   private final WeatherRepository weatherRepository;
   private final KmaWeatherClient kmaWeatherClient;
   private final KmaForecastParser kmaForecastParser;
-  private final KakaoLocalClient kakaoLocalClient;
-  private final KakaoRegionParser kakaoRegionParser;
+  private final LocationResolver locationResolver;
   private final WeatherMapper weatherMapper;
   private final Clock clock;
   private final String kmaServiceKey;
-  private final String kakaoRestApiKey;
 
-  public WeatherService(LocationRepository locationRepository, WeatherRepository weatherRepository,
+  public WeatherService(WeatherRepository weatherRepository,
       KmaWeatherClient kmaWeatherClient, KmaForecastParser kmaForecastParser,
-      KakaoLocalClient kakaoLocalClient, KakaoRegionParser kakaoRegionParser,
-      WeatherMapper weatherMapper, Clock clock,
-      @Value("${weather.kma.service-key}") String kmaServiceKey,
-      @Value("${weather.kakao.rest-api-key}") String kakaoRestApiKey) {
-    this.locationRepository = locationRepository;
+      LocationResolver locationResolver, WeatherMapper weatherMapper, Clock clock,
+      @Value("${weather.kma.service-key}") String kmaServiceKey) {
     this.weatherRepository = weatherRepository;
     this.kmaWeatherClient = kmaWeatherClient;
     this.kmaForecastParser = kmaForecastParser;
-    this.kakaoLocalClient = kakaoLocalClient;
-    this.kakaoRegionParser = kakaoRegionParser;
+    this.locationResolver = locationResolver;
     this.weatherMapper = weatherMapper;
     this.clock = clock;
     this.kmaServiceKey = kmaServiceKey;
-    this.kakaoRestApiKey = kakaoRestApiKey;
   }
 
   @Transactional
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);
     KmaGridPoint grid = toGrid(latitude, longitude);
-    Location location = findOrCreateLocation(grid, latitude, longitude);
+    Location location = locationResolver.resolveLocation(grid, latitude, longitude);
 
     LocalDate today = LocalDate.now(clock.withZone(KST));
     LocalDate yesterday = today.minusDays(1);
@@ -100,7 +84,10 @@ public class WeatherService {
             .filter(w -> !toForecastDate(w).isBefore(today))
             .toList();
 
-    return result.stream().map(weatherMapper::toDto).toList();
+    List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
+    return result.stream()
+        .map(weather -> weatherMapper.toDto(weather, latitude, longitude, locationNames))
+        .toList();
   }
 
   private LocalDate toForecastDate(Weather weather) {
@@ -114,19 +101,6 @@ public class WeatherService {
       log.warn("한반도 범위를 벗어난 좌표 요청: latitude={}, longitude={}", latitude, longitude);
       throw InvalidCoordinateException.of(latitude, longitude);
     }
-  }
-
-  private Location findOrCreateLocation(KmaGridPoint grid, double latitude, double longitude) {
-    return locationRepository.findByXAndY(grid.nx(), grid.ny())
-        .orElseGet(() -> {
-          KakaoRegionResponse kakaoResponse = kakaoLocalClient.getRegionCode(
-              "KakaoAK " + kakaoRestApiKey, longitude, latitude);
-          List<String> locationNames = kakaoRegionParser.toLocationNames(kakaoResponse);
-
-          locationRepository.insertIfAbsent(UUID.randomUUID(), grid.nx(), grid.ny(), latitude,
-              longitude, toJson(locationNames));
-          return locationRepository.findByXAndY(grid.nx(), grid.ny()).orElseThrow();
-        });
   }
 
   private List<Weather> fetchLiveAndSave(Location location, KmaGridPoint grid,
@@ -178,13 +152,5 @@ public class WeatherService {
       return WindStrength.MODERATE;
     }
     return WindStrength.STRONG;
-  }
-
-  private String toJson(List<String> locationNames) {
-    try {
-      return OBJECT_MAPPER.writeValueAsString(locationNames);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("locationNames 직렬화 실패", e);
-    }
   }
 }

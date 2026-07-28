@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -17,12 +18,9 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
-import com.sprint.mission.otboo.external.kakao.KakaoLocalClient;
-import com.sprint.mission.otboo.external.kakao.KakaoRegionParser;
-import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kma.KmaForecastParser;
+import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.KmaWeatherClient;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
@@ -31,7 +29,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -48,17 +45,13 @@ class WeatherServiceTest {
       .build();
 
   @Mock
-  private LocationRepository locationRepository;
-  @Mock
   private WeatherRepository weatherRepository;
   @Mock
   private KmaWeatherClient kmaWeatherClient;
   @Mock
   private KmaForecastParser kmaForecastParser;
   @Mock
-  private KakaoLocalClient kakaoLocalClient;
-  @Mock
-  private KakaoRegionParser kakaoRegionParser;
+  private LocationResolver locationResolver;
   @Mock
   private WeatherMapper weatherMapper;
 
@@ -68,9 +61,8 @@ class WeatherServiceTest {
   void setUp() {
     // 2026-07-27 18:00 KST 고정 - 17시 발표가 최신
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
-    weatherService = new WeatherService(locationRepository, weatherRepository, kmaWeatherClient,
-        kmaForecastParser, kakaoLocalClient, kakaoRegionParser, weatherMapper,
-        clock, "kma-service-key", "kakao-rest-api-key");
+    weatherService = new WeatherService(weatherRepository, kmaWeatherClient, kmaForecastParser,
+        locationResolver, weatherMapper, clock, "kma-service-key");
   }
 
   @Nested
@@ -83,8 +75,9 @@ class WeatherServiceTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      Location location = Location.create(latitude, longitude, 60, 127, List.of("서울특별시"));
-      given(locationRepository.findByXAndY(60, 127)).willReturn(Optional.of(location));
+      Location location = Location.create(latitude, longitude, 60, 127, null);
+      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
+          .willReturn(location);
 
       Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
       Weather todayWeather = Weather.create(location, freshForecastedAt,
@@ -93,20 +86,25 @@ class WeatherServiceTest {
       given(weatherRepository.findLatestRevisions(eq(location), any()))
           .willReturn(List.of(todayWeather));
 
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(locationNames);
+
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("id", todayWeather.getId())
           .set("forecastedAt", freshForecastedAt)
           .set("forecastAt", todayWeather.getForecastAt())
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(todayWeather)).willReturn(expectedDto);
+      given(weatherMapper.toDto(todayWeather, latitude, longitude, locationNames))
+          .willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
 
       // then
       assertThat(result).containsExactly(expectedDto);
-      verifyNoInteractions(kmaWeatherClient, kakaoLocalClient);
+      verifyNoInteractions(kmaWeatherClient);
     }
 
     @Test
@@ -116,18 +114,9 @@ class WeatherServiceTest {
       double latitude = 37.5674783;
       double longitude = 126.9884121;
 
-      given(locationRepository.findByXAndY(60, 127)).willReturn(Optional.empty());
-
-      KakaoRegionResponse kakaoResponse = new KakaoRegionResponse(List.of());
-      given(kakaoLocalClient.getRegionCode("KakaoAK kakao-rest-api-key", longitude, latitude))
-          .willReturn(kakaoResponse);
-      given(kakaoRegionParser.toLocationNames(kakaoResponse))
-          .willReturn(List.of("서울특별시", "중구", "명동", ""));
-
-      Location createdLocation = Location.create(latitude, longitude, 60, 127,
-          List.of("서울특별시", "중구", "명동", ""));
-      given(locationRepository.findByXAndY(60, 127))
-          .willReturn(Optional.empty(), Optional.of(createdLocation));
+      Location createdLocation = Location.create(latitude, longitude, 60, 127, null);
+      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
+          .willReturn(createdLocation);
 
       given(weatherRepository.findLatestRevisions(eq(createdLocation), any()))
           .willReturn(List.of());
@@ -152,18 +141,20 @@ class WeatherServiceTest {
       given(weatherRepository.save(any(Weather.class)))
           .willAnswer(invocation -> invocation.getArgument(0));
 
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(List.of("서울특별시", "중구", "명동"));
+
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(any(Weather.class))).willReturn(expectedDto);
+      given(weatherMapper.toDto(any(Weather.class), eq(latitude), eq(longitude), anyList()))
+          .willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
 
       // then
       assertThat(result).containsExactly(expectedDto);
-      verify(locationRepository).insertIfAbsent(any(), eq(60), eq(127), eq(latitude),
-          eq(longitude), any());
       verify(weatherRepository).save(any(Weather.class));
     }
 
@@ -173,8 +164,9 @@ class WeatherServiceTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      Location location = Location.create(latitude, longitude, 60, 127, List.of("서울특별시"));
-      given(locationRepository.findByXAndY(60, 127)).willReturn(Optional.of(location));
+      Location location = Location.create(latitude, longitude, 60, 127, null);
+      given(locationResolver.resolveLocation(new KmaGridPoint(60, 127), latitude, longitude))
+          .willReturn(location);
 
       // 어제(D-1) 데이터만 존재, 오늘 데이터는 없음(stale)
       Weather yesterdayWeather = Weather.create(location, Instant.parse("2026-07-26T08:00:00Z"),
@@ -202,10 +194,13 @@ class WeatherServiceTest {
 
       given(weatherRepository.save(any(Weather.class)))
           .willAnswer(invocation -> invocation.getArgument(0));
-      given(weatherMapper.toDto(any(Weather.class))).willAnswer(
-          invocation -> FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
-              .set("skyStatus", ((Weather) invocation.getArgument(0)).getSkyStatus())
-              .sample());
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(List.of("서울특별시", "중구", "명동"));
+      given(weatherMapper.toDto(any(Weather.class), eq(latitude), eq(longitude), anyList()))
+          .willAnswer(
+              invocation -> FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+                  .set("skyStatus", ((Weather) invocation.getArgument(0)).getSkyStatus())
+                  .sample());
 
       // when
       weatherService.getWeather(latitude, longitude);
@@ -217,7 +212,6 @@ class WeatherServiceTest {
       Weather savedTodayWeather = captor.getValue();
       assertThat(savedTodayWeather.getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
       assertThat(savedTodayWeather.getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
-      verifyNoInteractions(kakaoLocalClient);
     }
 
     @Test
