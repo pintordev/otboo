@@ -5,6 +5,7 @@ import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
+import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;

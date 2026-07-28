@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.external.kma;
+package com.sprint.mission.otboo.external.kma.exception;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;

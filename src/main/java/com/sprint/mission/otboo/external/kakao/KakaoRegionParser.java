@@ -1,8 +1,8 @@
 package com.sprint.mission.otboo.external.kakao;
 
-import com.sprint.mission.otboo.domain.weathernotification.weather.exception.LocationNotFoundException;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse.Document;
+import com.sprint.mission.otboo.external.kakao.exception.LocationNotFoundException;
 import java.util.List;
 import org.springframework.stereotype.Component;
 

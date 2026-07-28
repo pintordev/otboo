@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.external.kma;
+package com.sprint.mission.otboo.external.kma.exception;
 
 import com.sprint.mission.otboo.global.exception.OtbooException;
 import java.util.Map;

@@ -1,9 +1,9 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.exception;
+package com.sprint.mission.otboo.external.kakao.exception;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 
-public class LocationNotFoundException extends WeatherException {
+public class LocationNotFoundException extends KakaoException {
 
   private static final String MESSAGE = "해당 좌표의 행정구역 정보를 찾을 수 없습니다.";
 

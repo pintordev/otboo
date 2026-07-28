@@ -15,6 +15,7 @@ import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
+import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

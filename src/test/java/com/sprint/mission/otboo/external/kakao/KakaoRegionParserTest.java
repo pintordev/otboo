@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
-import com.sprint.mission.otboo.domain.weathernotification.weather.exception.LocationNotFoundException;
+import com.sprint.mission.otboo.external.kakao.exception.LocationNotFoundException;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse.Document;
 import java.util.List;
