@@ -31,7 +31,7 @@ erDiagram
     FEED ||--o{ FEED_LIKE : has
 
     WEATHER ||--o{ FEED : "snapshot copied into (FK 여부 미결정, 설계 노트 4)"
-    LOCATION ||--o{ WEATHER : "forecasted for"
+    WEATHER_GRID ||--o{ WEATHER : "forecasted for"
 
     USER {
         uuid id PK
@@ -159,20 +159,16 @@ erDiagram
         instant created_at
     }
 
-    LOCATION {
+    WEATHER_GRID {
         uuid id PK
-        double latitude
-        double longitude
         int x "기상청 격자 좌표"
         int y "기상청 격자 좌표"
-        json location_names "행정구역명 배열"
         instant created_at
-        instant updated_at
     }
 
     WEATHER {
         uuid id PK
-        uuid location_id FK
+        uuid weather_grid_id FK
         instant forecasted_at
         instant forecast_at
         string sky_status
@@ -190,7 +186,7 @@ erDiagram
         instant created_at
     }
 
-    LOCATION_BLOCK {
+    LOCATION {
         uuid id PK
         int lat_block "위도 ~50m 단위 양자화 인덱스"
         int lon_block "경도 ~50m 단위 양자화 인덱스"
@@ -199,7 +195,7 @@ erDiagram
     }
 ```
 
-> `LOCATION_BLOCK`은 `LOCATION`과 관계(FK)가 없습니다 — 설계 노트 15 참고.
+> `LOCATION`은 `WEATHER_GRID`와 관계(FK)가 없습니다 — 설계 노트 15 참고.
 
 > `RECOMMENDATION`은 테이블이 아닙니다 — `GET /api/recommendations`는 저장된 데이터를 조회하는 게 아니라 날씨+프로필+의상 데이터를 기반으로 그때그때 계산하는 응답이라 영속 엔티티가 필요 없습니다.
 
@@ -212,11 +208,11 @@ erDiagram
 5. **`Comment` 수정/삭제 API가 스펙에 없음** — 현재는 등록/조회만 가능. 이대로 갈지, 스펙 누락인지 사전기간에 팀/멘토 확인 필요. 확인 전까지는 Comment에 별도 삭제 관련 컬럼(soft-delete 등) 추가하지 않음.
 6. **`Notification`은 하드 삭제로 확정** — `read_at` 컬럼을 제거하고, `DELETE /api/notifications/{id}`는 소프트 읽음 처리가 아니라 실제 물리 삭제로 확정합니다. 읽음 후 N일 경과분만 배치로 정리하던 정책도 함께 폐기됩니다 — `conventions.md` §2-1 갱신.
 7. **`Follow`/`FeedLike`/`ClothesAttribute`는 복합 유니크 제약** — `(follower_id, followee_id)`, `(feed_id, user_id)`, `(clothes_id, definition_id)` 각각 UNIQUE로 중복 팔로우/중복 좋아요/중복 속성 부여 방지(API 레벨 검증과 이중 방어).
-8. **위치 값 객체는 도메인별로 다르게 처리** — `Profile`은 유저당 1개뿐이라 `latitude`/`longitude`/`x`/`y`/`location_names`를 자체 컬럼으로 embed. `Weather`는 같은 좌표의 예보가 반복 생성되므로 `LOCATION` 테이블로 정규화하고 `location_id` FK로 참조 — 중복 저장 방지, 좌표 기준 조회 인덱스(`(x, y)`)도 `LOCATION` 하나에만 걸면 됨.
+8. **위치 값 객체는 도메인별로 다르게 처리** — `Profile`은 유저당 1개뿐이라 `latitude`/`longitude`/`x`/`y`/`location_names`를 자체 컬럼으로 embed. `Weather`는 같은 좌표의 예보가 반복 생성되므로 `WEATHER_GRID` 테이블로 정규화하고 `weather_grid_id` FK로 참조 — 중복 저장 방지, 격자 기준 조회 인덱스(`(x, y)`)도 `WEATHER_GRID` 하나에만 걸면 됨. `WEATHER_GRID`는 이 목적 하나만 담당하므로 `latitude`/`longitude`/`location_names`를 두지 않음(설계 노트 15에서 분리).
 9. **소셜 로그인은 `SOCIAL_ACCOUNT` 테이블로 관리** — `UserDto.linkedOAuthProviders`(FE 계약에는 있으나 `api-docs.json` 스키마엔 없는 필드, 수행계획서 [알려진 계약 차이] 참고)는 `User`에 배열 컬럼을 두는 대신, `SOCIAL_ACCOUNT WHERE user_id = ?`를 조회해 응답 생성 시점에 파생시킵니다. `UNIQUE(provider, provider_id)`로 동일 소셜 계정이 다른 유저에 중복 연동되는 것도 방지.
 10. **비밀번호 초기화는 Redis 토큰화로 변경** — `User.temp_password`/`temp_password_expires_at` 컬럼을 제거하고, `POST /api/auth/reset-password` 시 Redis에 `password-reset:{token}` 키로 `userId`를 저장하고 TTL(예: 30분)로 만료를 관리합니다. 로그인 시 임시 비밀번호 검증 로직도 제거되고, 토큰 기반 비밀번호 재설정 흐름으로 대체됩니다.
 11. **`Feed.like_count`/`comment_count`는 비정규화 카운터** — 매번 `COUNT(*)` 하지 않고 컬럼에 캐싱합니다. 좋아요/댓글 생성·삭제 시 반드시 같은 트랜잭션 안에서 원자적으로 증감(`UPDATE ... SET like_count = like_count + 1`)해야 카운트가 실제 값과 어긋나지 않습니다.
 12. **DB 제약/인덱스 네이밍 규칙** — `PK_{TABLE}`, `FK_{참조테이블}_TO_{현재테이블}_{순번}`, `CHK_{table}_{column}`, `UQ_{table}_{columns}`, `IDX_{table}_{columns}` 형식으로 통일합니다(`conventions.md` §2-2 참고).
 13. **`CLOTHES_ATTRIBUTE_DEF`의 선택 가능 값은 JSONB 대신 별도 테이블로 분리** — `selectable_values` JSON 배열 컬럼을 없애고 `CLOTHES_ATTRIBUTE_DEF_VALUE`(값 1개당 1행)로 분리합니다. 값 추가/삭제/순서 변경이 UPDATE 없이 행 단위로 가능해지고, 특정 값이 실제 사용 중인지도 SQL로 바로 확인할 수 있습니다.
 14. **`CLOTHES_ATTRIBUTE`의 정의당 다중 값 허용 여부 — 미결정** ⚠️ 현재는 `(clothes_id, definition_id)` UNIQUE로 정의당 값 1개만 허용하지만, 색상처럼 다중 값이 자연스러운 속성도 있어 1:N 허용 여부를 팀 결정 필요. 허용하기로 하면 유니크 제약을 `(clothes_id, definition_id, value)`로 변경.
-15. **`LOCATION_BLOCK` 신설 — 응답용 행정구역명을 `LOCATION`(5km 격자)과 분리 캐싱** — 기상청 격자는 5km 단위라 하나의 격자에 여러 행정동(많게는 4개 자치구, 최대 28개 동)이 걸칠 수 있어, `LOCATION.location_names`를 응답에 그대로 쓰면 같은 격자를 공유하는 다른 위치의 사용자에게 엉뚱한 행정구역명이 내려갑니다. `GET /api/weathers` 응답의 `latitude`/`longitude`는 요청 좌표를 그대로 반환하고, `location_names`는 `LOCATION`이 아니라 위경도를 ~50m 단위로 양자화한 `LOCATION_BLOCK`에서 조회/캐싱합니다. `LOCATION`은 날씨 중복 저장 방지(설계 노트 8)라는 원래 목적만 유지하고, `LOCATION_BLOCK`은 카카오 좌표→행정구역 변환 결과를 좌표 해상도에 맞게 캐싱하는 별도 책임으로 분리했습니다. `WEATHER`/`LOCATION`과는 FK 관계가 없는 독립 캐시 테이블입니다. `LOCATION.location_names`는 더 이상 애플리케이션에서 채우지 않습니다(항상 `NULL`) — 응답에서 안 쓰는 값을 위해 카카오를 중복 호출하지 않기 위함이며, 컬럼은 스키마 호환을 위해 남겨두되 사실상 deprecated입니다.
+15. **격자(`WEATHER_GRID`)와 실제 위치(`LOCATION`)를 완전히 분리 캐싱** — 기상청 격자는 5km 단위라 하나의 격자에 여러 행정동(많게는 4개 자치구, 최대 28개 동)이 걸칠 수 있어, 격자 기준으로 캐싱한 행정구역명을 응답에 그대로 쓰면 같은 격자를 공유하는 다른 위치의 사용자에게 엉뚱한 행정구역명이 내려갑니다. 그래서 원래 `locations` 테이블이던 것을 `weather_grids`로 리네임하고 `x`/`y`만 남긴 순수 격자 식별 테이블로 정리했고(날씨 FK 대상, 카카오 호출 없음), 응답용 행정구역명은 위경도를 ~50m 단위로 양자화한 별도 `locations` 테이블(구 `location_blocks`)에서 조회/캐싱합니다 — `WEATHER`/`WEATHER_GRID`와는 FK 관계가 없는 독립 캐시 테이블입니다. `GET /api/weathers` 응답의 `latitude`/`longitude`는 어느 테이블 값도 아니라 요청 좌표를 그대로 반환합니다.
