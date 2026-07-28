@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
@@ -66,6 +67,14 @@ public class WeatherService {
         .map(weather -> weatherMapper.toDto(weather, weatherGrid, latitude, longitude,
             locationNames))
         .toList();
+  }
+
+  public LocationDto getLocation(double latitude, double longitude) {
+    KmaGridPoint grid = toGrid(latitude, longitude);
+    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
+    List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
+    return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+        locationNames);
   }
 
   private LocalDate toForecastDate(Weather weather) {
