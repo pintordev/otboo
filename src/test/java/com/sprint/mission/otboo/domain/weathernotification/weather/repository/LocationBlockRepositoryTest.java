@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Locati
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,29 @@ class LocationBlockRepositoryTest {
       assertThat(found).isPresent();
       assertThat(found.get().getLocationNames()).containsExactly("서울특별시", "중구", "명동");
       assertThat(found.get().getCreatedAt()).isNotNull();
+    }
+  }
+
+  @Nested
+  @DisplayName("InsertIfAbsent")
+  class InsertIfAbsent {
+
+    @Test
+    @DisplayName("같은_블록으로_두_번_삽입해도_먼저_삽입된_행만_유지된다")
+    void 같은_블록으로_두_번_삽입해도_먼저_삽입된_행만_유지된다() {
+      UUID firstId = UUID.randomUUID();
+      UUID secondId = UUID.randomUUID();
+
+      locationBlockRepository.insertIfAbsent(firstId, 83639, 227271, "[\"서울특별시\"]");
+      locationBlockRepository.insertIfAbsent(secondId, 83639, 227271, "[\"다른값\"]");
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      Optional<LocationBlock> found = locationBlockRepository.findByLatBlockAndLonBlock(83639, 227271);
+
+      assertThat(found).isPresent();
+      assertThat(found.get().getId()).isEqualTo(firstId);
+      assertThat(found.get().getLocationNames()).containsExactly("서울특별시");
     }
   }
 }
