@@ -71,9 +71,22 @@ dependencyManagement {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'external'
+	}
 	finalizedBy jacocoTestReport
     systemProperty "spring.profiles.active", "test"
+}
+
+tasks.register('externalTest', Test) {
+	group = 'verification'
+	description = '실제 외부 API(기상청/Kakao) 호출 검증 테스트 - 기본 test 태스크에서 제외됨'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'external'
+	}
+	systemProperty "spring.profiles.active", "test"
 }
 
 def jacocoExcludes = [
