@@ -39,7 +39,8 @@ erDiagram
         string password "BCrypt 해싱"
         string name
         string role "USER, ADMIN"
-        boolean locked "관리자 정지"
+        boolean is_locked "관리자 정지"
+        string lock_reason "NONE, ADMIN_ACTION"
         instant created_at
         instant updated_at
     }
@@ -54,16 +55,16 @@ erDiagram
 
     PROFILE {
         uuid user_id PK "FK to USER.id"
-        string name
         string gender "MALE, FEMALE, OTHER, nullable"
         date birth_date "nullable"
         double latitude "nullable, embed(Weather와 달리 정규화 안 함 — 설계 노트 8)"
         double longitude "nullable"
-        int x "기상청 격자 좌표, nullable"
-        int y "기상청 격자 좌표, nullable"
+        int location_x "기상청 격자 좌표, nullable"
+        int location_y "기상청 격자 좌표, nullable"
         json location_names "행정구역명 배열, nullable"
         int temperature_sensitivity "1~5, not null, 기본값 3"
         string profile_image_url "nullable"
+        instant created_at
         instant updated_at
     }
 
