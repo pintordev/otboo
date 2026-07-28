@@ -121,7 +121,7 @@ reviews:
         - 테스트 간 상태 공유 금지 → @BeforeEach 초기화 필수
         - given/when/then 구조 확인
         - @Nested 블록의 클래스명은 영어, @DisplayName과 테스트 메서드명은 한글인지 확인
-        - 테스트 픽스처는 FixtureMonkey 사용 (수동 빌더/생성자 나열 지양)
+        - 테스트 픽스처는 FixtureMonkey 사용 (수동 빌더/생성자 나열 지양) — 단, then에서 비교할 기대 응답 DTO는 FixtureMonkey 대신 명시적으로 생성
 
     - path: "scripts/**"
       instructions: |

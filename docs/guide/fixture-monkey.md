@@ -89,9 +89,23 @@ class ClothesServiceTest {
 }
 ```
 
-## 8. 체크리스트
+## 8. 기대값(응답 DTO)은 FixtureMonkey를 쓰지 않습니다
+
+`when`에 넘길 요청/입력 픽스처는 FixtureMonkey로 만들지만, `then`에서 비교할 **기대 응답 DTO는 명시적으로 생성**합니다. 기대값까지 랜덤으로 만들면 테스트가 무엇을 검증하는지 코드만 봐서 알 수 없고, 필드가 늘어나거나 매핑 로직이 바뀌어도 우연히 통과/실패하는 테스트가 생깁니다(#24, #31에서 이 방식으로 작성).
+
+```java
+// 지양 — 기대값도 FixtureMonkey로 생성하면 무엇을 검증하는지 알 수 없음
+FeedDto expected = fixtureMonkey.giveMeOne(FeedDto.class);
+
+// 권장 — 기대값은 명시적으로 값을 채워서 생성
+FeedDto expected = new FeedDto(feedId, authorId, "내용", false);
+assertThat(result).isEqualTo(expected);
+```
+
+## 9. 체크리스트
 
 - [ ] `EasyRandom`, 수동 빌더/생성자 나열 사용 금지 — FixtureMonkey만 사용 (`conventions.md` §14 금기사항)
+- [ ] 기대 응답(assert 대상) DTO는 FixtureMonkey로 생성하지 않고 명시적으로 값을 채워서 만듦 — FixtureMonkey는 입력/요청 픽스처에만 사용 (8번 참고)
 - [ ] DTO는 전부 `record`(setter 없음)이므로 `.objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)`를 빠뜨리면 생성 자체가 실패함 — 기본 빌더 설정에 항상 포함
 - [ ] `@NotNull`/`@NotBlank`가 걸린 요청 DTO는 `JakartaValidationPlugin`이 적용된 인스턴스로 생성해야 검증을 실제로 통과함
 - [ ] 인증된 사용자 ID와 일치시켜야 하는 필드(`authorId`, `ownerId`, `followerId` 등)는 반드시 `.set(...)`으로 고정 — 랜덤 값 그대로 두면 3번(`authorId` 검증) 관련 테스트가 우연히 통과/실패할 수 있음
