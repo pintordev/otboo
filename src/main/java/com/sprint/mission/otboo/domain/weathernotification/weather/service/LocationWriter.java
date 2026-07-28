@@ -1,6 +1,5 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
@@ -21,15 +20,7 @@ public class LocationWriter {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Location save(int latBlock, int lonBlock, List<String> locationNames) {
     locationRepository.insertIfAbsent(UUID.randomUUID(), latBlock, lonBlock,
-        toJson(locationNames));
+        mapper.writeValueAsString(locationNames));
     return locationRepository.findByLatBlockAndLonBlock(latBlock, lonBlock).orElseThrow();
-  }
-
-  private String toJson(List<String> locationNames) {
-    try {
-      return mapper.writeValueAsString(locationNames);
-    } catch (JacksonException e) {
-      throw new IllegalStateException("locationNames 직렬화 실패", e);
-    }
   }
 }
