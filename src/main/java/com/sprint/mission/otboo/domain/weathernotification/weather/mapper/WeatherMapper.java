@@ -14,10 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeatherMapper {
 
-  public WeatherDto toDto(Weather weather, double latitude, double longitude,
-      List<String> locationNames) {
-    WeatherGrid weatherGrid = weather.getWeatherGrid();
-
+  public WeatherDto toDto(Weather weather, WeatherGrid weatherGrid, double latitude,
+      double longitude, List<String> locationNames) {
     LocationDto locationDto = new LocationDto(
         latitude,
         longitude,

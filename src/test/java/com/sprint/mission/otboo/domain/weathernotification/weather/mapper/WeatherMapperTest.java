@@ -50,7 +50,7 @@ class WeatherMapperTest {
       List<String> requestLocationNames = List.of("서울특별시", "종로구", "청운동");
 
       // when
-      WeatherDto dto = weatherMapper.toDto(weather, requestLatitude, requestLongitude,
+      WeatherDto dto = weatherMapper.toDto(weather, weatherGrid, requestLatitude, requestLongitude,
           requestLocationNames);
 
       // then

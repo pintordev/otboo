@@ -97,7 +97,7 @@ class WeatherServiceTest {
           .set("forecastAt", todayWeather.getForecastAt())
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(todayWeather, latitude, longitude, locationNames))
+      given(weatherMapper.toDto(todayWeather, weatherGrid, latitude, longitude, locationNames))
           .willReturn(expectedDto);
 
       // when
@@ -140,7 +140,7 @@ class WeatherServiceTest {
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(savedWeather, latitude, longitude,
+      given(weatherMapper.toDto(savedWeather, createdWeatherGrid, latitude, longitude,
           List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
 
       // when

@@ -63,7 +63,8 @@ public class WeatherService {
 
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return result.stream()
-        .map(weather -> weatherMapper.toDto(weather, latitude, longitude, locationNames))
+        .map(weather -> weatherMapper.toDto(weather, weatherGrid, latitude, longitude,
+            locationNames))
         .toList();
   }
 
