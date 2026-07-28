@@ -30,13 +30,12 @@ class KakaoRegionFetcherTest {
     @DisplayName("카카오_호출_후_행정구역명_목록을_반환한다")
     void 카카오_호출_후_행정구역명_목록을_반환한다() {
       // given
-      kakaoRegionFetcher = new KakaoRegionFetcher(kakaoLocalClient, kakaoRegionParser,
-          "kakao-rest-api-key");
+      kakaoRegionFetcher = new KakaoRegionFetcher(kakaoLocalClient, kakaoRegionParser);
       double latitude = 37.5674783;
       double longitude = 126.9884121;
 
       KakaoRegionResponse response = new KakaoRegionResponse(List.of());
-      given(kakaoLocalClient.getRegionCode("KakaoAK kakao-rest-api-key", longitude, latitude))
+      given(kakaoLocalClient.getRegionCode(longitude, latitude))
           .willReturn(response);
       given(kakaoRegionParser.toLocationNames(response, latitude, longitude))
           .willReturn(List.of("서울특별시", "중구", "명동", ""));

@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @Tag("external")
@@ -18,9 +17,6 @@ class KakaoLocalClientTest {
   @Autowired
   private KakaoLocalClient kakaoLocalClient;
 
-  @Value("${weather.kakao.rest-api-key}")
-  private String restApiKey;
-
   @Nested
   @DisplayName("GetRegionCode")
   class GetRegionCode {
@@ -28,12 +24,8 @@ class KakaoLocalClientTest {
     @Test
     @DisplayName("실제_카카오_API를_호출하면_행정동_정보를_받는다")
     void 실제_카카오_API를_호출하면_행정동_정보를_받는다() {
-      // given
-      String authorization = "KakaoAK " + restApiKey;
-
       // when
-      KakaoRegionResponse response = kakaoLocalClient.getRegionCode(authorization, 126.9884121,
-          37.5674783);
+      KakaoRegionResponse response = kakaoLocalClient.getRegionCode(126.9884121, 37.5674783);
 
       // then
       assertThat(response.documents()).isNotEmpty();
