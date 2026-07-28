@@ -59,7 +59,7 @@ reviews:
         [Entity 규칙 — 가장 엄격하게 검토] (docs/conventions.md §2)
         금지:
         - setter 메서드 → 상태 변경은 의도를 드러내는 메서드명 사용
-        - @Builder → 정적 팩토리 메서드 사용
+        - @Builder/@SuperBuilder를 public/package-private로 노출 → private로만 사용, 생성 진입점은 정적 팩토리 메서드로 고정 (private Builder를 정적 팩토리 메서드 내부에서 쓰는 것은 허용)
         - Long 타입 PK → UUID만 허용
         - FetchType.EAGER → LAZY + fetch join 필수
         - isDeleted 필드 → deletedAt(Instant) null 여부로만 소프트딜리트 처리
@@ -83,7 +83,7 @@ reviews:
         필수:
         - 클래스 레벨 @Transactional(readOnly=true) 기본
         - 변경 메서드만 @Transactional 재정의
-        - 예외: OtbooException을 상속하는 도메인 예외, 자신의 HTTP 상태 코드/메시지를 private static final로 직접 보유, 팩토리 메서드로 생성 (별도 ErrorCode enum 없음)
+        - 예외: 컨트롤러까지 전파돼 HTTP 응답으로 나가는 예외는 OtbooException을 상속하는 도메인 예외로, 자신의 HTTP 상태 코드/메시지를 private static final로 직접 보유, 팩토리 메서드로 생성 (별도 ErrorCode enum 없음). 내부 로깅에서만 소비되고 컨트롤러까지 전파되지 않는 예외는 이 계층 상속 불필요
 
     - path: "src/main/java/**/repository/**"
       instructions: |

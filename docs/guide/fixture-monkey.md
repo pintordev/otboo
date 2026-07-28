@@ -12,6 +12,7 @@ otboo DTO는 대부분 Java `record` + Jakarta Validation(`@NotNull`, `@NotBlank
 
 ```java
 FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
+    .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)   // record는 setter가 없어 생성자 기반 인트로스펙터 필수
     .plugin(new JakartaValidationPlugin())   // @NotNull/@NotBlank/@Size 등 제약 인지
     .build();
 ```
@@ -61,6 +62,7 @@ class ClothesServiceTest {
     @BeforeAll
     static void setUpFixtureMonkey() {
         fixtureMonkey = FixtureMonkey.builder()
+            .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
             .plugin(new JakartaValidationPlugin())
             .build();
     }
@@ -90,6 +92,7 @@ class ClothesServiceTest {
 ## 8. 체크리스트
 
 - [ ] `EasyRandom`, 수동 빌더/생성자 나열 사용 금지 — FixtureMonkey만 사용 (`conventions.md` §14 금기사항)
+- [ ] DTO는 전부 `record`(setter 없음)이므로 `.objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)`를 빠뜨리면 생성 자체가 실패함 — 기본 빌더 설정에 항상 포함
 - [ ] `@NotNull`/`@NotBlank`가 걸린 요청 DTO는 `JakartaValidationPlugin`이 적용된 인스턴스로 생성해야 검증을 실제로 통과함
 - [ ] 인증된 사용자 ID와 일치시켜야 하는 필드(`authorId`, `ownerId`, `followerId` 등)는 반드시 `.set(...)`으로 고정 — 랜덤 값 그대로 두면 3번(`authorId` 검증) 관련 테스트가 우연히 통과/실패할 수 있음
 - [ ] 리스트가 필요한 테스트는 `.sampleList(n)` 사용, 개별 `sample()` 반복 호출 지양

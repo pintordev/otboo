@@ -565,6 +565,8 @@ public class ClothesNotFoundException extends ClothesException {
 }
 ```
 
+> **`OtbooException` 상속은 컨트롤러까지 전파돼 HTTP 응답으로 나가는 예외에만 필요합니다.** 배치 Step 내부 실패, 외부 클라이언트 파싱 실패 등 컨트롤러까지 올라가지 않고 내부 로깅(`log.error` 등)에서만 소비되고 끝나는 예외는 `OtbooException`/도메인 예외 계층을 상속하지 않아도 무방합니다 — 이 계층은 `GlobalExceptionHandler`가 `status`/`details`를 읽어 `ErrorResponse`로 변환하기 위한 것이라, 애초에 그 경로를 안 타는 예외까지 굳이 맞출 필요는 없습니다. 일반 `RuntimeException`(또는 그 하위)으로 두면 됩니다.
+
 ---
 
 ## 6. 커서 페이지네이션
@@ -678,7 +680,9 @@ public interface KmaWeatherClient {
 
 ```java
 // FixtureMonkey 예시 (jakarta-validation 플러그인으로 제약 인지 생성)
+// DTO가 record라 setter가 없으므로 objectIntrospector 지정은 필수
 FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
+    .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
     .plugin(new JakartaValidationPlugin())
     .build();
 ClothesCreateRequest request = fixtureMonkey.giveMeBuilder(ClothesCreateRequest.class)
@@ -719,7 +723,7 @@ class ClothesRepositoryTest {
 }
 ```
 
-외부 API(기상청/Kakao/LLM) 연동 로직은 목업뿐 아니라 **실제 API 호출 기반 검증 테스트**를 별도로 포함합니다(응답 스펙 변경을 CI에서 조기 감지).
+외부 API(기상청/Kakao/LLM) 연동 로직은 목업뿐 아니라 **실제 API 호출 기반 검증 테스트**를 별도로 포함합니다(응답 스펙 변경을 CI에서 조기 감지). 이 테스트는 네트워크/API 키/외부 서비스 가용성에 의존해 불안정할 수 있으므로 `@Tag("external")`을 붙여 기본 `test` 태스크(`useJUnitPlatform { excludeTags 'external' }`)에서 제외하고, 별도 `externalTest` 태스크로 실행합니다.
 
 ---
 
