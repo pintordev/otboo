@@ -28,5 +28,39 @@ class LocationBlockCalculatorTest {
       // then
       assertThat(nearbyBlock).isEqualTo(block);
     }
+
+    @Test
+    @DisplayName("위도가_200m_이상_떨어지면_다른_블록으로_계산된다")
+    void 위도가_이백미터_이상_떨어지면_다른_블록으로_계산된다() {
+      // given
+      double latitude = 37.5670000;
+      double longitude = 126.9880000;
+      double farLatitude = 37.5687966; // 약 200m 북쪽
+
+      // when
+      BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
+      BlockIndex farBlock = LocationBlockCalculator.toBlock(farLatitude, longitude);
+
+      // then
+      assertThat(farBlock.latBlock()).isNotEqualTo(block.latBlock());
+      assertThat(farBlock.lonBlock()).isEqualTo(block.lonBlock());
+    }
+
+    @Test
+    @DisplayName("경도가_200m_이상_떨어지면_다른_블록으로_계산된다")
+    void 경도가_이백미터_이상_떨어지면_다른_블록으로_계산된다() {
+      // given
+      double latitude = 37.5670000;
+      double longitude = 126.9880000;
+      double farLongitude = 126.9902350; // 약 200m 동쪽
+
+      // when
+      BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
+      BlockIndex farBlock = LocationBlockCalculator.toBlock(latitude, farLongitude);
+
+      // then
+      assertThat(farBlock.lonBlock()).isNotEqualTo(block.lonBlock());
+      assertThat(farBlock.latBlock()).isEqualTo(block.latBlock());
+    }
   }
 }
