@@ -17,6 +17,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -196,8 +197,7 @@ class WeatherServiceTest {
     @DisplayName("한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다")
     void 한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다() {
       assertThatThrownBy(() -> weatherService.getWeather(10.0, 127.0))
-          .isInstanceOf(
-              com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException.class);
+          .isInstanceOf(InvalidCoordinateException.class);
     }
   }
 
@@ -231,8 +231,7 @@ class WeatherServiceTest {
     @DisplayName("한반도_범위를_벗어난_좌표는_LocationResolver_호출_없이_InvalidCoordinateException을_던진다")
     void 한반도_범위를_벗어난_좌표는_LocationResolver_호출_없이_InvalidCoordinateException을_던진다() {
       assertThatThrownBy(() -> weatherService.getLocation(10.0, 127.0))
-          .isInstanceOf(
-              com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException.class);
+          .isInstanceOf(InvalidCoordinateException.class);
       verifyNoInteractions(locationResolver);
     }
   }
