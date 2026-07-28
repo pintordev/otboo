@@ -2,9 +2,9 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.LocationBlock;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationBlockRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
@@ -22,17 +22,17 @@ public class LocationResolver {
 
   private final ObjectMapper mapper = new ObjectMapper();
   private final WeatherGridRepository weatherGridRepository;
-  private final LocationBlockRepository locationBlockRepository;
+  private final LocationRepository locationRepository;
   private final KakaoLocalClient kakaoLocalClient;
   private final KakaoRegionParser kakaoRegionParser;
   private final String kakaoRestApiKey;
 
   public LocationResolver(WeatherGridRepository weatherGridRepository,
-      LocationBlockRepository locationBlockRepository, KakaoLocalClient kakaoLocalClient,
+      LocationRepository locationRepository, KakaoLocalClient kakaoLocalClient,
       KakaoRegionParser kakaoRegionParser,
       @Value("${weather.kakao.rest-api-key}") String kakaoRestApiKey) {
     this.weatherGridRepository = weatherGridRepository;
-    this.locationBlockRepository = locationBlockRepository;
+    this.locationRepository = locationRepository;
     this.kakaoLocalClient = kakaoLocalClient;
     this.kakaoRegionParser = kakaoRegionParser;
     this.kakaoRestApiKey = kakaoRestApiKey;
@@ -48,9 +48,9 @@ public class LocationResolver {
 
   public List<String> resolveLocationNames(double latitude, double longitude) {
     BlockIndex blockIndex = LocationBlockCalculator.toBlock(latitude, longitude);
-    return locationBlockRepository
+    return locationRepository
         .findByLatBlockAndLonBlock(blockIndex.latBlock(), blockIndex.lonBlock())
-        .map(LocationBlock::getLocationNames)
+        .map(Location::getLocationNames)
         .orElseGet(() -> fetchAndCacheLocationNames(blockIndex, latitude, longitude));
   }
 
@@ -60,11 +60,11 @@ public class LocationResolver {
         longitude, latitude);
     List<String> locationNames = kakaoRegionParser.toLocationNames(response);
 
-    locationBlockRepository.insertIfAbsent(UUID.randomUUID(), blockIndex.latBlock(),
+    locationRepository.insertIfAbsent(UUID.randomUUID(), blockIndex.latBlock(),
         blockIndex.lonBlock(), toJson(locationNames));
-    return locationBlockRepository
+    return locationRepository
         .findByLatBlockAndLonBlock(blockIndex.latBlock(), blockIndex.lonBlock())
-        .map(LocationBlock::getLocationNames)
+        .map(Location::getLocationNames)
         .orElseThrow();
   }
 

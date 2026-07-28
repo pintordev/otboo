@@ -21,15 +21,15 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(
-    name = "location_blocks",
+    name = "locations",
     uniqueConstraints = @UniqueConstraint(
-        name = "UQ_location_blocks_lat_block_lon_block",
+        name = "UQ_locations_lat_block_lon_block",
         columnNames = {"lat_block", "lon_block"})
 )
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class LocationBlock {
+public class Location {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -50,13 +50,13 @@ public class LocationBlock {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
-  private LocationBlock(int latBlock, int lonBlock, List<String> locationNames) {
+  private Location(int latBlock, int lonBlock, List<String> locationNames) {
     this.latBlock = latBlock;
     this.lonBlock = lonBlock;
     this.locationNames = locationNames;
   }
 
-  public static LocationBlock create(int latBlock, int lonBlock, List<String> locationNames) {
-    return new LocationBlock(latBlock, lonBlock, locationNames);
+  public static Location create(int latBlock, int lonBlock, List<String> locationNames) {
+    return new Location(latBlock, lonBlock, locationNames);
   }
 }

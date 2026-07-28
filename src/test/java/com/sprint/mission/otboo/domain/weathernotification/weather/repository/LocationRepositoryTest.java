@@ -2,7 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.LocationBlock;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import java.util.List;
 import java.util.Optional;
@@ -21,10 +21,10 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaConfig.class)
-class LocationBlockRepositoryTest {
+class LocationRepositoryTest {
 
   @Autowired
-  private LocationBlockRepository locationBlockRepository;
+  private LocationRepository locationRepository;
 
   @Autowired
   private TestEntityManager testEntityManager;
@@ -34,17 +34,19 @@ class LocationBlockRepositoryTest {
   class Save {
 
     @Test
-    @DisplayName("LocationBlock을_저장하면_블록_좌표로_조회할_수_있다")
-    void LocationBlock을_저장하면_블록_좌표로_조회할_수_있다() {
-      LocationBlock locationBlock = LocationBlock.create(83639, 227271, List.of("서울특별시", "중구", "명동"));
+    @DisplayName("Location을_저장하면_ID가_생성되고_저장된_값을_조회할_수_있다")
+    void save_and_findById() {
+      Location location = Location.create(83639, 227271, List.of("서울특별시", "중구", "명동"));
 
-      locationBlockRepository.save(locationBlock);
+      Location saved = locationRepository.save(location);
       testEntityManager.flush();
       testEntityManager.clear();
 
-      Optional<LocationBlock> found = locationBlockRepository.findByLatBlockAndLonBlock(83639, 227271);
+      Optional<Location> found = locationRepository.findById(saved.getId());
 
       assertThat(found).isPresent();
+      assertThat(found.get().getLatBlock()).isEqualTo(83639);
+      assertThat(found.get().getLonBlock()).isEqualTo(227271);
       assertThat(found.get().getLocationNames()).containsExactly("서울특별시", "중구", "명동");
       assertThat(found.get().getCreatedAt()).isNotNull();
     }
@@ -60,12 +62,12 @@ class LocationBlockRepositoryTest {
       UUID firstId = UUID.randomUUID();
       UUID secondId = UUID.randomUUID();
 
-      locationBlockRepository.insertIfAbsent(firstId, 83639, 227271, "[\"서울특별시\"]");
-      locationBlockRepository.insertIfAbsent(secondId, 83639, 227271, "[\"다른값\"]");
+      locationRepository.insertIfAbsent(firstId, 83639, 227271, "[\"서울특별시\"]");
+      locationRepository.insertIfAbsent(secondId, 83639, 227271, "[\"다른값\"]");
       testEntityManager.flush();
       testEntityManager.clear();
 
-      Optional<LocationBlock> found = locationBlockRepository.findByLatBlockAndLonBlock(83639, 227271);
+      Optional<Location> found = locationRepository.findByLatBlockAndLonBlock(83639, 227271);
 
       assertThat(found).isPresent();
       assertThat(found.get().getId()).isEqualTo(firstId);

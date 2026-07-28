@@ -9,9 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.LocationBlock;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationBlockRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
@@ -35,7 +35,7 @@ class LocationResolverTest {
   @Mock
   private WeatherGridRepository weatherGridRepository;
   @Mock
-  private LocationBlockRepository locationBlockRepository;
+  private LocationRepository locationRepository;
   @Mock
   private KakaoLocalClient kakaoLocalClient;
   @Mock
@@ -45,7 +45,7 @@ class LocationResolverTest {
 
   @BeforeEach
   void setUp() {
-    locationResolver = new LocationResolver(weatherGridRepository, locationBlockRepository,
+    locationResolver = new LocationResolver(weatherGridRepository, locationRepository,
         kakaoLocalClient, kakaoRegionParser, "kakao-rest-api-key");
   }
 
@@ -99,9 +99,9 @@ class LocationResolverTest {
       double latitude = 37.5674783;
       double longitude = 126.9884121;
       BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
-      LocationBlock cached = LocationBlock.create(block.latBlock(), block.lonBlock(),
+      Location cached = Location.create(block.latBlock(), block.lonBlock(),
           List.of("서울특별시", "중구"));
-      given(locationBlockRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
+      given(locationRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
           .willReturn(Optional.of(cached));
 
       // when
@@ -121,9 +121,9 @@ class LocationResolverTest {
       BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
 
       KakaoRegionResponse kakaoResponse = new KakaoRegionResponse(List.of());
-      LocationBlock savedBlock = LocationBlock.create(block.latBlock(), block.lonBlock(),
+      Location savedBlock = Location.create(block.latBlock(), block.lonBlock(),
           List.of("서울특별시", "중구", "명동", ""));
-      given(locationBlockRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
+      given(locationRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
           .willReturn(Optional.empty(), Optional.of(savedBlock));
       given(kakaoLocalClient.getRegionCode("KakaoAK kakao-rest-api-key", longitude, latitude))
           .willReturn(kakaoResponse);
@@ -135,7 +135,7 @@ class LocationResolverTest {
 
       // then
       assertThat(result).containsExactly("서울특별시", "중구", "명동", "");
-      verify(locationBlockRepository).insertIfAbsent(any(), eq(block.latBlock()),
+      verify(locationRepository).insertIfAbsent(any(), eq(block.latBlock()),
           eq(block.lonBlock()), eq("[\"서울특별시\",\"중구\",\"명동\",\"\"]"));
     }
   }
