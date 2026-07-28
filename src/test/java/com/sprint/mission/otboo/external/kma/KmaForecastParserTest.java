@@ -104,6 +104,7 @@ class KmaForecastParserTest {
       // given
       Instant now = Instant.parse("2026-07-27T08:00:00Z");
       List<Item> items = List.of(
+          item("TMP", "20260730", "1500", "28"),
           item("PCP", "20260730", "0600", "1.0mm"),
           item("PCP", "20260730", "0900", "강수없음"),
           item("PCP", "20260730", "1200", "1mm 미만"),
@@ -125,6 +126,7 @@ class KmaForecastParserTest {
       // given
       Instant now = Instant.parse("2026-07-27T08:00:00Z");
       List<Item> items = List.of(
+          item("TMP", "20260730", "1500", "28"),
           item("PTY", "20260730", "0000", "0"),
           item("PTY", "20260730", "0900", "1"),
           item("PTY", "20260730", "1200", "0"),
@@ -161,6 +163,26 @@ class KmaForecastParserTest {
       // then
       assertThat(result).hasSize(1);
       assertThat(result.get(0).date()).isEqualTo(LocalDate.of(2026, 7, 29));
+    }
+
+    @Test
+    @DisplayName("TMP_데이터가_없는_날짜는_슬롯_수가_충분해도_결과에서_제외된다")
+    void TMP_데이터가_없는_날짜는_슬롯_수가_충분해도_결과에서_제외된다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("PCP", "20260730", "0000", "강수없음"),
+          item("PCP", "20260730", "0900", "강수없음"),
+          item("PCP", "20260730", "1200", "강수없음"),
+          item("PCP", "20260730", "1500", "강수없음")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).isEmpty();
     }
   }
 

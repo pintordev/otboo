@@ -36,7 +36,7 @@ public class KmaForecastParser {
     List<DailyWeatherForecastDto> result = new ArrayList<>();
     for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
       List<Item> dayItems = entry.getValue();
-      if (!hasEnoughSlots(dayItems)) {
+      if (!hasEnoughSlots(dayItems) || !hasTemperatureData(dayItems)) {
         continue;
       }
 
@@ -52,6 +52,10 @@ public class KmaForecastParser {
   private boolean hasEnoughSlots(List<Item> dayItems) {
     long distinctSlotCount = dayItems.stream().map(Item::fcstTime).distinct().count();
     return distinctSlotCount >= MIN_SLOT_COUNT;
+  }
+
+  private boolean hasTemperatureData(List<Item> dayItems) {
+    return dayItems.stream().anyMatch(item -> "TMP".equals(item.category()));
   }
 
   private String closestFcstTime(List<Item> dayItems, Instant now) {
