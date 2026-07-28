@@ -23,6 +23,10 @@ public final class KmaGridConverter {
   }
 
   public static KmaGridPoint toGrid(double latitude, double longitude) {
+    if (!Double.isFinite(latitude) || !Double.isFinite(longitude)) {
+      throw new IllegalArgumentException(
+          "좌표 값이 유효하지 않습니다: latitude=" + latitude + ", longitude=" + longitude);
+    }
     if (latitude < MIN_LAT_DEG || latitude > MAX_LAT_DEG) {
       throw new IllegalArgumentException(
           "한반도 범위를 벗어난 위도입니다: latitude=" + latitude);

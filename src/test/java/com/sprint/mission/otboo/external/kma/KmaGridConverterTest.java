@@ -42,5 +42,19 @@ class KmaGridConverterTest {
       assertThatThrownBy(() -> KmaGridConverter.toGrid(36.0, 100.0))
           .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("NaN_위도는_예외가_발생한다")
+    void NaN_위도는_예외가_발생한다() {
+      assertThatThrownBy(() -> KmaGridConverter.toGrid(Double.NaN, 127.0))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("NaN_경도는_예외가_발생한다")
+    void NaN_경도는_예외가_발생한다() {
+      assertThatThrownBy(() -> KmaGridConverter.toGrid(36.0, Double.NaN))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
   }
 }
