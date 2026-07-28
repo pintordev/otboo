@@ -19,10 +19,12 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Slf4j
+@RequiredArgsConstructor
 @Service
 public class WeatherService {
 
@@ -34,17 +36,6 @@ public class WeatherService {
   private final LocationResolver locationResolver;
   private final WeatherMapper weatherMapper;
   private final Clock clock;
-
-  public WeatherService(WeatherRepository weatherRepository,
-      KmaForecastFetcher kmaForecastFetcher, WeatherWriter weatherWriter,
-      LocationResolver locationResolver, WeatherMapper weatherMapper, Clock clock) {
-    this.weatherRepository = weatherRepository;
-    this.kmaForecastFetcher = kmaForecastFetcher;
-    this.weatherWriter = weatherWriter;
-    this.locationResolver = locationResolver;
-    this.weatherMapper = weatherMapper;
-    this.clock = clock;
-  }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);

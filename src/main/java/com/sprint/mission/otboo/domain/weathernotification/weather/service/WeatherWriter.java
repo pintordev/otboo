@@ -11,20 +11,18 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@RequiredArgsConstructor
 @Component
 public class WeatherWriter {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final WeatherRepository weatherRepository;
-
-  public WeatherWriter(WeatherRepository weatherRepository) {
-    this.weatherRepository = weatherRepository;
-  }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public List<Weather> save(WeatherGrid weatherGrid, Instant forecastedAt,

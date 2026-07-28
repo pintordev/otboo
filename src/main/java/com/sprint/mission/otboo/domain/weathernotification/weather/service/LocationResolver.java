@@ -9,8 +9,10 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.util.Location
 import com.sprint.mission.otboo.external.kakao.KakaoRegionFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+@RequiredArgsConstructor
 @Component
 public class LocationResolver {
 
@@ -19,16 +21,6 @@ public class LocationResolver {
   private final LocationRepository locationRepository;
   private final LocationWriter locationWriter;
   private final KakaoRegionFetcher kakaoRegionFetcher;
-
-  public LocationResolver(WeatherGridRepository weatherGridRepository,
-      WeatherGridWriter weatherGridWriter, LocationRepository locationRepository,
-      LocationWriter locationWriter, KakaoRegionFetcher kakaoRegionFetcher) {
-    this.weatherGridRepository = weatherGridRepository;
-    this.weatherGridWriter = weatherGridWriter;
-    this.locationRepository = locationRepository;
-    this.locationWriter = locationWriter;
-    this.kakaoRegionFetcher = kakaoRegionFetcher;
-  }
 
   public WeatherGrid resolveWeatherGrid(KmaGridPoint grid) {
     return weatherGridRepository.findByXAndY(grid.nx(), grid.ny())

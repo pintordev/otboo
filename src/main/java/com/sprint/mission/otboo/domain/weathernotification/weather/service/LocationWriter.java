@@ -6,19 +6,17 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Locati
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@RequiredArgsConstructor
 @Component
 public class LocationWriter {
 
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper;
   private final LocationRepository locationRepository;
-
-  public LocationWriter(LocationRepository locationRepository) {
-    this.locationRepository = locationRepository;
-  }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Location save(int latBlock, int lonBlock, List<String> locationNames) {

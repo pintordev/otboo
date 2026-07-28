@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/weathers")
+@RequiredArgsConstructor
+@RestController
 public class WeatherController implements WeatherApi {
 
   private final WeatherService weatherService;
