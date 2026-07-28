@@ -1,9 +1,11 @@
 package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
@@ -11,6 +13,8 @@ import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
+import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
+import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -49,8 +53,9 @@ class KmaForecastFetcherTest {
       BaseTime baseTime = new BaseTime("20260727", "1700");
       Instant now = Instant.parse("2026-07-27T09:00:00Z");
 
-      KmaWeatherResponse response = new KmaWeatherResponse(null);
-      given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
+      KmaWeatherResponse response = new KmaWeatherResponse(
+          new Response(new Header("00", "정상"), null));
+      given(kmaWeatherClient.getVillageForecast("kma-service-key", 2000, 1, "JSON", "20260727",
           "1700", 60, 127)).willReturn(response);
 
       DailyWeatherForecastDto dayTwo = FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
@@ -67,6 +72,27 @@ class KmaForecastFetcherTest {
 
       // then
       assertThat(result).containsExactly(dayOne, dayTwo);
+    }
+
+    @Test
+    @DisplayName("resultCode가_실패면_KmaApiException을_던진다")
+    void resultCode가_실패면_KmaApiException을_던진다() {
+      // given
+      kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
+          "kma-service-key");
+      KmaGridPoint grid = new KmaGridPoint(60, 127);
+      BaseTime baseTime = new BaseTime("20260727", "1700");
+      Instant now = Instant.parse("2026-07-27T09:00:00Z");
+
+      KmaWeatherResponse response = new KmaWeatherResponse(
+          new Response(new Header("03", "NO_DATA"), null));
+      given(kmaWeatherClient.getVillageForecast("kma-service-key", 2000, 1, "JSON", "20260727",
+          "1700", 60, 127)).willReturn(response);
+
+      // when & then
+      assertThatThrownBy(() -> kmaForecastFetcher.fetch(grid, baseTime, now))
+          .isInstanceOf(KmaApiException.class);
+      verifyNoInteractions(kmaForecastParser);
     }
   }
 }
