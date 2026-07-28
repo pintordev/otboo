@@ -1,7 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import java.util.List;
@@ -28,7 +28,7 @@ public class LocationWriter {
   private String toJson(List<String> locationNames) {
     try {
       return mapper.writeValueAsString(locationNames);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       throw new IllegalStateException("locationNames 직렬화 실패", e);
     }
   }
