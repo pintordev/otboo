@@ -3,7 +3,6 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -12,28 +11,29 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
-import com.sprint.mission.otboo.external.kma.KmaForecastParser;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
+import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
-import com.sprint.mission.otboo.external.kma.KmaWeatherClient;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
-import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -43,13 +43,14 @@ class WeatherServiceTest {
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
       .build();
+  private static final BaseTime LATEST_BASE_TIME = new BaseTime("20260727", "1700");
 
   @Mock
   private WeatherRepository weatherRepository;
   @Mock
-  private KmaWeatherClient kmaWeatherClient;
+  private KmaForecastFetcher kmaForecastFetcher;
   @Mock
-  private KmaForecastParser kmaForecastParser;
+  private WeatherWriter weatherWriter;
   @Mock
   private LocationResolver locationResolver;
   @Mock
@@ -61,8 +62,8 @@ class WeatherServiceTest {
   void setUp() {
     // 2026-07-27 18:00 KST 고정 - 17시 발표가 최신
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
-    weatherService = new WeatherService(weatherRepository, kmaWeatherClient, kmaForecastParser,
-        locationResolver, weatherMapper, clock, "kma-service-key");
+    weatherService = new WeatherService(weatherRepository, kmaForecastFetcher, weatherWriter,
+        locationResolver, weatherMapper, clock);
   }
 
   @Nested
@@ -104,7 +105,7 @@ class WeatherServiceTest {
 
       // then
       assertThat(result).containsExactly(expectedDto);
-      verifyNoInteractions(kmaWeatherClient);
+      verifyNoInteractions(kmaForecastFetcher, weatherWriter);
     }
 
     @Test
@@ -117,29 +118,21 @@ class WeatherServiceTest {
       WeatherGrid createdWeatherGrid = WeatherGrid.create(60, 127);
       given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
           .willReturn(createdWeatherGrid);
-
       given(weatherRepository.findLatestRevisions(eq(createdWeatherGrid), any()))
           .willReturn(List.of());
-
-      KmaWeatherResponse kmaResponse = new KmaWeatherResponse(null);
-      given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
-          "1700", 60, 127)).willReturn(kmaResponse);
 
       DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
               DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
-          .set("skyStatus", SkyStatus.CLEAR)
-          .set("precipitationType", PrecipitationType.NONE)
-          .set("temperatureCurrent", 28.0)
-          .set("temperatureMin", 25.0)
-          .set("temperatureMax", 31.0)
-          .set("humidityCurrent", 65.0)
           .sample();
-      given(kmaForecastParser.parseDailyForecast(eq(kmaResponse), any()))
-          .willReturn(List.of(todayForecast));
+      given(kmaForecastFetcher.fetch(new KmaGridPoint(60, 127), LATEST_BASE_TIME,
+          Instant.parse("2026-07-27T09:00:00Z"))).willReturn(List.of(todayForecast));
 
-      given(weatherRepository.save(any(Weather.class)))
-          .willAnswer(invocation -> invocation.getArgument(0));
+      Weather savedWeather = Weather.create(createdWeatherGrid, LATEST_BASE_TIME.toInstant(),
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+      given(weatherWriter.save(createdWeatherGrid, LATEST_BASE_TIME.toInstant(),
+          List.of(todayForecast), Map.of())).willReturn(List.of(savedWeather));
 
       given(locationResolver.resolveLocationNames(latitude, longitude))
           .willReturn(List.of("서울특별시", "중구", "명동"));
@@ -147,20 +140,19 @@ class WeatherServiceTest {
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(any(Weather.class), eq(latitude), eq(longitude), anyList()))
-          .willReturn(expectedDto);
+      given(weatherMapper.toDto(savedWeather, latitude, longitude,
+          List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
 
       // then
       assertThat(result).containsExactly(expectedDto);
-      verify(weatherRepository).save(any(Weather.class));
     }
 
     @Test
-    @DisplayName("기존_위치의_오늘_데이터가_stale하면_전날_데이터로_diff를_계산해서_재조회한다")
-    void 기존_위치의_오늘_데이터가_stale하면_전날_데이터로_diff를_계산해서_재조회한다() {
+    @DisplayName("기존_위치의_오늘_데이터가_stale하면_전날_데이터를_포함해서_재조회한다")
+    void 기존_위치의_오늘_데이터가_stale하면_전날_데이터를_포함해서_재조회한다() {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
@@ -175,43 +167,28 @@ class WeatherServiceTest {
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 
-      KmaWeatherResponse kmaResponse = new KmaWeatherResponse(null);
-      given(kmaWeatherClient.getVillageForecast("kma-service-key", 1000, 1, "JSON", "20260727",
-          "1700", 60, 127)).willReturn(kmaResponse);
-
       DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
               DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
-          .set("skyStatus", SkyStatus.CLEAR)
-          .set("precipitationType", PrecipitationType.NONE)
-          .set("temperatureCurrent", 28.0)
-          .set("temperatureMin", 25.0)
-          .set("temperatureMax", 31.0)
-          .set("humidityCurrent", 65.0)
           .sample();
-      given(kmaForecastParser.parseDailyForecast(eq(kmaResponse), any()))
-          .willReturn(List.of(todayForecast));
+      given(kmaForecastFetcher.fetch(new KmaGridPoint(60, 127), LATEST_BASE_TIME,
+          Instant.parse("2026-07-27T09:00:00Z"))).willReturn(List.of(todayForecast));
 
-      given(weatherRepository.save(any(Weather.class)))
-          .willAnswer(invocation -> invocation.getArgument(0));
+      given(weatherWriter.save(any(), any(), any(), any())).willReturn(List.of());
       given(locationResolver.resolveLocationNames(latitude, longitude))
           .willReturn(List.of("서울특별시", "중구", "명동"));
-      given(weatherMapper.toDto(any(Weather.class), eq(latitude), eq(longitude), anyList()))
-          .willAnswer(
-              invocation -> FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
-                  .set("skyStatus", ((Weather) invocation.getArgument(0)).getSkyStatus())
-                  .sample());
 
       // when
       weatherService.getWeather(latitude, longitude);
 
       // then
-      org.mockito.ArgumentCaptor<Weather> captor = org.mockito.ArgumentCaptor.forClass(
-          Weather.class);
-      verify(weatherRepository).save(captor.capture());
-      Weather savedTodayWeather = captor.getValue();
-      assertThat(savedTodayWeather.getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
-      assertThat(savedTodayWeather.getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<Map<LocalDate, Weather>> existingByDateCaptor =
+          ArgumentCaptor.forClass(Map.class);
+      verify(weatherWriter).save(eq(weatherGrid), eq(LATEST_BASE_TIME.toInstant()),
+          eq(List.of(todayForecast)), existingByDateCaptor.capture());
+      assertThat(existingByDateCaptor.getValue())
+          .containsEntry(LocalDate.of(2026, 7, 26), yesterdayWeather);
     }
 
     @Test

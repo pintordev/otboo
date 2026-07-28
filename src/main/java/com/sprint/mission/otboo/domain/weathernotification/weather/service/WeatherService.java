@@ -1,65 +1,51 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import com.sprint.mission.otboo.external.kma.KmaForecastParser;
+import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
-import com.sprint.mission.otboo.external.kma.KmaWeatherClient;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
-import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
-@Transactional(readOnly = true)
 @Service
 public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-  private static final int FORECAST_NUM_OF_ROWS = 1000;
-  private static final int FORECAST_PAGE_NO = 1;
 
   private final WeatherRepository weatherRepository;
-  private final KmaWeatherClient kmaWeatherClient;
-  private final KmaForecastParser kmaForecastParser;
+  private final KmaForecastFetcher kmaForecastFetcher;
+  private final WeatherWriter weatherWriter;
   private final LocationResolver locationResolver;
   private final WeatherMapper weatherMapper;
   private final Clock clock;
-  private final String kmaServiceKey;
 
   public WeatherService(WeatherRepository weatherRepository,
-      KmaWeatherClient kmaWeatherClient, KmaForecastParser kmaForecastParser,
-      LocationResolver locationResolver, WeatherMapper weatherMapper, Clock clock,
-      @Value("${weather.kma.service-key}") String kmaServiceKey) {
+      KmaForecastFetcher kmaForecastFetcher, WeatherWriter weatherWriter,
+      LocationResolver locationResolver, WeatherMapper weatherMapper, Clock clock) {
     this.weatherRepository = weatherRepository;
-    this.kmaWeatherClient = kmaWeatherClient;
-    this.kmaForecastParser = kmaForecastParser;
+    this.kmaForecastFetcher = kmaForecastFetcher;
+    this.weatherWriter = weatherWriter;
     this.locationResolver = locationResolver;
     this.weatherMapper = weatherMapper;
     this.clock = clock;
-    this.kmaServiceKey = kmaServiceKey;
   }
 
-  @Transactional
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);
     KmaGridPoint grid = toGrid(latitude, longitude);
@@ -107,50 +93,11 @@ public class WeatherService {
       BaseTime baseTime, Map<LocalDate, Weather> existingByDate) {
     log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
         baseTime.baseDate(), baseTime.baseTime());
-    KmaWeatherResponse response = kmaWeatherClient.getVillageForecast(kmaServiceKey,
-        FORECAST_NUM_OF_ROWS, FORECAST_PAGE_NO, "JSON", baseTime.baseDate(), baseTime.baseTime(),
-        grid.nx(), grid.ny());
-    List<DailyWeatherForecastDto> dailyForecasts = kmaForecastParser
-        .parseDailyForecast(response, clock.instant()).stream()
-        .sorted(Comparator.comparing(DailyWeatherForecastDto::date))
-        .toList();
-
-    Weather previousDayWeather = dailyForecasts.isEmpty() ? null
-        : existingByDate.get(dailyForecasts.get(0).date().minusDays(1));
-    Double previousTemp =
-        previousDayWeather != null ? previousDayWeather.getTemperatureCurrent() : null;
-    Double previousHumidity =
-        previousDayWeather != null ? previousDayWeather.getHumidityCurrent() : null;
-
-    List<Weather> saved = new ArrayList<>();
-    for (DailyWeatherForecastDto dto : dailyForecasts) {
-      double temperatureCompared =
-          previousTemp != null ? dto.temperatureCurrent() - previousTemp : 0.0;
-      double humidityCompared =
-          previousHumidity != null ? dto.humidityCurrent() - previousHumidity : 0.0;
-
-      Weather weather = Weather.create(weatherGrid, baseTime.toInstant(),
-          dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
-          dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
-          humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),
-          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed()));
-
-      saved.add(weatherRepository.save(weather));
-
-      previousTemp = dto.temperatureCurrent();
-      previousHumidity = dto.humidityCurrent();
-    }
+    List<DailyWeatherForecastDto> dailyForecasts = kmaForecastFetcher.fetch(grid, baseTime,
+        clock.instant());
+    List<Weather> saved = weatherWriter.save(weatherGrid, baseTime.toInstant(), dailyForecasts,
+        existingByDate);
     log.info("기상청 라이브 재조회 저장 완료: nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(), saved.size());
     return saved;
-  }
-
-  private WindStrength toWindStrength(double speed) {
-    if (speed < 4.0) {
-      return WindStrength.WEAK;
-    }
-    if (speed < 9.0) {
-      return WindStrength.MODERATE;
-    }
-    return WindStrength.STRONG;
   }
 }
