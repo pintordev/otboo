@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.controller;
 
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -100,6 +101,7 @@ class WeatherControllerTest {
           .andExpect(jsonPath("$.x").value(60))
           .andExpect(jsonPath("$.y").value(127))
           .andExpect(jsonPath("$.locationNames[0]").value("서울특별시"));
+      verify(weatherService).getLocation(37.5674783, 126.9884121);
     }
 
     @Test
