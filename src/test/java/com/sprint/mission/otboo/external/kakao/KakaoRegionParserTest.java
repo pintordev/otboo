@@ -1,9 +1,11 @@
 package com.sprint.mission.otboo.external.kakao;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.sprint.mission.otboo.domain.weathernotification.weather.exception.LocationNotFoundException;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse;
 import com.sprint.mission.otboo.external.kakao.dto.KakaoRegionResponse.Document;
 import java.util.List;
@@ -33,10 +35,22 @@ class KakaoRegionParserTest {
           List.of(legalDongDocument, administrativeDongDocument));
 
       // when
-      List<String> locationNames = parser.toLocationNames(response);
+      List<String> locationNames = parser.toLocationNames(response, 37.5674783, 126.9884121);
 
       // then
       assertThat(locationNames).containsExactly("서울특별시", "중구", "명동", "");
+    }
+
+    @Test
+    @DisplayName("행정동_문서가_없으면_LocationNotFoundException을_던진다")
+    void 행정동_문서가_없으면_LocationNotFoundException을_던진다() {
+      // given
+      Document legalDongDocument = document("B", "명동");
+      KakaoRegionResponse response = new KakaoRegionResponse(List.of(legalDongDocument));
+
+      // when & then
+      assertThatThrownBy(() -> parser.toLocationNames(response, 37.5674783, 126.9884121))
+          .isInstanceOf(LocationNotFoundException.class);
     }
   }
 

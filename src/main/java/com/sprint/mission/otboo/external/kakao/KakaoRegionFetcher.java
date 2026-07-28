@@ -23,6 +23,6 @@ public class KakaoRegionFetcher {
   public List<String> fetch(double latitude, double longitude) {
     KakaoRegionResponse response = kakaoLocalClient.getRegionCode("KakaoAK " + kakaoRestApiKey,
         longitude, latitude);
-    return kakaoRegionParser.toLocationNames(response);
+    return kakaoRegionParser.toLocationNames(response, latitude, longitude);
   }
 }

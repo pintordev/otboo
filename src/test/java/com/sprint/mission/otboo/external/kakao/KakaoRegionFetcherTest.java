@@ -38,7 +38,7 @@ class KakaoRegionFetcherTest {
       KakaoRegionResponse response = new KakaoRegionResponse(List.of());
       given(kakaoLocalClient.getRegionCode("KakaoAK kakao-rest-api-key", longitude, latitude))
           .willReturn(response);
-      given(kakaoRegionParser.toLocationNames(response))
+      given(kakaoRegionParser.toLocationNames(response, latitude, longitude))
           .willReturn(List.of("서울특별시", "중구", "명동", ""));
 
       // when
