@@ -8,7 +8,7 @@ public record WeatherDto(
     UUID id,
     Instant forecastedAt,
     Instant forecastAt,
-    WeatherAPILocation location,
+    LocationDto location,
     SkyStatus skyStatus,
     PrecipitationDto precipitation,
     HumidityDto humidity,

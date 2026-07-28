@@ -43,6 +43,7 @@ public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int FORECAST_NUM_OF_ROWS = 1000;
+  private static final int FORECAST_PAGE_NO = 1;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   private final LocationRepository locationRepository;
@@ -86,7 +87,7 @@ public class WeatherService {
     List<Weather> latestRevisions = weatherRepository.findLatestRevisions(location, from);
 
     Map<LocalDate, Weather> existingByDate = latestRevisions.stream()
-        .collect(Collectors.toMap(w -> w.getForecastAt().atZone(KST).toLocalDate(), w -> w));
+        .collect(Collectors.toMap(this::toForecastDate, w -> w));
 
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
     Weather todayWeather = existingByDate.get(today);
@@ -96,10 +97,14 @@ public class WeatherService {
     List<Weather> result = stale
         ? fetchLiveAndSave(location, grid, latestBaseTime, existingByDate)
         : latestRevisions.stream()
-            .filter(w -> !w.getForecastAt().atZone(KST).toLocalDate().isBefore(today))
+            .filter(w -> !toForecastDate(w).isBefore(today))
             .toList();
 
     return result.stream().map(weatherMapper::toDto).toList();
+  }
+
+  private LocalDate toForecastDate(Weather weather) {
+    return weather.getForecastAt().atZone(KST).toLocalDate();
   }
 
   private KmaGridPoint toGrid(double latitude, double longitude) {
@@ -129,8 +134,8 @@ public class WeatherService {
     log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
         baseTime.baseDate(), baseTime.baseTime());
     KmaWeatherResponse response = kmaWeatherClient.getVillageForecast(kmaServiceKey,
-        FORECAST_NUM_OF_ROWS, 1, "JSON", baseTime.baseDate(), baseTime.baseTime(), grid.nx(),
-        grid.ny());
+        FORECAST_NUM_OF_ROWS, FORECAST_PAGE_NO, "JSON", baseTime.baseDate(), baseTime.baseTime(),
+        grid.nx(), grid.ny());
     List<DailyWeatherForecastDto> dailyForecasts = kmaForecastParser
         .parseDailyForecast(response, clock.instant()).stream()
         .sorted(Comparator.comparing(DailyWeatherForecastDto::date))

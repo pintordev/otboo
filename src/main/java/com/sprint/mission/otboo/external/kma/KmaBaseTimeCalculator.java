@@ -12,6 +12,7 @@ public final class KmaBaseTimeCalculator {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+  private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HHmm");
   private static final Duration PUBLISH_DELAY_BUFFER = Duration.ofMinutes(20);
 
   private KmaBaseTimeCalculator() {
@@ -52,7 +53,7 @@ public final class KmaBaseTimeCalculator {
 
     public Instant toInstant() {
       LocalDate date = LocalDate.parse(baseDate, DATE_FORMATTER);
-      LocalTime time = LocalTime.parse(baseTime, DateTimeFormatter.ofPattern("HHmm"));
+      LocalTime time = LocalTime.parse(baseTime, TIME_FORMATTER);
       return date.atTime(time).atZone(KST).toInstant();
     }
   }

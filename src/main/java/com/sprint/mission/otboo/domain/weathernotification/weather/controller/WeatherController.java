@@ -1,7 +1,6 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.controller;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.controller.api.WeatherApi;
-import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherAPILocation;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherService;
 import java.util.List;
