@@ -723,7 +723,27 @@ class ClothesRepositoryTest {
 }
 ```
 
-외부 API(기상청/Kakao/LLM) 연동 로직은 목업뿐 아니라 **실제 API 호출 기반 검증 테스트**를 별도로 포함합니다(응답 스펙 변경을 CI에서 조기 감지). 이 테스트는 네트워크/API 키/외부 서비스 가용성에 의존해 불안정할 수 있으므로 `@Tag("external")`을 붙여 기본 `test` 태스크(`useJUnitPlatform { excludeTags 'external' }`)에서 제외하고, 별도 `externalTest` 태스크로 실행합니다.
+외부 API(기상청/Kakao/LLM) 연동 로직은 목업뿐 아니라 **실제 API 호출 기반 검증 테스트**를 별도로 포함합니다(응답 스펙 변경을 CI에서 조기 감지). 이 테스트는 네트워크/API 키/외부 서비스 가용성에 의존해 불안정할 수 있으므로, 실제 외부 API를 처음 연동하는 시점에 `build.gradle`에 아래 설정을 추가해 기본 `test` 태스크에서 격리합니다.
+
+```groovy
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'external'
+    }
+}
+
+tasks.register('externalTest', Test) {
+    group = 'verification'
+    description = '실제 외부 API 호출 검증 테스트 - 기본 test 태스크에서 제외됨'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'external'
+    }
+}
+```
+
+실제 네트워크 호출이 있는 테스트 클래스에는 `@Tag("external")`을 붙여 기본 `test`에서 빠지고 `externalTest`로만 실행되게 합니다(현재 `dev`에는 아직 `external/` 연동이 없어 이 설정도 없습니다 — 첫 Feign Client 추가 PR에서 함께 반영).
 
 ---
 
