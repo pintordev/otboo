@@ -77,9 +77,8 @@ class LocationRepositoryTest {
       UUID firstId = UUID.randomUUID();
       UUID secondId = UUID.randomUUID();
 
-      locationRepository.insertIfAbsent(firstId, 60, 127, 37.5674783, 126.9884121,
-          "[\"서울특별시\"]");
-      locationRepository.insertIfAbsent(secondId, 60, 127, 37.0, 127.0, "[\"다른값\"]");
+      locationRepository.insertIfAbsent(firstId, 60, 127, 37.5674783, 126.9884121);
+      locationRepository.insertIfAbsent(secondId, 60, 127, 37.0, 127.0);
       testEntityManager.flush();
       testEntityManager.clear();
 
@@ -87,7 +86,7 @@ class LocationRepositoryTest {
 
       assertThat(found).isPresent();
       assertThat(found.get().getId()).isEqualTo(firstId);
-      assertThat(found.get().getLocationNames()).containsExactly("서울특별시");
+      assertThat(found.get().getLatitude()).isEqualTo(37.5674783);
     }
   }
 }
