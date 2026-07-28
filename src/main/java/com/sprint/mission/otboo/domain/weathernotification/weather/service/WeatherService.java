@@ -38,8 +38,8 @@ public class WeatherService {
   private final Clock clock;
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
-    log.debug("날씨 조회 요청: latitude={}, longitude={}", latitude, longitude);
     KmaGridPoint grid = toGrid(latitude, longitude);
+    log.debug("날씨 조회 요청: nx={}, ny={}", grid.nx(), grid.ny());
     WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
 
     LocalDate today = LocalDate.now(clock.withZone(KST));
@@ -76,7 +76,7 @@ public class WeatherService {
     try {
       return KmaGridConverter.toGrid(latitude, longitude);
     } catch (IllegalArgumentException e) {
-      log.warn("한반도 범위를 벗어난 좌표 요청: latitude={}, longitude={}", latitude, longitude);
+      log.warn("한반도 범위를 벗어난 좌표 요청");
       throw InvalidCoordinateException.of(latitude, longitude);
     }
   }
