@@ -1,17 +1,25 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
-import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherRefresher;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +31,9 @@ class WeatherFetchProcessorTest {
   private WeatherFetchProcessor processor;
 
   @Mock
+  private WeatherRefresher weatherRefresher;
+
+  @Mock
   private Clock clock;
 
   @Nested
@@ -30,20 +41,20 @@ class WeatherFetchProcessorTest {
   class Process {
 
     @Test
-    @DisplayName("WeatherGrid를_KmaGridPoint와_baseTime을_담은_WeatherFetchItem으로_변환한다")
-    void WeatherGrid를_KmaGridPoint와_baseTime을_담은_WeatherFetchItem으로_변환한다() {
+    @DisplayName("WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다")
+    void WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다() {
       // given
-      Instant now = Instant.parse("2026-07-27T08:30:00Z");
-      given(clock.instant()).willReturn(now);
+      given(clock.instant()).willReturn(Instant.parse("2026-07-27T08:30:00Z"));
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      List<Weather> saved = List.of();
+      given(weatherRefresher.refresh(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), any()))
+          .willReturn(saved);
 
       // when
-      WeatherFetchItem result = processor.process(weatherGrid);
+      List<Weather> result = processor.process(weatherGrid);
 
       // then
-      assertThat(result.weatherGrid()).isEqualTo(weatherGrid);
-      assertThat(result.grid()).isEqualTo(new KmaGridPoint(60, 127));
-      assertThat(result.baseTime()).isEqualTo(KmaBaseTimeCalculator.calculate(now));
+      assertThat(result).isEqualTo(saved);
     }
 
     @Test
@@ -57,11 +68,14 @@ class WeatherFetchProcessorTest {
       WeatherGrid grid2 = WeatherGrid.create(61, 128);
 
       // when
-      WeatherFetchItem item1 = processor.process(grid1);
-      WeatherFetchItem item2 = processor.process(grid2);
+      processor.process(grid1);
+      processor.process(grid2);
 
       // then
-      assertThat(item1.baseTime()).isEqualTo(item2.baseTime());
+      ArgumentCaptor<BaseTime> baseTimeCaptor = ArgumentCaptor.forClass(BaseTime.class);
+      verify(weatherRefresher, times(2)).refresh(any(), any(), baseTimeCaptor.capture());
+      List<BaseTime> capturedBaseTimes = baseTimeCaptor.getAllValues();
+      assertThat(capturedBaseTimes.get(0)).isEqualTo(capturedBaseTimes.get(1));
     }
   }
 }
