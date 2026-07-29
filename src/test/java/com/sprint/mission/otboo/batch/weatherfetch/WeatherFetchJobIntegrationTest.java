@@ -96,13 +96,16 @@ class WeatherFetchJobIntegrationTest {
 
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
 
-      // when
-      JobExecution execution = jobOperatorTestUtils.startJob(
+      // when - 서로 다른 JobParameters로 두 번 실행해 매 실행마다 새 행이 insert되는지(update 아님) 확인
+      JobExecution firstExecution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+      JobExecution secondExecution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
       // then
-      assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-      assertThat(weatherRepository.count()).isEqualTo(2);
+      assertThat(firstExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      assertThat(secondExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      assertThat(weatherRepository.count()).isEqualTo(4);
     }
 
     @Test
