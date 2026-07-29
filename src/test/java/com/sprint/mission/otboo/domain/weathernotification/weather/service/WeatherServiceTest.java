@@ -9,12 +9,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException;
 import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.WeatherMapper;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -168,8 +170,42 @@ class WeatherServiceTest {
     @DisplayName("한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다")
     void 한반도_범위를_벗어난_좌표는_InvalidCoordinateException을_던진다() {
       assertThatThrownBy(() -> weatherService.getWeather(10.0, 127.0))
-          .isInstanceOf(
-              com.sprint.mission.otboo.domain.weathernotification.weather.exception.InvalidCoordinateException.class);
+          .isInstanceOf(InvalidCoordinateException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("GetLocation")
+  class GetLocation {
+
+    @Test
+    @DisplayName("유효한_좌표로_조회하면_LocationDto를_반환한다")
+    void 유효한_좌표로_조회하면_LocationDto를_반환한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(locationNames);
+
+      // when
+      LocationDto result = weatherService.getLocation(latitude, longitude);
+
+      // then
+      assertThat(result).isEqualTo(
+          new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+              locationNames));
+    }
+
+    @Test
+    @DisplayName("한반도_범위를_벗어난_좌표는_LocationResolver_호출_없이_InvalidCoordinateException을_던진다")
+    void 한반도_범위를_벗어난_좌표는_LocationResolver_호출_없이_InvalidCoordinateException을_던진다() {
+      assertThatThrownBy(() -> weatherService.getLocation(10.0, 127.0))
+          .isInstanceOf(InvalidCoordinateException.class);
+      verifyNoInteractions(locationResolver);
     }
   }
 }

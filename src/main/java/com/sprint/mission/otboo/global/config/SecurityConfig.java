@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.global.config;
 
+import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.global.exception.ErrorResponseWriter;
 import com.sprint.mission.otboo.global.security.details.CustomUserDetailsService;
 import com.sprint.mission.otboo.global.security.jwt.JwtProvider;
@@ -75,6 +76,7 @@ public class SecurityConfig {
 
                 .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
 
                 .anyRequest().authenticated()
         );

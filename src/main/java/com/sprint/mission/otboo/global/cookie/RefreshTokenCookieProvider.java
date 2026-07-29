@@ -13,6 +13,8 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RefreshTokenCookieProvider {
 
+    public static final String REFRESH_TOKEN = "REFRESH_TOKEN";
+
     private final JwtProperties jwtProperties;
     private final CookieProperties cookieProperties;
 
@@ -26,7 +28,7 @@ public class RefreshTokenCookieProvider {
     }
 
     private ResponseCookie build(String value, Duration maxAge) {
-        return ResponseCookie.from("REFRESH_TOKEN", value)
+        return ResponseCookie.from(REFRESH_TOKEN, value)
                 .httpOnly(true)
                 .secure(cookieProperties.secure())
                 .sameSite("Strict")

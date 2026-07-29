@@ -6,15 +6,14 @@ import com.sprint.mission.otboo.domain.authuser.auth.dto.response.JwtDto;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
 import com.sprint.mission.otboo.domain.authuser.auth.service.AuthService;
 import com.sprint.mission.otboo.global.cookie.RefreshTokenCookieProvider;
+import com.sprint.mission.otboo.global.security.jwt.filter.CurrentUser;
+import com.sprint.mission.otboo.global.security.jwt.filter.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,12 +24,38 @@ public class AuthController implements AuthApi {
     private final RefreshTokenCookieProvider refreshTokenCookieProvider;
 
     @Override
+    @PostMapping("/sign-out")
+    public ResponseEntity<Void> signOut(
+            @CurrentUser UserPrincipal principal,
+            HttpServletResponse response
+    ) {
+        authService.signOut(principal.userId());
+        refreshTokenCookieProvider.clear(response);
+        return ResponseEntity
+                .status(HttpStatus.NO_CONTENT)
+                .build();
+    }
+
+    @Override
     @PostMapping("/sign-in")
     public ResponseEntity<JwtDto> signIn(
             @Valid @ModelAttribute SignInRequest request,
             HttpServletResponse response
     ) {
         SignInDto result = authService.signIn(request);
+        refreshTokenCookieProvider.attach(response, result.refreshToken());
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(result.jwtDto());
+    }
+
+    @Override
+    @PostMapping("/refresh")
+    public ResponseEntity<JwtDto> refresh(
+            @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN) String refreshToken,
+            HttpServletResponse response
+    ) {
+        SignInDto result = authService.refresh(refreshToken);
         refreshTokenCookieProvider.attach(response, result.refreshToken());
         return ResponseEntity
                 .status(HttpStatus.OK)
