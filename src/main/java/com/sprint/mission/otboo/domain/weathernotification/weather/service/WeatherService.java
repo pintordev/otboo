@@ -8,17 +8,13 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.mapper.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
-import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,8 +27,7 @@ public class WeatherService {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final WeatherRepository weatherRepository;
-  private final KmaForecastFetcher kmaForecastFetcher;
-  private final WeatherWriter weatherWriter;
+  private final WeatherRefresher weatherRefresher;
   private final LocationResolver locationResolver;
   private final WeatherMapper weatherMapper;
   private final Clock clock;
@@ -47,16 +42,16 @@ public class WeatherService {
     Instant from = yesterday.atStartOfDay(KST).toInstant();
     List<Weather> latestRevisions = weatherRepository.findLatestRevisions(weatherGrid, from);
 
-    Map<LocalDate, Weather> existingByDate = latestRevisions.stream()
-        .collect(Collectors.toMap(this::toForecastDate, w -> w));
-
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
-    Weather todayWeather = existingByDate.get(today);
+    Weather todayWeather = latestRevisions.stream()
+        .filter(w -> toForecastDate(w).equals(today))
+        .findFirst()
+        .orElse(null);
     boolean stale = todayWeather == null
         || todayWeather.getForecastedAt().isBefore(latestBaseTime.toInstant());
 
     List<Weather> result = stale
-        ? fetchLiveAndSave(weatherGrid, grid, latestBaseTime, existingByDate)
+        ? weatherRefresher.refresh(weatherGrid, grid, latestBaseTime)
         : latestRevisions.stream()
             .filter(w -> !toForecastDate(w).isBefore(today))
             .toList();
@@ -79,17 +74,5 @@ public class WeatherService {
       log.warn("한반도 범위를 벗어난 좌표 요청");
       throw InvalidCoordinateException.of(latitude, longitude);
     }
-  }
-
-  private List<Weather> fetchLiveAndSave(WeatherGrid weatherGrid, KmaGridPoint grid,
-      BaseTime baseTime, Map<LocalDate, Weather> existingByDate) {
-    log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
-        baseTime.baseDate(), baseTime.baseTime());
-    List<DailyWeatherForecastDto> dailyForecasts = kmaForecastFetcher.fetch(grid, baseTime,
-        clock.instant());
-    List<Weather> saved = weatherWriter.save(weatherGrid, baseTime.toInstant(), dailyForecasts,
-        existingByDate);
-    log.info("기상청 라이브 재조회 저장 완료: nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(), saved.size());
-    return saved;
   }
 }
