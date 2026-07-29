@@ -39,7 +39,7 @@
 
 ### 전체 구조
 
-대분류는 `domain` / `global` / `external` 세 가지입니다(사전기간 ADR로 확정).
+대분류는 `domain` / `global` / `external` / `batch` 네 가지입니다(`domain`/`global`/`external`은 사전기간 ADR로 확정, `batch`는 09번 배치 이슈에서 추가 확정 — 아래 [배치 구조](#배치-구조) 참고).
 
 ```
 com.sprint.mission.otboo/
@@ -50,7 +50,10 @@ com.sprint.mission.otboo/
 │   │   ├── SecurityConfig.java          # Spring Security + JWT 필터 체인, CSRF 정책
 │   │   ├── SwaggerConfig.java           # springdoc-openapi
 │   │   ├── FeignConfig.java             # Feign Client 공통 설정(타임아웃/로깅/에러 디코더)
+│   │   ├── SchedulingConfig.java        # @EnableScheduling
 │   │   └── WebSocketConfig.java         # STOMP 엔드포인트(/ws) 등록
+│   ├── batch/
+│   │   └── SkipLoggingListener.java     # SkipListener<Object,Object> — 모든 배치 Job 공용, onSkipInRead/Process/Write 로깅
 │   ├── dto/
 │   │   ├── CursorPageResponse.java      # 커서 페이지네이션 공통 응답 (6번 참고)
 │   │   └── ErrorResponse.java           # {exceptionName, message, details} — 4번 참고
@@ -73,12 +76,14 @@ com.sprint.mission.otboo/
 │   │   ├── attributedef/                # 의상 속성 정의(어드민) 태그
 │   │   └── recommendation/              # 추천 알고리즘, (선택) LLM 챗봇 태그
 │   ├── weathernotification/             # 라벨: weather-notification
-│   │   ├── weather/                     # 날씨 조회, 위치(좌표) 변환, 배치 태그
+│   │   ├── weather/                     # 날씨 조회, 위치(좌표) 변환 태그 — 배치는 domain에 안 두고 batch/weatherfetch/로 분리(아래 참고)
 │   │   └── notification/                # 알림 태그, event/ — NotificationEventListener (SSE + Kafka 발행)
 │   └── social/                          # 라벨: social
 │       ├── feed/                        # OOTD 피드, 댓글, 좋아요 태그 (Comment는 별도 태그가 없어 feed/ 안에 포함)
 │       ├── follow/                      # 팔로우 관리 태그
 │       └── directmessage/               # DirectMessage 태그, event/ — DirectMessageSentEvent
+├── batch/                                # 배치 Job 전용 — Job마다 하위 패키지(아래 참고)
+│   └── weatherfetch/
 └── external/
     ├── kma/                             # 기상청 단기예보 Open API
     │   ├── KmaWeatherClient.java        # Feign
@@ -115,6 +120,11 @@ src/test/java/com/sprint/mission/otboo/
 │   │       └── service/
 │   │           └── UserServiceTest.java      # @ExtendWith(MockitoExtension.class)
 │   └── ...
+├── batch/
+│   └── weatherfetch/
+│       ├── config/
+│       │   └── WeatherFetchJobConfigTest.java     # mock 의존성 주입, Job/Step 빈 이름만 검증
+│       └── WeatherFetchJobIntegrationTest.java    # @SpringBootTest — Job 레벨이라 레이어 하위 패키지 밖(job 패키지 루트)에 둠
 └── external/
     └── kma/
         └── KmaWeatherClientTest.java          # 실제 API 호출 기반 검증 테스트 (9번 참고)
@@ -125,6 +135,8 @@ src/test/java/com/sprint/mission/otboo/
 | `service/` | `@ExtendWith(MockitoExtension.class)` | Mock 의존성, 빠름 |
 | `repository/` | `@DataJpaTest` | 실제 DB(Testcontainers PostgreSQL), JPA 레이어만 로드 |
 | `controller/` | `@WebMvcTest` | MockMvc, 서비스는 `@MockBean` |
+| `batch/{job}/config/` | 순수 단위 테스트(mock 의존성 직접 생성자 주입) | `Job`/`Step` 빈 생성·이름만 검증, Spring 컨텍스트 없음 |
+| `batch/{job}/*JobIntegrationTest` | `@SpringBootTest` | 실제 Testcontainers Postgres, 외부 클라이언트만 `@MockitoBean` |
 | `external/*Client` | 실제 API 호출 검증 테스트 | 기상청/Kakao/LLM 응답 스펙 변경 조기 감지 |
 
 ### 도메인 구조
@@ -194,6 +206,47 @@ public ResponseEntity<ClothesDto> create(
     @RequestPart(required = false) MultipartFile image
 ) { ... }
 ```
+
+### 배치 구조
+
+Spring Batch Job은 `domain/{domain}/{unit}/`에 종속시키지 않고 최상위 `batch/` 패키지에 둡니다(09번 배치 이슈에서 결정). 배치 Job은 특정 도메인 소유라기보다 "여러 도메인 컴포넌트를 조합해 주기적으로 실행하는 별도 관심사"에 가깝고, Job이 늘어날수록(Retention 배치 등) `domain/` 안에 여러 Job이 뒤섞이는 것보다 `batch/` 밑에 나란히 두는 게 찾기 쉽습니다.
+
+```
+batch/
+  weatherfetch/                    # Job 이름 = {도메인}{동작} (WeatherFetch*)
+    reader/
+      WeatherFetchReader.java      # 커스텀 ItemReader — Spring Batch 기본 제공 Reader(JpaPagingItemReader 등)는
+                                    # 우리 로직이 없어 Mockito 단위 테스트 가치가 없으므로 지양
+    processor/
+      WeatherFetchProcessor.java   # 외부 API 호출 등 실제 작업 수행 — Writer에서 하면 안 됨(아래 참고)
+    writer/
+      WeatherFetchWriter.java      # Processor가 이미 저장까지 끝냈다면 no-op + 로깅만
+    config/
+      WeatherFetchJobConfig.java   # Job/Step 조립. Bean명: {job}Job/{job}Step
+    listener/
+      WeatherFetchJobListener.java   # JobExecutionListener — beforeJob/afterJob 로깅
+      WeatherFetchStepListener.java  # StepExecutionListener — 처리 건수/소요시간 로깅
+    scheduler/
+      WeatherFetchScheduler.java   # @Scheduled 메서드는 Service 호출 한 줄만(14번 금기사항)
+    service/
+      WeatherFetchService.java     # JobOperator.start() 호출, JobParameters 구성, 예외 wrap
+    exception/
+      WeatherFetchJobFailedException.java  # 컨트롤러까지 안 올라가는 배치 내부 예외 → OtbooException 미상속(5번 참고)
+```
+
+**네이밍**: `{도메인}Batch*`처럼 뭉뚱그린 접두사 대신 `{도메인}{동작}*`(`WeatherFetch*`)을 씁니다. 이유 둘:
+1. 기존 서비스 클래스와 이름이 겹칠 수 있습니다(`WeatherWriter`는 이미 조회 API 서비스가 쓰는 이름 — 배치 Writer를 `WeatherWriter`로 지으면 충돌).
+2. 같은 도메인에 배치가 여러 개 생기면(예: Weather의 fetch/retention) `{도메인}Batch*`끼리 이름으로 구분이 안 됩니다.
+
+**Processor vs Writer — 실제 작업(외부 API 호출/저장)은 어디서 하나**: 표준 관례상 Writer가 저장을 담당하는 게 맞지만, 항목별로 독립 트랜잭션(`@Transactional(REQUIRES_NEW)`)이 필요한 경우는 예외입니다. Spring Batch의 `faultTolerant().skip()`은 `write()`가 실패하면 청크를 통째로 롤백한 뒤 범인을 찾기 위해 청크의 모든 항목을 다시 `write()`에 넣어 재실행합니다("chunk scan"). `REQUIRES_NEW`로 이미 커밋된 항목까지 재실행되면 중복 저장이 발생하므로, 항목별 독립 트랜잭션이 필요한 저장은 반드시 **Processor**에서 실행합니다(`process()`는 항목마다 정확히 한 번만 호출되고 rescan이 없음). 항목들이 서로 독립적이지 않고(예: 벌크 upsert) 청크 전체가 하나의 트랜잭션으로 묶여도 되는 배치라면 Writer에서 처리해도 무방합니다.
+
+**Reader**: Spring Batch 기본 제공 `JpaPagingItemReader` 등은 우리 로직이 없어 Mockito로 의미 있게 단위 테스트할 게 없습니다(검증하려면 `@DataJpaTest` 통합 테스트가 필요한데, 그건 Spring Batch 자체 페이징 로직을 재검증하는 셈). 커서/페이지 진행 상태를 직접 관리하는 커스텀 `ItemReader` 구현을 우선 검토합니다.
+
+**Scheduler/Service 분리**: `@Scheduled` 메서드에 로직을 직접 두지 않는 규칙(14번)에 따라, Scheduler는 Service 호출 한 줄만 두고 `JobParameters` 구성·예외 wrap은 Service가 담당합니다. `JobParameters`엔 실행 시각(`Instant`)을 포함해 같은 cron 트리거로 우발적 중복 실행돼도 `JobInstance`가 겹치지 않게 합니다.
+
+> ⚠️ Spring Batch 6.0부터 `JobLauncher`는 deprecated(6.2+ 제거 예정)입니다. `JobOperator extends JobLauncher`이고 `run()` 대신 `start()`를 씁니다 — 새 배치 코드는 `JobOperator`를 쓰세요. `StepBuilder.chunk(int, PlatformTransactionManager)`도 deprecated(7.0 제거 예정) — `chunk(int)` 다음에 `.transactionManager(...)`를 체이닝합니다.
+
+**테스트**: `{Job}JobConfigTest`는 `@SpringBatchTest` 없이 의존성을 전부 mock으로 주입해 `Job`/`Step` 빈이 정상 생성되고 이름이 맞는지만 검증하는 순수 단위 테스트로 작성합니다(9번 테스트 컨벤션과 별개로, Job 설정 자체는 Spring 컨텍스트 없이도 검증 가능). 실제 정상 처리/skip/skipLimit 초과 동작은 별도 `{Job}JobIntegrationTest`(`@SpringBootTest` + 실제 Testcontainers Postgres + 외부 클라이언트만 `@MockitoBean`)로 검증합니다.
 
 ---
 
