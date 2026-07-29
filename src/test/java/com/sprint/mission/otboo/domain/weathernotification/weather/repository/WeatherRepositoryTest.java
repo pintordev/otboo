@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.global.config.JpaConfig;
+import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, QuerydslConfig.class})
 class WeatherRepositoryTest {
 
   @Autowired

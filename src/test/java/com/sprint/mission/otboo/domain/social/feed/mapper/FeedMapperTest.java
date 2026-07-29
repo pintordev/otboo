@@ -25,7 +25,7 @@ class FeedMapperTest {
 
     @Test
     @DisplayName("Feed 엔티티를 FeedDto로 변환하고 likedByMe를 전달값으로 채운다")
-    void mapsFeedToDtoWithGivenLikedByMe() {
+    void Feed_엔티티를_FeedDto로_변환하고_likedByMe를_전달값으로_채운다() {
       // given
       Feed feed = fm.giveMeBuilder(Feed.class)
           .set("content", "오늘의 착장")
