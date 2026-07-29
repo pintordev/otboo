@@ -1,5 +1,6 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.service;
 
+import com.sprint.mission.otboo.batch.weatherfetch.exception.WeatherFetchJobFailedException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.job.Job;

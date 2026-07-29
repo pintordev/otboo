@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.processor;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;

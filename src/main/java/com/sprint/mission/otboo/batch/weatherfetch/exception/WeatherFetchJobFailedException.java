@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.exception;
 
 public class WeatherFetchJobFailedException extends RuntimeException {
 

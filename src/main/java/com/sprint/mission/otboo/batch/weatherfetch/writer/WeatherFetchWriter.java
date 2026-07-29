@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.writer;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import java.util.List;

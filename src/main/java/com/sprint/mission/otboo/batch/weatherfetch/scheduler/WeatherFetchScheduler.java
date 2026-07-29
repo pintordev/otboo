@@ -1,5 +1,6 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.scheduler;
 
+import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherFetchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

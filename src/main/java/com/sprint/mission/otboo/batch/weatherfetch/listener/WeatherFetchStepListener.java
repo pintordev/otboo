@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.domain.weathernotification.weather.batch;
+package com.sprint.mission.otboo.batch.weatherfetch.listener;
 
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
