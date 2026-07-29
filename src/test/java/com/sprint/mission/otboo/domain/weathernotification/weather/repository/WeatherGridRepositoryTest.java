@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.global.config.JpaConfig;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -83,6 +86,44 @@ class WeatherGridRepositoryTest {
 
       assertThat(found).isPresent();
       assertThat(found.get().getId()).isEqualTo(firstId);
+    }
+  }
+
+  @Nested
+  @DisplayName("FindPageByCursor")
+  class FindPageByCursor {
+
+    @Test
+    @DisplayName("커서_이전_저장된_격자는_제외하고_createdAt_id_순으로_반환한다")
+    void 커서_이전_저장된_격자는_제외하고_createdAt_id_순으로_반환한다() {
+      WeatherGrid grid1 = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+      WeatherGrid grid2 = weatherGridRepository.save(WeatherGrid.create(61, 127));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherGrid> firstPage = weatherGridRepository.findPageByCursor(
+          Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 1));
+
+      assertThat(firstPage).extracting(WeatherGrid::getId).containsExactly(grid1.getId());
+
+      List<WeatherGrid> secondPage = weatherGridRepository.findPageByCursor(
+          firstPage.get(0).getCreatedAt(), firstPage.get(0).getId(), PageRequest.of(0, 1));
+
+      assertThat(secondPage).extracting(WeatherGrid::getId).containsExactly(grid2.getId());
+    }
+
+    @Test
+    @DisplayName("더_이상_읽을_격자가_없으면_빈_리스트를_반환한다")
+    void 더_이상_읽을_격자가_없으면_빈_리스트를_반환한다() {
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherGrid> page = weatherGridRepository.findPageByCursor(
+          grid.getCreatedAt(), grid.getId(), PageRequest.of(0, 10));
+
+      assertThat(page).isEmpty();
     }
   }
 }
