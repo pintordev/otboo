@@ -20,10 +20,18 @@ public class WeatherFetchStepListener implements StepExecutionListener {
     }
 
     Duration duration = Duration.between(stepExecution.getStartTime(), stepExecution.getEndTime());
-    log.info("WeatherFetch Step 완료 | readCount={}, writeCount={}, skipCount={}, duration={}",
-        stepExecution.getReadCount(), stepExecution.getWriteCount(), stepExecution.getSkipCount(),
-        duration);
+    ExitStatus exitStatus = stepExecution.getExitStatus();
 
-    return stepExecution.getExitStatus();
+    if (ExitStatus.FAILED.getExitCode().equals(exitStatus.getExitCode())) {
+      log.error("WeatherFetch Step 실패 | readCount={}, writeCount={}, skipCount={}, duration={}, exitStatus={}",
+          stepExecution.getReadCount(), stepExecution.getWriteCount(),
+          stepExecution.getSkipCount(), duration, exitStatus);
+    } else {
+      log.info("WeatherFetch Step 완료 | readCount={}, writeCount={}, skipCount={}, duration={}",
+          stepExecution.getReadCount(), stepExecution.getWriteCount(),
+          stepExecution.getSkipCount(), duration);
+    }
+
+    return exitStatus;
   }
 }
