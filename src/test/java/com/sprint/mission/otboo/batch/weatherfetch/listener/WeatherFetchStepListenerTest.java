@@ -88,5 +88,22 @@ class WeatherFetchStepListenerTest {
             "skipCount=1");
       });
     }
+
+    @Test
+    @DisplayName("ExitStatus가_FAILED면_error_로그를_남기고_ExitStatus를_그대로_반환한다")
+    void ExitStatus가_FAILED면_error_로그를_남기고_ExitStatus를_그대로_반환한다() {
+      // given
+      given(stepExecution.getStartTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 0));
+      given(stepExecution.getEndTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 5));
+      given(stepExecution.getExitStatus()).willReturn(ExitStatus.FAILED);
+
+      // when
+      ExitStatus result = listener.afterStep(stepExecution);
+
+      // then
+      assertThat(result).isEqualTo(ExitStatus.FAILED);
+      assertThat(appender.list).anySatisfy(
+          event -> assertThat(event.getLevel()).isEqualTo(Level.ERROR));
+    }
   }
 }
