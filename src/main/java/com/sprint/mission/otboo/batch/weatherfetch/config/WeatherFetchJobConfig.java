@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.batch.weatherfetch.reader.WeatherFetchReader;
 import com.sprint.mission.otboo.batch.weatherfetch.writer.WeatherFetchWriter;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
+import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import com.sprint.mission.otboo.global.batch.SkipLoggingListener;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -57,7 +58,7 @@ public class WeatherFetchJobConfig {
         .processor(weatherFetchProcessor)
         .writer(weatherFetchWriter)
         .faultTolerant()
-        .skip(Exception.class)
+        .skip(KmaApiException.class)
         .skipLimit(skipLimit)
         .skipListener(skipLoggingListener)
         .listener(weatherFetchStepListener)

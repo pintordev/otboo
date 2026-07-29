@@ -13,6 +13,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
+import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import java.time.LocalDate;
@@ -113,7 +114,7 @@ class WeatherFetchJobIntegrationTest {
 
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
       given(kmaForecastFetcher.fetch(eq(new KmaGridPoint(61, 128)), any(), any()))
-          .willThrow(new RuntimeException("기상청 호출 실패"));
+          .willThrow(KmaApiException.of("03", "NO_DATA"));
 
       // when
       JobExecution execution = jobOperatorTestUtils.startJob(
@@ -132,7 +133,7 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(61, 128));
 
       given(kmaForecastFetcher.fetch(any(), any(), any()))
-          .willThrow(new RuntimeException("기상청 호출 실패"));
+          .willThrow(KmaApiException.of("03", "NO_DATA"));
 
       // when
       JobExecution execution = jobOperatorTestUtils.startJob(
@@ -141,6 +142,25 @@ class WeatherFetchJobIntegrationTest {
       // then
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
       assertThat(weatherRepository.count()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("복구_불가능한_예외는_skip하지_않고_1건만_실패해도_Job이_즉시_FAILED로_끝난다")
+    void 복구_불가능한_예외는_skip하지_않고_1건만_실패해도_Job이_즉시_FAILED로_끝난다() throws Exception {
+      // given - skipLimit(1)로도 봐줄 수 있는 횟수지만, KmaApiException이 아니라 skip 대상이 아님
+      weatherGridRepository.save(WeatherGrid.create(60, 127));
+      weatherGridRepository.save(WeatherGrid.create(61, 128));
+
+      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
+      given(kmaForecastFetcher.fetch(eq(new KmaGridPoint(61, 128)), any(), any()))
+          .willThrow(new IllegalStateException("DB/설정 오류 등 복구 불가능한 예외 시뮬레이션"));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
     }
   }
 }
