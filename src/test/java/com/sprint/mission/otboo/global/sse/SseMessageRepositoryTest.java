@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.global.sse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,60 @@ class SseMessageRepositoryTest {
 
             // then
             assertThat(sseMessageRepository.getLatestEventId()).isEqualTo(second.id());
+        }
+    }
+
+    @Nested
+    @DisplayName("findAllAfter")
+    class FindAllAfter {
+
+        @Test
+        @DisplayName("lastEventId가_null이면_빈_리스트를_반환한다")
+        void lastEventId가_null이면_빈_리스트를_반환한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "payload"));
+
+            // when
+            List<SseMessage> result = sseMessageRepository.findAllAfter(null, userId);
+
+            // then
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("존재하는_lastEventId_이후에_저장된_메시지_중_해당_유저_대상만_반환한다")
+        void 존재하는_lastEventId_이후에_저장된_메시지_중_해당_유저_대상만_반환한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            UUID otherUserId = UUID.randomUUID();
+            SseMessage before = new SseMessage(Set.of(userId), "notifications", "before");
+            SseMessage afterForOther = new SseMessage(Set.of(otherUserId), "notifications", "afterForOther");
+            SseMessage afterForUser = new SseMessage(Set.of(userId), "notifications", "afterForUser");
+            sseMessageRepository.save(before);
+            sseMessageRepository.save(afterForOther);
+            sseMessageRepository.save(afterForUser);
+
+            // when
+            List<SseMessage> result = sseMessageRepository.findAllAfter(before.id(), userId);
+
+            // then
+            assertThat(result).containsExactly(afterForUser);
+        }
+
+        @Test
+        @DisplayName("lastEventId가_큐에_없으면_저장된_메시지_전체를_해당_유저_기준으로_반환한다")
+        void lastEventId가_큐에_없으면_저장된_메시지_전체를_해당_유저_기준으로_반환한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            SseMessage message = new SseMessage(Set.of(userId), "notifications", "payload");
+            sseMessageRepository.save(message);
+
+            // when
+            List<SseMessage> result = sseMessageRepository.findAllAfter(UUID.randomUUID(), userId);
+
+            // then
+            assertThat(result).containsExactly(message);
         }
     }
 }
