@@ -12,7 +12,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -200,6 +203,68 @@ class SseServiceTest {
             // then
             verify(emitter1).send(any(SseEmitter.SseEventBuilder.class));
             verify(emitter2).send(any(SseEmitter.SseEventBuilder.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("send")
+    class Send {
+
+        @Test
+        @DisplayName("dto를_메시지로_저장하고_수신자_emitter가_있으면_전송한다")
+        void dto를_메시지로_저장하고_수신자_emitter가_있으면_전송한다() throws IOException {
+            // given
+            UUID receiverId = UUID.randomUUID();
+            NotificationDto dto = new NotificationDto(
+                    UUID.randomUUID(), Instant.now(), receiverId, "제목", "내용", NotificationLevel.INFO);
+            SseEmitter emitter = mock(SseEmitter.class);
+            given(sseEmitterRepository.findByUserId(receiverId)).willReturn(Optional.of(emitter));
+
+            // when
+            sseService.send(List.of(dto), "notifications");
+
+            // then
+            verify(sseMessageRepository).save(any(SseMessage.class));
+            verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
+        }
+
+        @Test
+        @DisplayName("수신자별로_각자_자기_emitter에만_개별_전송한다")
+        void 수신자별로_각자_자기_emitter에만_개별_전송한다() throws IOException {
+            // given
+            UUID receiverId1 = UUID.randomUUID();
+            UUID receiverId2 = UUID.randomUUID();
+            NotificationDto dto1 = new NotificationDto(
+                    UUID.randomUUID(), Instant.now(), receiverId1, "제목1", "내용1", NotificationLevel.INFO);
+            NotificationDto dto2 = new NotificationDto(
+                    UUID.randomUUID(), Instant.now(), receiverId2, "제목2", "내용2", NotificationLevel.INFO);
+            SseEmitter emitter1 = mock(SseEmitter.class);
+            SseEmitter emitter2 = mock(SseEmitter.class);
+            given(sseEmitterRepository.findByUserId(receiverId1)).willReturn(Optional.of(emitter1));
+            given(sseEmitterRepository.findByUserId(receiverId2)).willReturn(Optional.of(emitter2));
+
+            // when
+            sseService.send(List.of(dto1, dto2), "notifications");
+
+            // then
+            verify(emitter1).send(any(SseEmitter.SseEventBuilder.class));
+            verify(emitter2).send(any(SseEmitter.SseEventBuilder.class));
+        }
+
+        @Test
+        @DisplayName("수신자의_emitter가_없으면_저장만_하고_전송은_하지_않는다")
+        void 수신자의_emitter가_없으면_저장만_하고_전송은_하지_않는다() {
+            // given
+            UUID receiverId = UUID.randomUUID();
+            NotificationDto dto = new NotificationDto(
+                    UUID.randomUUID(), Instant.now(), receiverId, "제목", "내용", NotificationLevel.INFO);
+            given(sseEmitterRepository.findByUserId(receiverId)).willReturn(Optional.empty());
+
+            // when
+            sseService.send(List.of(dto), "notifications");
+
+            // then
+            verify(sseMessageRepository).save(any(SseMessage.class));
         }
     }
 }
