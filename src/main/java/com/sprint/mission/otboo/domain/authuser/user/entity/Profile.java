@@ -23,54 +23,54 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Profile {
 
-    private static final int DEFAULT_TEMPERATURE_SENSITIVITY = 3;
+  private static final int DEFAULT_TEMPERATURE_SENSITIVITY = 3;
 
-    @Id
-    private UUID id;
+  @Id
+  private UUID id;
 
-    @MapsId
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+  @MapsId
+  @OneToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "user_id", nullable = false)
+  private User user;
 
-    @Enumerated(EnumType.STRING)
-    private Gender gender;
+  @Enumerated(EnumType.STRING)
+  private Gender gender;
 
-    private LocalDate birthDate;
+  private LocalDate birthDate;
 
-    private Double latitude;
+  private Double latitude;
 
-    private Double longitude;
+  private Double longitude;
 
-    @Column(name = "location_x")
-    private Integer locationX;
+  @Column(name = "location_x")
+  private Integer locationX;
 
-    @Column(name = "location_y")
-    private Integer locationY;
+  @Column(name = "location_y")
+  private Integer locationY;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private List<String> locationNames;
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  private List<String> locationNames;
 
-    @Column(nullable = false)
-    private int temperatureSensitivity;
+  @Column(nullable = false)
+  private int temperatureSensitivity;
 
-    private String profileImageUrl;
+  private String profileImageUrl;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+  @CreatedDate
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+  @LastModifiedDate
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
 
-    private Profile(User user, int temperatureSensitivity) {
-        this.user = user;
-        this.temperatureSensitivity = temperatureSensitivity;
-    }
+  private Profile(User user, int temperatureSensitivity) {
+    this.user = user;
+    this.temperatureSensitivity = temperatureSensitivity;
+  }
 
-    public static Profile createDefault(User user) {
-        return new Profile(user, DEFAULT_TEMPERATURE_SENSITIVITY);
-    }
+  public static Profile createDefault(User user) {
+    return new Profile(user, DEFAULT_TEMPERATURE_SENSITIVITY);
+  }
 }

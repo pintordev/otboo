@@ -21,7 +21,7 @@ public record KmaWeatherResponse(Response response) {
   }
 
   public record Item(String baseDate, String baseTime, String category, String fcstDate,
-      String fcstTime, String fcstValue, int nx, int ny) {
+                     String fcstTime, String fcstValue, int nx, int ny) {
 
   }
 }

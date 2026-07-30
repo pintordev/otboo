@@ -13,27 +13,27 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RefreshTokenCookieProvider {
 
-    public static final String REFRESH_TOKEN = "REFRESH_TOKEN";
+  public static final String REFRESH_TOKEN = "REFRESH_TOKEN";
 
-    private final JwtProperties jwtProperties;
-    private final CookieProperties cookieProperties;
+  private final JwtProperties jwtProperties;
+  private final CookieProperties cookieProperties;
 
-    public void attach(HttpServletResponse response, String refreshToken) {
-        Duration maxAge = Duration.ofDays(jwtProperties.refreshTokenExpirationDays());
-        response.addHeader(HttpHeaders.SET_COOKIE, build(refreshToken, maxAge).toString());
-    }
+  public void attach(HttpServletResponse response, String refreshToken) {
+    Duration maxAge = Duration.ofDays(jwtProperties.refreshTokenExpirationDays());
+    response.addHeader(HttpHeaders.SET_COOKIE, build(refreshToken, maxAge).toString());
+  }
 
-    public void clear(HttpServletResponse response) {
-        response.addHeader(HttpHeaders.SET_COOKIE, build("", Duration.ZERO).toString());
-    }
+  public void clear(HttpServletResponse response) {
+    response.addHeader(HttpHeaders.SET_COOKIE, build("", Duration.ZERO).toString());
+  }
 
-    private ResponseCookie build(String value, Duration maxAge) {
-        return ResponseCookie.from(REFRESH_TOKEN, value)
-                .httpOnly(true)
-                .secure(cookieProperties.secure())
-                .sameSite("Strict")
-                .path("/api/auth")
-                .maxAge(maxAge)
-                .build();
-    }
+  private ResponseCookie build(String value, Duration maxAge) {
+    return ResponseCookie.from(REFRESH_TOKEN, value)
+        .httpOnly(true)
+        .secure(cookieProperties.secure())
+        .sameSite("Strict")
+        .path("/api/auth")
+        .maxAge(maxAge)
+        .build();
+  }
 }

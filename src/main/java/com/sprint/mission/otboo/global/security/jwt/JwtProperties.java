@@ -9,4 +9,5 @@ public record JwtProperties(
     long accessTokenExpirationMinutes,
     long refreshTokenExpirationDays
 ) {
+
 }

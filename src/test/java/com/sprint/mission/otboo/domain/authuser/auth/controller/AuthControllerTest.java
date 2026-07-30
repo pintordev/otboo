@@ -34,6 +34,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import com.sprint.mission.otboo.domain.authuser.auth.dto.request.ResetPasswordRequest;
+import org.springframework.http.MediaType;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,227 +51,293 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+
 @WebMvcTest(AuthController.class)
 @Import(AuthControllerTest.SecurityArgumentResolverConfig.class)
 class AuthControllerTest {
 
-    @TestConfiguration
-    static class SecurityArgumentResolverConfig implements WebMvcConfigurer {
-        @Override
-        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new AuthenticationPrincipalArgumentResolver());
-        }
+  @TestConfiguration
+  static class SecurityArgumentResolverConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+      resolvers.add(new AuthenticationPrincipalArgumentResolver());
+    }
+  }
+
+  private static final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
+
+  @Autowired
+  private MockMvc mockMvc;
+
+  @Autowired
+  private ObjectMapper objectMapper;
+
+  @MockitoBean
+  private AuthService authService;
+
+  @MockitoBean
+  private RefreshTokenCookieProvider refreshTokenCookieProvider;
+
+  private Authentication authenticationOf(UUID userId) {
+    UserPrincipal principal = new UserPrincipal(userId, "USER");
+    return new UsernamePasswordAuthenticationToken(principal, null,
+        List.of(new SimpleGrantedAuthority("USER")));
+  }
+
+  @Nested
+  @DisplayName("로그인 성공")
+  class SignInSuccess {
+
+    @Test
+    @DisplayName("유효한 자격증명으로 로그인하면 200과 JwtDto를 반환하고 리프레시 토큰 쿠키를 첨부한다")
+    void signIn_validRequest_returns200AndAttachesRefreshTokenCookie() throws Exception {
+      // given
+      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
+      UserDto userDto = new UserDto(UUID.randomUUID(), Instant.now(), request.username(), "홍길동",
+          Role.USER, false);
+      JwtDto jwtDto = new JwtDto(userDto, "access-token");
+      SignInDto signInDto = new SignInDto(jwtDto, "refresh-token");
+      given(authService.signIn(any(SignInRequest.class))).willReturn(signInDto);
+
+      // when & then
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", request.username())
+              .param("password", request.password()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.accessToken").value("access-token"))
+          .andExpect(jsonPath("$.userDto.email").value(request.username()))
+          .andExpect(jsonPath("$.refreshToken").doesNotExist());
+
+      verify(refreshTokenCookieProvider).attach(any(HttpServletResponse.class),
+          eq("refresh-token"));
+    }
+  }
+
+  @Nested
+  @DisplayName("로그인 요청 유효성 검증")
+  class SignInValidation {
+
+    @Test
+    @DisplayName("아이디가 비어있으면 400을 반환하고 로그인을 시도하지 않는다")
+    void signIn_blankUsername_returns400() throws Exception {
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "")
+              .param("password", "password123"))
+          .andExpect(status().isBadRequest());
+
+      verify(authService, never()).signIn(any());
     }
 
-    private static final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
-            .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
-            .plugin(new JakartaValidationPlugin())
-            .build();
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean
-    private AuthService authService;
-
-    @MockitoBean
-    private RefreshTokenCookieProvider refreshTokenCookieProvider;
-
-    private Authentication authenticationOf(UUID userId) {
-        UserPrincipal principal = new UserPrincipal(userId, "USER");
-        return new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority("USER")));
+    @Test
+    @DisplayName("이메일 형식이 올바르지 않으면 400을 반환한다")
+    void signIn_invalidEmailFormat_returns400() throws Exception {
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "invalid-email")
+              .param("password", "password123"))
+          .andExpect(status().isBadRequest());
     }
 
-    @Nested
-    @DisplayName("로그인 성공")
-    class SignInSuccess {
-
-        @Test
-        @DisplayName("유효한 자격증명으로 로그인하면 200과 JwtDto를 반환하고 리프레시 토큰 쿠키를 첨부한다")
-        void signIn_validRequest_returns200AndAttachesRefreshTokenCookie() throws Exception {
-            // given
-            SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-            UserDto userDto = new UserDto(UUID.randomUUID(), Instant.now(), request.username(), "홍길동", Role.USER, false);
-            JwtDto jwtDto = new JwtDto(userDto, "access-token");
-            SignInDto signInDto = new SignInDto(jwtDto, "refresh-token");
-            given(authService.signIn(any(SignInRequest.class))).willReturn(signInDto);
-
-            // when & then
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", request.username())
-                            .param("password", request.password()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.accessToken").value("access-token"))
-                    .andExpect(jsonPath("$.userDto.email").value(request.username()))
-                    .andExpect(jsonPath("$.refreshToken").doesNotExist());
-
-            verify(refreshTokenCookieProvider).attach(any(HttpServletResponse.class), eq("refresh-token"));
-        }
+    @Test
+    @DisplayName("비밀번호가 6자 미만이면 400을 반환한다")
+    void signIn_passwordTooShort_returns400() throws Exception {
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "hong@test.com")
+              .param("password", "1234"))
+          .andExpect(status().isBadRequest());
     }
 
-    @Nested
-    @DisplayName("로그인 요청 유효성 검증")
-    class SignInValidation {
+    @Test
+    @DisplayName("비밀번호가 비어있으면 400을 반환한다")
+    void signIn_blankPassword_returns400() throws Exception {
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "hong@test.com")
+              .param("password", ""))
+          .andExpect(status().isBadRequest());
+    }
+  }
 
-        @Test
-        @DisplayName("아이디가 비어있으면 400을 반환하고 로그인을 시도하지 않는다")
-        void signIn_blankUsername_returns400() throws Exception {
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "")
-                            .param("password", "password123"))
-                    .andExpect(status().isBadRequest());
+  @Nested
+  @DisplayName("자격증명 실패")
+  class InvalidCredentials {
 
-            verify(authService, never()).signIn(any());
-        }
+    @Test
+    @DisplayName("아이디/비밀번호가 일치하지 않으면 401을 반환하고 쿠키를 첨부하지 않는다")
+    void signIn_invalidCredentials_returns401AndDoesNotAttachCookie() throws Exception {
+      given(authService.signIn(any(SignInRequest.class)))
+          .willThrow(InvalidCredentialsException.withNone());
 
-        @Test
-        @DisplayName("이메일 형식이 올바르지 않으면 400을 반환한다")
-        void signIn_invalidEmailFormat_returns400() throws Exception {
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "invalid-email")
-                            .param("password", "password123"))
-                    .andExpect(status().isBadRequest());
-        }
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "hong@test.com")
+              .param("password", "wrongpass1"))  // 13자 이하로 수정 (10자)
+          .andExpect(status().isUnauthorized());
 
-        @Test
-        @DisplayName("비밀번호가 6자 미만이면 400을 반환한다")
-        void signIn_passwordTooShort_returns400() throws Exception {
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "hong@test.com")
-                            .param("password", "1234"))
-                    .andExpect(status().isBadRequest());
-        }
+      verify(refreshTokenCookieProvider, never()).attach(any(), any());
+    }
+  }
 
-        @Test
-        @DisplayName("비밀번호가 비어있으면 400을 반환한다")
-        void signIn_blankPassword_returns400() throws Exception {
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "hong@test.com")
-                            .param("password", ""))
-                    .andExpect(status().isBadRequest());
-        }
+  @Nested
+  @DisplayName("계정 잠김")
+  class AccountLocked {
+
+    @Test
+    @DisplayName("계정이 잠겨 있으면 403을 반환하고 쿠키를 첨부하지 않는다")
+    void signIn_lockedAccount_returns403AndDoesNotAttachCookie() throws Exception {
+      given(authService.signIn(any(SignInRequest.class)))
+          .willThrow(AccountLockedException.withEmail("hong@test.com"));
+
+      mockMvc.perform(post("/api/auth/sign-in")
+              .param("username", "hong@test.com")
+              .param("password", "password123"))
+          .andExpect(status().isForbidden());
+
+      verify(refreshTokenCookieProvider, never()).attach(any(), any());
+    }
+  }
+
+  @Nested
+  @DisplayName("로그아웃")
+  class SignOut {
+
+    @AfterEach
+    void tearDown() {
+      SecurityContextHolder.clearContext();
     }
 
-    @Nested
-    @DisplayName("자격증명 실패")
-    class InvalidCredentials {
+    @Test
+    @DisplayName("인증된 사용자가 로그아웃하면 204를 반환하고, 자신의 세션을 폐기한 뒤 리프레시 토큰 쿠키를 지운다")
+    void signOut_authenticatedUser_returns204RevokesOwnSessionAndClearsCookie() throws Exception {
+      // given
+      UUID userId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
 
-        @Test
-        @DisplayName("아이디/비밀번호가 일치하지 않으면 401을 반환하고 쿠키를 첨부하지 않는다")
-        void signIn_invalidCredentials_returns401AndDoesNotAttachCookie() throws Exception {
-            given(authService.signIn(any(SignInRequest.class)))
-                    .willThrow(InvalidCredentialsException.withNone());
+      // when & then
+      mockMvc.perform(post("/api/auth/sign-out"))
+          .andExpect(status().isNoContent());
 
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "hong@test.com")
-                            .param("password", "wrongpass1"))  // 13자 이하로 수정 (10자)
-                    .andExpect(status().isUnauthorized());
+      verify(authService).signOut(userId);
+      verify(refreshTokenCookieProvider).clear(any(HttpServletResponse.class));
+    }
+  }
 
-            verify(refreshTokenCookieProvider, never()).attach(any(), any());
-        }
+  @Nested
+  @DisplayName("토큰 재발급")
+  class Refresh {
+
+    @Test
+    @DisplayName("유효한 refresh token 쿠키가 있으면 200과 새 JwtDto를 반환하고 리프레시 토큰 쿠키를 갱신한다")
+    void refresh_validCookie_returns200AndAttachesNewRefreshTokenCookie() throws Exception {
+      // given
+      UserDto userDto = new UserDto(UUID.randomUUID(), Instant.now(), "hong@test.com", "홍길동",
+          Role.USER, false);
+      JwtDto jwtDto = new JwtDto(userDto, "new-access-token");
+      SignInDto signInDto = new SignInDto(jwtDto, "new-refresh-token");
+      given(authService.refresh("old-refresh-token")).willReturn(signInDto);
+
+      // when & then
+      mockMvc.perform(post("/api/auth/refresh")
+              .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "old-refresh-token")))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+          .andExpect(jsonPath("$.refreshToken").doesNotExist());
+
+      verify(refreshTokenCookieProvider).attach(any(HttpServletResponse.class),
+          eq("new-refresh-token"));
     }
 
-    @Nested
-    @DisplayName("계정 잠김")
-    class AccountLocked {
+    @Test
+    @DisplayName("refresh token이 만료/무효하면 401을 반환하고 쿠키를 다시 첨부하지 않는다")
+    void refresh_invalidToken_returns401AndDoesNotAttachCookie() throws Exception {
+      given(authService.refresh(any())).willThrow(InvalidRefreshTokenException.withNone());
 
-        @Test
-        @DisplayName("계정이 잠겨 있으면 403을 반환하고 쿠키를 첨부하지 않는다")
-        void signIn_lockedAccount_returns403AndDoesNotAttachCookie() throws Exception {
-            given(authService.signIn(any(SignInRequest.class)))
-                    .willThrow(AccountLockedException.withEmail("hong@test.com"));
+      mockMvc.perform(post("/api/auth/refresh")
+              .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "bad-token")))
+          .andExpect(status().isUnauthorized());
 
-            mockMvc.perform(post("/api/auth/sign-in")
-                            .param("username", "hong@test.com")
-                            .param("password", "password123"))
-                    .andExpect(status().isForbidden());
-
-            verify(refreshTokenCookieProvider, never()).attach(any(), any());
-        }
+      verify(refreshTokenCookieProvider, never()).attach(any(), any());
     }
 
-    @Nested
-    @DisplayName("로그아웃")
-    class SignOut {
+    @Test
+    @DisplayName("사용자를 찾을 수 없으면 404를 반환하고 쿠키를 첨부하지 않는다")
+    void refresh_userNotFound_returns404AndDoesNotAttachCookie() throws Exception {
+      given(authService.refresh(any())).willThrow(UserNotFoundException.withNone());
 
-        @AfterEach
-        void tearDown() {
-            SecurityContextHolder.clearContext();
-        }
+      mockMvc.perform(post("/api/auth/refresh")
+              .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "some-token")))
+          .andExpect(status().isNotFound());
 
-        @Test
-        @DisplayName("인증된 사용자가 로그아웃하면 204를 반환하고, 자신의 세션을 폐기한 뒤 리프레시 토큰 쿠키를 지운다")
-        void signOut_authenticatedUser_returns204RevokesOwnSessionAndClearsCookie() throws Exception {
-            // given
-            UUID userId = UUID.randomUUID();
-            SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
-
-            // when & then
-            mockMvc.perform(post("/api/auth/sign-out"))
-                    .andExpect(status().isNoContent());
-
-            verify(authService).signOut(userId);
-            verify(refreshTokenCookieProvider).clear(any(HttpServletResponse.class));
-        }
+      verify(refreshTokenCookieProvider, never()).attach(any(), any());
     }
 
-    @Nested
-    @DisplayName("토큰 재발급")
-    class Refresh {
+    @Test
+    @DisplayName("계정이 잠겨 있으면 403을 반환하고 쿠키를 첨부하지 않는다")
+    void refresh_lockedAccount_returns403AndDoesNotAttachCookie() throws Exception {
+      given(authService.refresh(any())).willThrow(
+          AccountLockedException.withEmail("hong@test.com"));
 
-        @Test
-        @DisplayName("유효한 refresh token 쿠키가 있으면 200과 새 JwtDto를 반환하고 리프레시 토큰 쿠키를 갱신한다")
-        void refresh_validCookie_returns200AndAttachesNewRefreshTokenCookie() throws Exception {
-            // given
-            UserDto userDto = new UserDto(UUID.randomUUID(), Instant.now(), "hong@test.com", "홍길동", Role.USER, false);
-            JwtDto jwtDto = new JwtDto(userDto, "new-access-token");
-            SignInDto signInDto = new SignInDto(jwtDto, "new-refresh-token");
-            given(authService.refresh("old-refresh-token")).willReturn(signInDto);
+      mockMvc.perform(post("/api/auth/refresh")
+              .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "some-token")))
+          .andExpect(status().isForbidden());
 
-            // when & then
-            mockMvc.perform(post("/api/auth/refresh")
-                            .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "old-refresh-token")))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.accessToken").value("new-access-token"))
-                    .andExpect(jsonPath("$.refreshToken").doesNotExist());
-
-            verify(refreshTokenCookieProvider).attach(any(HttpServletResponse.class), eq("new-refresh-token"));
-        }
-
-        @Test
-        @DisplayName("refresh token이 만료/무효하면 401을 반환하고 쿠키를 다시 첨부하지 않는다")
-        void refresh_invalidToken_returns401AndDoesNotAttachCookie() throws Exception {
-            given(authService.refresh(any())).willThrow(InvalidRefreshTokenException.withNone());
-
-            mockMvc.perform(post("/api/auth/refresh")
-                            .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "bad-token")))
-                    .andExpect(status().isUnauthorized());
-
-            verify(refreshTokenCookieProvider, never()).attach(any(), any());
-        }
-
-        @Test
-        @DisplayName("사용자를 찾을 수 없으면 404를 반환하고 쿠키를 첨부하지 않는다")
-        void refresh_userNotFound_returns404AndDoesNotAttachCookie() throws Exception {
-            given(authService.refresh(any())).willThrow(UserNotFoundException.withNone());
-
-            mockMvc.perform(post("/api/auth/refresh")
-                            .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "some-token")))
-                    .andExpect(status().isNotFound());
-
-            verify(refreshTokenCookieProvider, never()).attach(any(), any());
-        }
-
-        @Test
-        @DisplayName("계정이 잠겨 있으면 403을 반환하고 쿠키를 첨부하지 않는다")
-        void refresh_lockedAccount_returns403AndDoesNotAttachCookie() throws Exception {
-            given(authService.refresh(any())).willThrow(AccountLockedException.withEmail("hong@test.com"));
-
-            mockMvc.perform(post("/api/auth/refresh")
-                            .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "some-token")))
-                    .andExpect(status().isForbidden());
-
-            verify(refreshTokenCookieProvider, never()).attach(any(), any());
-        }
+      verify(refreshTokenCookieProvider, never()).attach(any(), any());
     }
+  }
+
+  @Nested
+  @DisplayName("임시 비밀번호 발급")
+  class ResetPassword {
+
+    @Test
+    @DisplayName("유효한 이메일로 요청하면 200을 반환하고 서비스에 위임한다")
+    void resetPassword_validEmail_returns200() throws Exception {
+      // given
+      ResetPasswordRequest request = new ResetPasswordRequest("hong@test.com");
+
+      // when & then
+      mockMvc.perform(post("/api/auth/reset-password")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isOk());
+
+      verify(authService).resetPassword(request);
+    }
+
+    @Test
+    @DisplayName("이메일이 비어있으면 400을 반환하고 서비스는 호출하지 않는다")
+    void resetPassword_blankEmail_returns400() throws Exception {
+      ResetPasswordRequest request = new ResetPasswordRequest("");
+
+      mockMvc.perform(post("/api/auth/reset-password")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isBadRequest());
+
+      verify(authService, never()).resetPassword(any());
+    }
+
+    @Test
+    @DisplayName("이메일 형식이 올바르지 않으면 400을 반환한다")
+    void resetPassword_invalidEmailFormat_returns400() throws Exception {
+      ResetPasswordRequest request = new ResetPasswordRequest("not-an-email");
+
+      mockMvc.perform(post("/api/auth/reset-password")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("이메일이 50자를 초과하면 400을 반환한다")
+    void resetPassword_emailTooLong_returns400() throws Exception {
+      ResetPasswordRequest request = new ResetPasswordRequest("a".repeat(45) + "@test.com");
+
+      mockMvc.perform(post("/api/auth/reset-password")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isBadRequest());
+    }
+  }
 }

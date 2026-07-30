@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class FeedMapper {
-    
+
   public FeedDto toDto(Feed feed, boolean likedByMe) {
     return new FeedDto(
         feed.getId(),

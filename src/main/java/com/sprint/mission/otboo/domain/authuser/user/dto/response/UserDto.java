@@ -6,11 +6,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record UserDto(
-        UUID id,
-        Instant createdAt,
-        String email,
-        String name,
-        Role role,
-        boolean locked
+    UUID id,
+    Instant createdAt,
+    String email,
+    String name,
+    Role role,
+    boolean locked
 ) {
+
 }

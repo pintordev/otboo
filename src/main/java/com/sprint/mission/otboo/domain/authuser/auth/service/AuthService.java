@@ -1,7 +1,9 @@
 package com.sprint.mission.otboo.domain.authuser.auth.service;
 
+import com.sprint.mission.otboo.domain.authuser.auth.dto.request.ResetPasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.SignInRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
+import com.sprint.mission.otboo.domain.authuser.auth.event.TempPasswordRequestedEvent;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.AccountLockedException;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.InvalidCredentialsException;
 import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
@@ -11,12 +13,15 @@ import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.global.security.jwt.JwtProvider;
+import com.sprint.mission.otboo.global.temppassword.generator.TempPasswordGenerator;
+import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.global.usersession.UserSession;
 import com.sprint.mission.otboo.global.usersession.UserSessionRegistry;
 import io.jsonwebtoken.Claims;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,6 +41,9 @@ public class AuthService {
   private final AuthMapper authMapper;
   private final UserRepository userRepository;
   private final SseService sseService;
+  private final TempPasswordGenerator tempPasswordGenerator;
+  private final TempPasswordRegistry tempPasswordRegistry;
+  private final ApplicationEventPublisher eventPublisher;
 
   public void signOut(UUID userId) {
     userSessionRegistry.revoke(userId);
@@ -86,6 +94,17 @@ public class AuthService {
     } catch (AuthenticationException e) {
       throw InvalidCredentialsException.withNone();
     }
+  }
+
+  @Transactional
+  public void resetPassword(ResetPasswordRequest request) {
+    userRepository.findByEmail(request.email())
+        .ifPresent(user -> {
+          String rawTempPassword = tempPasswordGenerator.generate();
+          tempPasswordRegistry.save(user.getId(), rawTempPassword);
+          eventPublisher.publishEvent(
+              new TempPasswordRequestedEvent(user.getEmail(), rawTempPassword));
+        });
   }
 
   public SignInDto refresh(String refreshToken) {

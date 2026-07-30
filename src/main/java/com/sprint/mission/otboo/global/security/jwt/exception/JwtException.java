@@ -7,7 +7,7 @@ import java.util.Map;
 
 public abstract class JwtException extends OtbooException {
 
-    protected JwtException(HttpStatus status, String message, Map<String, Object> details) {
-        super(status, message, details);
-    }
+  protected JwtException(HttpStatus status, String message, Map<String, Object> details) {
+    super(status, message, details);
+  }
 }

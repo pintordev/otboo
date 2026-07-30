@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.authuser.auth.controller;
 
 import com.sprint.mission.otboo.domain.authuser.auth.controller.api.AuthApi;
+import com.sprint.mission.otboo.domain.authuser.auth.dto.request.ResetPasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.SignInRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.JwtDto;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
@@ -20,45 +21,54 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController implements AuthApi {
 
-    private final AuthService authService;
-    private final RefreshTokenCookieProvider refreshTokenCookieProvider;
+  private final AuthService authService;
+  private final RefreshTokenCookieProvider refreshTokenCookieProvider;
 
-    @Override
-    @PostMapping("/sign-out")
-    public ResponseEntity<Void> signOut(
-            @CurrentUser UserPrincipal principal,
-            HttpServletResponse response
-    ) {
-        authService.signOut(principal.userId());
-        refreshTokenCookieProvider.clear(response);
-        return ResponseEntity
-                .status(HttpStatus.NO_CONTENT)
-                .build();
-    }
+  @Override
+  @PostMapping("/sign-out")
+  public ResponseEntity<Void> signOut(
+      @CurrentUser UserPrincipal principal,
+      HttpServletResponse response
+  ) {
+    authService.signOut(principal.userId());
+    refreshTokenCookieProvider.clear(response);
+    return ResponseEntity
+        .status(HttpStatus.NO_CONTENT)
+        .build();
+  }
 
-    @Override
-    @PostMapping("/sign-in")
-    public ResponseEntity<JwtDto> signIn(
-            @Valid @ModelAttribute SignInRequest request,
-            HttpServletResponse response
-    ) {
-        SignInDto result = authService.signIn(request);
-        refreshTokenCookieProvider.attach(response, result.refreshToken());
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(result.jwtDto());
-    }
+  @Override
+  @PostMapping("/sign-in")
+  public ResponseEntity<JwtDto> signIn(
+      @Valid @ModelAttribute SignInRequest request,
+      HttpServletResponse response
+  ) {
+    SignInDto result = authService.signIn(request);
+    refreshTokenCookieProvider.attach(response, result.refreshToken());
+    return ResponseEntity
+        .status(HttpStatus.OK)
+        .body(result.jwtDto());
+  }
 
-    @Override
-    @PostMapping("/refresh")
-    public ResponseEntity<JwtDto> refresh(
-            @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN) String refreshToken,
-            HttpServletResponse response
-    ) {
-        SignInDto result = authService.refresh(refreshToken);
-        refreshTokenCookieProvider.attach(response, result.refreshToken());
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(result.jwtDto());
-    }
+  @Override
+  @PostMapping("/reset-password")
+  public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    authService.resetPassword(request);
+    return ResponseEntity
+        .status(HttpStatus.OK)
+        .build();
+  }
+
+  @Override
+  @PostMapping("/refresh")
+  public ResponseEntity<JwtDto> refresh(
+      @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN) String refreshToken,
+      HttpServletResponse response
+  ) {
+    SignInDto result = authService.refresh(refreshToken);
+    refreshTokenCookieProvider.attach(response, result.refreshToken());
+    return ResponseEntity
+        .status(HttpStatus.OK)
+        .body(result.jwtDto());
+  }
 }

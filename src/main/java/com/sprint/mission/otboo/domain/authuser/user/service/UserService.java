@@ -19,29 +19,30 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final ProfileRepository profileRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final UserMapper userMapper;
+  private final UserRepository userRepository;
+  private final ProfileRepository profileRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final UserMapper userMapper;
 
-    @Transactional
-    public UserDto signUp(UserCreateRequest request) {
+  @Transactional
+  public UserDto signUp(UserCreateRequest request) {
 
-        if (userRepository.existsByEmail(request.email())) {
-            throw DuplicateEmailException.withEmail(request.email());
-        }
-
-        User newUser = User.create(request.name(), request.email(), passwordEncoder.encode(request.password()));
-        User savedUser;
-        try {
-            savedUser = userRepository.saveAndFlush(newUser);
-        } catch (DataIntegrityViolationException e) {
-            throw DuplicateEmailException.withEmail(request.email());
-        }
-
-        Profile newDefaultProfile = Profile.createDefault(savedUser);
-        profileRepository.save(newDefaultProfile);
-
-        return userMapper.userDtoFrom(savedUser);
+    if (userRepository.existsByEmail(request.email())) {
+      throw DuplicateEmailException.withEmail(request.email());
     }
+
+    User newUser = User.create(request.name(), request.email(),
+        passwordEncoder.encode(request.password()));
+    User savedUser;
+    try {
+      savedUser = userRepository.saveAndFlush(newUser);
+    } catch (DataIntegrityViolationException e) {
+      throw DuplicateEmailException.withEmail(request.email());
+    }
+
+    Profile newDefaultProfile = Profile.createDefault(savedUser);
+    profileRepository.save(newDefaultProfile);
+
+    return userMapper.userDtoFrom(savedUser);
+  }
 }

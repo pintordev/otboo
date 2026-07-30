@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 
 public abstract class UserException extends OtbooException {
 
-    protected UserException(HttpStatus status, String message, Map<String, Object> details) {
-        super(status, message, details);
-    }
+  protected UserException(HttpStatus status, String message, Map<String, Object> details) {
+    super(status, message, details);
+  }
 }

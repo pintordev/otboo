@@ -7,7 +7,7 @@ import java.util.Map;
 
 public abstract class UserSessionException extends OtbooException {
 
-    protected UserSessionException(HttpStatus status, String message, Map<String, Object> details) {
-        super(status, message, details);
-    }
+  protected UserSessionException(HttpStatus status, String message, Map<String, Object> details) {
+    super(status, message, details);
+  }
 }

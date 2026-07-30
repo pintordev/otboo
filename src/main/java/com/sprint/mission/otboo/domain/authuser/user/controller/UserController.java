@@ -18,13 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/users")
 public class UserController implements UserApi {
 
-    private final UserService userService;
+  private final UserService userService;
 
-    @Override
-    @PostMapping("")
-    public ResponseEntity<UserDto> signUp(@Valid @RequestBody UserCreateRequest request) {
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(userService.signUp(request));
-    }
+  @Override
+  @PostMapping("")
+  public ResponseEntity<UserDto> signUp(@Valid @RequestBody UserCreateRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.CREATED)
+        .body(userService.signUp(request));
+  }
 }

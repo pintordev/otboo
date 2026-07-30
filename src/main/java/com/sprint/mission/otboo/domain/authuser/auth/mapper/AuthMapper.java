@@ -12,19 +12,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AuthMapper {
 
-    private final UserMapper userMapper;
+  private final UserMapper userMapper;
 
-    public SignInDto signInDtoFrom(CustomUserDetails principal, String accessToken, String refreshToken) {
-        return new SignInDto(
-                jwtDtoFrom(principal, accessToken),
-                refreshToken
-        );
-    }
+  public SignInDto signInDtoFrom(CustomUserDetails principal, String accessToken,
+      String refreshToken) {
+    return new SignInDto(
+        jwtDtoFrom(principal, accessToken),
+        refreshToken
+    );
+  }
 
-    public JwtDto jwtDtoFrom(CustomUserDetails principal, String accessToken) {
-        return new JwtDto(
-                userMapper.userDtoFrom(principal),
-                accessToken
-        );
-    }
+  public JwtDto jwtDtoFrom(CustomUserDetails principal, String accessToken) {
+    return new JwtDto(
+        userMapper.userDtoFrom(principal),
+        accessToken
+    );
+  }
 }

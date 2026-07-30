@@ -29,60 +29,64 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Bean
-    public AuthenticationManager authenticationManager(
-            CustomUserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder
-    ) {
+  @Bean
+  public AuthenticationManager authenticationManager(
+      CustomUserDetailsService userDetailsService,
+      PasswordEncoder passwordEncoder
+  ) {
 
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder);
-        return new ProviderManager(provider);
-    }
+    DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+    provider.setPasswordEncoder(passwordEncoder);
+    return new ProviderManager(provider);
+  }
 
-    @Bean
-    public SecurityFilterChain filterChain(
-            HttpSecurity http,
-            ObjectMapper objectMapper,
-            JwtProvider jwtProvider,
-            UserSessionRegistry userSessionRegistry
-    ) throws Exception {
+  @Bean
+  public SecurityFilterChain filterChain(
+      HttpSecurity http,
+      ObjectMapper objectMapper,
+      JwtProvider jwtProvider,
+      UserSessionRegistry userSessionRegistry
+  ) throws Exception {
 
-        http.formLogin(AbstractHttpConfigurer::disable);
-        http.httpBasic(AbstractHttpConfigurer::disable);
+    http.formLogin(AbstractHttpConfigurer::disable);
+    http.httpBasic(AbstractHttpConfigurer::disable);
 
-        http.csrf(AbstractHttpConfigurer::disable);
-        // TODO: 개발 단계에서 csrf 비활성화 / 추후 csrf 설정 추가
+    http.csrf(AbstractHttpConfigurer::disable);
+    // TODO: 개발 단계에서 csrf 비활성화 / 추후 csrf 설정 추가
 
-        http.sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-        );
+    http.sessionManagement(session -> session
+        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+    );
 
-        http.addFilterBefore(
-                new JwtAuthenticationFilter(jwtProvider, userSessionRegistry),
-                UsernamePasswordAuthenticationFilter.class
-        );
+    http.addFilterBefore(
+        new JwtAuthenticationFilter(jwtProvider, userSessionRegistry),
+        UsernamePasswordAuthenticationFilter.class
+    );
 
-        http.exceptionHandling(ex -> ex
-                .authenticationEntryPoint((request, response, authException) ->
-                        ErrorResponseWriter.write(response, objectMapper, HttpStatus.UNAUTHORIZED, authException, "인증이 필요합니다."))
-                .accessDeniedHandler((request, response, accessDeniedException) ->
-                        ErrorResponseWriter.write(response, objectMapper, HttpStatus.FORBIDDEN, accessDeniedException, "접근 권한이 없습니다."))
-        );
+    http.exceptionHandling(ex -> ex
+        .authenticationEntryPoint((request, response, authException) ->
+            ErrorResponseWriter.write(response, objectMapper, HttpStatus.UNAUTHORIZED,
+                authException, "인증이 필요합니다."))
+        .accessDeniedHandler((request, response, accessDeniedException) ->
+            ErrorResponseWriter.write(response, objectMapper, HttpStatus.FORBIDDEN,
+                accessDeniedException, "접근 권한이 없습니다."))
+    );
 
-        http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/favicon.ico", "/css/**", "/js/**", "/images/**", "/assets/**", "/logo_symbol.svg", "/vite.svg").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+    http.authorizeHttpRequests(auth -> auth
+        .requestMatchers("/", "/index.html", "/favicon.ico", "/css/**", "/js/**", "/images/**",
+            "/assets/**", "/logo_symbol.svg", "/vite.svg").permitAll()
+        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-                .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
 
-                .anyRequest().authenticated()
-        );
+        .anyRequest().authenticated()
+    );
 
-        // TODO: OAuth2 설정 추가
+    // TODO: OAuth2 설정 추가
 
-        return http.build();
-    }
+    return http.build();
+  }
 }

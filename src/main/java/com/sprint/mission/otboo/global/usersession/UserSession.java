@@ -4,8 +4,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record UserSession(
-        UUID sessionId,
-        UUID currentRefreshJti,
-        Instant issuedAt
+    UUID sessionId,
+    UUID currentRefreshJti,
+    Instant issuedAt
 ) {
+
 }

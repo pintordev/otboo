@@ -7,8 +7,9 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @EnableConfigurationProperties({
-        JwtProperties.class,
-        CookieProperties.class
+    JwtProperties.class,
+    CookieProperties.class
 })
 public class AppPropertiesConfig {
+
 }
