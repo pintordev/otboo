@@ -10,9 +10,11 @@ import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
@@ -33,6 +35,10 @@ public class NotificationService {
 
   public CursorPageResponse<NotificationDto> getNotifications(
       UUID receiverId, NotificationListParams params) {
-    return notificationRepository.findNotifications(receiverId, params);
+    CursorPageResponse<NotificationDto> result =
+        notificationRepository.findNotifications(receiverId, params);
+    log.info("알림 목록 조회 완료: receiverId={}, 조회 건수={}, hasNext={}",
+        receiverId, result.data().size(), result.hasNext());
+    return result;
   }
 }
