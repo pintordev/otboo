@@ -85,11 +85,18 @@ class NotificationCustomRepositoryTest {
       Notification second = saveNotification(receiverId);
       Notification third = saveNotification(receiverId);
       testEntityManager.flush();
+
+      Instant firstCreatedAt = Instant.parse("2026-07-28T00:00:00Z");
+      Instant secondCreatedAt = Instant.parse("2026-07-28T00:00:01Z");
+      Instant thirdCreatedAt = Instant.parse("2026-07-28T00:00:02Z");
+      setCreatedAt(first.getId(), firstCreatedAt);
+      setCreatedAt(second.getId(), secondCreatedAt);
+      setCreatedAt(third.getId(), thirdCreatedAt);
       testEntityManager.clear();
 
       // DESC 정렬 시 순서: third → second → first
       NotificationListParams params = new NotificationListParams(
-          third.getCreatedAt().toString(), third.getId(), 10);
+          thirdCreatedAt.toString(), third.getId(), 10);
 
       // when
       CursorPageResponse<NotificationDto> result =
