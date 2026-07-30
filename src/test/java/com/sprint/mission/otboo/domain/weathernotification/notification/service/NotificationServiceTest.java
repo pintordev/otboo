@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
@@ -46,6 +47,11 @@ class NotificationServiceTest {
       .plugin(new JakartaValidationPlugin())
       .build();
 
+  private static final FixtureMonkey entityFixtureMonkey = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
+
   @InjectMocks
   private NotificationService notificationService;
 
@@ -72,8 +78,18 @@ class NotificationServiceTest {
           .set("level", NotificationLevel.INFO)
           .sample();
 
-      Notification saved1 = Notification.create(receiverId1, "제목", "내용", NotificationLevel.INFO);
-      Notification saved2 = Notification.create(receiverId2, "제목", "내용", NotificationLevel.INFO);
+      Notification saved1 = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("receiverId", receiverId1)
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      Notification saved2 = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("receiverId", receiverId2)
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
       given(notificationRepository.saveAll(anyList())).willReturn(List.of(saved1, saved2));
 
       NotificationDto dto1 = new NotificationDto(
@@ -169,7 +185,9 @@ class NotificationServiceTest {
     void 본인_알림이면_삭제한다() {
       // given
       UUID receiverId = UUID.randomUUID();
-      Notification notification = Notification.create(receiverId, "제목", "내용", NotificationLevel.INFO);
+      Notification notification = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("receiverId", receiverId)
+          .sample();
       UUID notificationId = notification.getId();
       given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
 
@@ -200,7 +218,9 @@ class NotificationServiceTest {
       // given
       UUID receiverId = UUID.randomUUID();
       UUID currentUserId = UUID.randomUUID();
-      Notification notification = Notification.create(receiverId, "제목", "내용", NotificationLevel.INFO);
+      Notification notification = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("receiverId", receiverId)
+          .sample();
       UUID notificationId = notification.getId();
       given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
 
