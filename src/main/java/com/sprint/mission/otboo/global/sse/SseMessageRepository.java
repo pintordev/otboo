@@ -6,18 +6,29 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class SseMessageRepository {
 
+    private static final int MAX_SIZE = 1_000;
+
     private final ConcurrentLinkedDeque<UUID> eventIdQueue = new ConcurrentLinkedDeque<>();
     private final Map<UUID, SseMessage> messages = new ConcurrentHashMap<>();
+    private final AtomicInteger size = new AtomicInteger();
 
     public UUID save(SseMessage message) {
         messages.put(message.id(), message);
         eventIdQueue.addLast(message.id());
+        if (size.incrementAndGet() > MAX_SIZE) {
+            UUID evicted = eventIdQueue.pollFirst();
+            if (evicted != null) {
+                messages.remove(evicted);
+                size.decrementAndGet();
+            }
+        }
         return message.id();
     }
 
