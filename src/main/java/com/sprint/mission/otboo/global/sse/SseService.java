@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -47,6 +48,12 @@ public class SseService {
     public void disconnectAll(UUID userId) {
         sseEmitterRepository.findByUserId(userId)
                 .ifPresent(SseEmitter::complete);
+    }
+
+    @Scheduled(fixedDelayString = "${sse.clean-up.fixed-delay}")
+    public void cleanUp() {
+        sseEmitterRepository.findAll().values()
+                .forEach(this::ping);
     }
 
     private boolean sendToEmitter(SseEmitter emitter, SseMessage message) {
