@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -176,6 +177,29 @@ class SseServiceTest {
             verify(targetEmitter).complete();
             verify(otherEmitter, never()).complete();
             verify(sseEmitterRepository, never()).findByUserId(otherUserId);
+        }
+    }
+
+    @Nested
+    @DisplayName("cleanUp")
+    class CleanUp {
+
+        @Test
+        @DisplayName("등록된_모든_emitter에_ping을_전송한다")
+        void 등록된_모든_emitter에_ping을_전송한다() throws IOException {
+            // given
+            UUID userId1 = UUID.randomUUID();
+            UUID userId2 = UUID.randomUUID();
+            SseEmitter emitter1 = mock(SseEmitter.class);
+            SseEmitter emitter2 = mock(SseEmitter.class);
+            given(sseEmitterRepository.findAll()).willReturn(Map.of(userId1, emitter1, userId2, emitter2));
+
+            // when
+            sseService.cleanUp();
+
+            // then
+            verify(emitter1).send(any(SseEmitter.SseEventBuilder.class));
+            verify(emitter2).send(any(SseEmitter.SseEventBuilder.class));
         }
     }
 }
