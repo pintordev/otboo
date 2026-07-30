@@ -23,4 +23,8 @@ public class SseEmitterRepository {
   public void remove(UUID userId, SseEmitter emitter) {
     emitters.computeIfPresent(userId, (id, current) -> current == emitter ? null : current);
   }
+
+  public Map<UUID, SseEmitter> findAll() {
+    return emitters;
+  }
 }
