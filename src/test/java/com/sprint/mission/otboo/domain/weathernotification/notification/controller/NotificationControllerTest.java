@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -201,6 +202,22 @@ class NotificationControllerTest {
       // when & then
       mockMvc.perform(delete("/api/notifications/{notificationId}", notificationId))
           .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("notificationId가 UUID 형식이 아니면 400을 반환한다")
+    void notificationId가_UUID_형식이_아니면_400을_반환한다() throws Exception {
+      // given
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(UUID.randomUUID()));
+
+      // when & then
+      mockMvc.perform(delete("/api/notifications/{notificationId}", "invalid-uuid"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.exceptionName").exists())
+          .andExpect(jsonPath("$.message").exists())
+          .andExpect(jsonPath("$.details").exists());
+
+      verify(notificationService, never()).delete(any(), any());
     }
   }
 }
