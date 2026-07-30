@@ -13,7 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
-import com.sprint.mission.otboo.domain.weathernotification.sse.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import com.sprint.mission.otboo.global.event.NotificationLevel;

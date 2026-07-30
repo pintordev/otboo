@@ -1,7 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
-import com.sprint.mission.otboo.domain.weathernotification.sse.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import java.io.IOException;

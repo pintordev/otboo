@@ -2,7 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sprint.mission.otboo.domain.weathernotification.sse.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
