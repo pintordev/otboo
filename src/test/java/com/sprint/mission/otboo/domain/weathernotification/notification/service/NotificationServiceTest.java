@@ -4,16 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.Notification;
 import com.sprint.mission.otboo.domain.weathernotification.notification.mapper.NotificationMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
+import com.sprint.mission.otboo.global.dto.CursorPageResponse;
+import com.sprint.mission.otboo.global.dto.SortDirection;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -27,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("NotificationService")
 class NotificationServiceTest {
 
   private static final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
@@ -119,6 +125,32 @@ class NotificationServiceTest {
       assertThat(captured.getTitle()).isEqualTo("제목");
       assertThat(captured.getContent()).isEqualTo("내용");
       assertThat(captured.getLevel()).isEqualTo(NotificationLevel.WARNING);
+    }
+  }
+
+  @Nested
+  @DisplayName("알림 목록 조회")
+  class GetNotifications {
+
+    @Test
+    @DisplayName("Repository가 반환한 페이지를 그대로 전달한다")
+    void Repository가_반환한_페이지를_그대로_전달한다() {
+      // given
+      UUID receiverId = UUID.randomUUID();
+      NotificationListParams params = new NotificationListParams(null, null, 10);
+      NotificationDto dto = new NotificationDto(
+          UUID.randomUUID(), Instant.now(), receiverId, "제목", "내용", NotificationLevel.INFO);
+      CursorPageResponse<NotificationDto> repoPage = new CursorPageResponse<>(
+          List.of(dto), null, null, false, 1L, "createdAt", SortDirection.DESCENDING);
+      when(notificationRepository.findNotifications(receiverId, params)).thenReturn(repoPage);
+
+      // when
+      CursorPageResponse<NotificationDto> result =
+          notificationService.getNotifications(receiverId, params);
+
+      // then
+      assertThat(result).isEqualTo(repoPage);
+      verify(notificationRepository).findNotifications(receiverId, params);
     }
   }
 }
