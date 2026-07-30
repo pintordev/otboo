@@ -29,7 +29,7 @@ public class NotificationController implements NotificationApi {
   public ResponseEntity<CursorPageResponse<NotificationDto>> getNotifications(
       @CurrentUser UserPrincipal principal,
       @Valid @ModelAttribute NotificationListParams params) {
-    log.debug("알림 목록 조회 요청: receiverId={}, limit={}", principal.userId(), params.limit());
+    log.debug("알림 목록 조회 요청: limit={}", params.limit());
     return ResponseEntity.ok(notificationService.getNotifications(principal.userId(), params));
   }
 }

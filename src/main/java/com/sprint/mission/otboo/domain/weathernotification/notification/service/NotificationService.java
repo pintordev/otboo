@@ -37,8 +37,7 @@ public class NotificationService {
       UUID receiverId, NotificationListParams params) {
     CursorPageResponse<NotificationDto> result =
         notificationRepository.findNotifications(receiverId, params);
-    log.info("알림 목록 조회 완료: receiverId={}, 조회 건수={}, hasNext={}",
-        receiverId, result.data().size(), result.hasNext());
+    log.info("알림 목록 조회 완료: 조회 건수={}, hasNext={}", result.data().size(), result.hasNext());
     return result;
   }
 }
