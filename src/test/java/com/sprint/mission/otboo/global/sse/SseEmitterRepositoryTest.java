@@ -63,4 +63,41 @@ class SseEmitterRepositoryTest {
             assertThat(sseEmitterRepository.findByUserId(userId)).contains(next);
         }
     }
+
+    @Nested
+    @DisplayName("제거")
+    class Remove {
+
+        @Test
+        @DisplayName("전달받은_emitter가_현재_저장된_것과_같은_참조면_제거한다")
+        void 전달받은_emitter가_현재_저장된_것과_같은_참조면_제거한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            SseEmitter emitter = new SseEmitter();
+            sseEmitterRepository.save(userId, emitter);
+
+            // when
+            sseEmitterRepository.remove(userId, emitter);
+
+            // then
+            assertThat(sseEmitterRepository.findByUserId(userId)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("전달받은_emitter가_이미_새_emitter로_교체된_뒤라면_아무_것도_하지_않는다")
+        void 전달받은_emitter가_이미_새_emitter로_교체된_뒤라면_아무_것도_하지_않는다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            SseEmitter previous = new SseEmitter();
+            SseEmitter next = new SseEmitter();
+            sseEmitterRepository.save(userId, previous);
+            sseEmitterRepository.save(userId, next);
+
+            // when
+            sseEmitterRepository.remove(userId, previous);
+
+            // then
+            assertThat(sseEmitterRepository.findByUserId(userId)).contains(next);
+        }
+    }
 }
