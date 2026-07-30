@@ -19,4 +19,8 @@ public class SseEmitterRepository {
   public Optional<SseEmitter> findByUserId(UUID userId) {
     return Optional.ofNullable(emitters.get(userId));
   }
+
+  public void remove(UUID userId, SseEmitter emitter) {
+    emitters.computeIfPresent(userId, (id, current) -> current == emitter ? null : current);
+  }
 }
