@@ -44,6 +44,11 @@ public class SseService {
         return emitter;
     }
 
+    public void disconnectAll(UUID userId) {
+        sseEmitterRepository.findByUserId(userId)
+                .ifPresent(SseEmitter::complete);
+    }
+
     private boolean sendToEmitter(SseEmitter emitter, SseMessage message) {
         try {
             emitter.send(SseEmitter.event()
