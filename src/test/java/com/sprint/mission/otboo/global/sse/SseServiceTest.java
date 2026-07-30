@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -124,6 +126,56 @@ class SseServiceTest {
                 SseEmitter createdEmitter = mocked.constructed().get(0);
                 verify(createdEmitter, times(3)).send(any(SseEmitter.SseEventBuilder.class));
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("disconnectAll")
+    class DisconnectAll {
+
+        @Test
+        @DisplayName("해당_유저의_emitter가_있으면_complete를_호출한다")
+        void 해당_유저의_emitter가_있으면_complete를_호출한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            SseEmitter emitter = mock(SseEmitter.class);
+            given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
+
+            // when
+            sseService.disconnectAll(userId);
+
+            // then
+            verify(emitter).complete();
+        }
+
+        @Test
+        @DisplayName("해당_유저의_emitter가_없으면_아무_것도_하지_않는다")
+        void 해당_유저의_emitter가_없으면_아무_것도_하지_않는다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.empty());
+
+            // when & then — 예외 없이 정상 종료
+            sseService.disconnectAll(userId);
+        }
+
+        @Test
+        @DisplayName("다른_유저의_emitter는_건드리지_않는다")
+        void 다른_유저의_emitter는_건드리지_않는다() {
+            // given
+            UUID targetUserId = UUID.randomUUID();
+            UUID otherUserId = UUID.randomUUID();
+            SseEmitter targetEmitter = mock(SseEmitter.class);
+            SseEmitter otherEmitter = mock(SseEmitter.class);
+            given(sseEmitterRepository.findByUserId(targetUserId)).willReturn(Optional.of(targetEmitter));
+
+            // when
+            sseService.disconnectAll(targetUserId);
+
+            // then
+            verify(targetEmitter).complete();
+            verify(otherEmitter, never()).complete();
+            verify(sseEmitterRepository, never()).findByUserId(otherUserId);
         }
     }
 }
