@@ -84,7 +84,7 @@ class SseServiceTest {
 
         @Test
         @DisplayName("LastEventId_이후_유실된_이벤트를_전부_재생한다")
-        void LastEventId_이후_유실된_이벤트를_전부_재생한다() {
+        void LastEventId_이후_유실된_이벤트를_전부_재생한다() throws IOException {
             // given
             UUID userId = UUID.randomUUID();
             UUID lastEventId = UUID.randomUUID();
@@ -105,7 +105,7 @@ class SseServiceTest {
 
         @Test
         @DisplayName("재생_중_연결_시점_최신_이벤트_id에_도달하면_그_이후는_재생하지_않는다")
-        void 재생_중_연결_시점_최신_이벤트_id에_도달하면_그_이후는_재생하지_않는다() {
+        void 재생_중_연결_시점_최신_이벤트_id에_도달하면_그_이후는_재생하지_않는다() throws IOException {
             // given
             UUID userId = UUID.randomUUID();
             UUID lastEventId = UUID.randomUUID();
