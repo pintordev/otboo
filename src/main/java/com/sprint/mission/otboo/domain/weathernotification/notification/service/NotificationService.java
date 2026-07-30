@@ -1,11 +1,14 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.service;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.Notification;
 import com.sprint.mission.otboo.domain.weathernotification.notification.mapper.NotificationMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
+import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,5 +29,10 @@ public class NotificationService {
     return notificationRepository.saveAll(notifications).stream()
         .map(notificationMapper::toDto)
         .toList();
+  }
+
+  public CursorPageResponse<NotificationDto> getNotifications(
+      UUID receiverId, NotificationListParams params) {
+    return notificationRepository.findNotifications(receiverId, params);
   }
 }
