@@ -8,9 +8,9 @@ public record SseMessage(UUID id, Set<UUID> receiverIds, String eventName, Objec
                          Instant createdAt) {
 
   public SseMessage {
-    id = UUID.randomUUID();
+    id = (id != null) ? id : UUID.randomUUID();
     receiverIds = Set.copyOf(receiverIds);
-    createdAt = Instant.now();
+    createdAt = (createdAt != null) ? createdAt : Instant.now();
   }
 
   public SseMessage(Set<UUID> receiverIds, String eventName, Object data) {

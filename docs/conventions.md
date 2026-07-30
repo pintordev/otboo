@@ -69,8 +69,10 @@ com.sprint.mission.otboo/
 │   │   ├── OtbooException.java          # 추상 기본 예외, status를 직접 보유
 │   │   └── GlobalExceptionHandler.java  # @RestControllerAdvice, 공통 케이스만 처리
 │   └── security/
-│       ├── JwtTokenProvider.java        # 토큰 발급/검증
-│       └── JwtAuthenticationFilter.java # Authorization: Bearer 파싱
+│       └── jwt/
+│           ├── JwtProvider.java            # 토큰 발급/검증
+│           └── filter/
+│               └── JwtAuthenticationFilter.java # Authorization: Bearer 파싱
 ├── domain/                              # 대분류는 GitHub 도메인 라벨(auth-user/clothes-recommend/weather-notification/social) 기준
 │   ├── authuser/                        # 라벨: auth-user
 │   │   ├── user/                        # 회원가입/로그인/권한/계정잠금 — 인증 관리 태그

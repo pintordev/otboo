@@ -10,4 +10,7 @@ public record NotificationRequestedEvent(
     NotificationLevel level
 ) {
 
+  public NotificationRequestedEvent {
+    receiverIds = Set.copyOf(receiverIds);
+  }
 }

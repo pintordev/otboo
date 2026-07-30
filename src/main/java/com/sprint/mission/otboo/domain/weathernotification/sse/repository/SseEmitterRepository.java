@@ -25,6 +25,6 @@ public class SseEmitterRepository {
   }
 
   public Map<UUID, SseEmitter> findAll() {
-    return emitters;
+    return Map.copyOf(emitters);
   }
 }

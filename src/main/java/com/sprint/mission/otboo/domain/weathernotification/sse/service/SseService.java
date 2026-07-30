@@ -32,8 +32,8 @@ public class SseService {
     emitter.onTimeout(() -> sseEmitterRepository.remove(userId, emitter));
     emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
-    UUID connectionTimeLatestId = sseMessageRepository.getLatestEventId();
     sseEmitterRepository.save(userId, emitter);
+    UUID connectionTimeLatestId = sseMessageRepository.getLatestEventId();
     if (!ping(emitter)) {
       return emitter;
     }
