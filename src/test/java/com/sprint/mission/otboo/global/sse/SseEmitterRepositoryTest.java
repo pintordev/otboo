@@ -100,4 +100,26 @@ class SseEmitterRepositoryTest {
             assertThat(sseEmitterRepository.findByUserId(userId)).contains(next);
         }
     }
+
+    @Nested
+    @DisplayName("전체 조회")
+    class FindAll {
+
+        @Test
+        @DisplayName("저장된_모든_emitter를_userId_기준_맵으로_반환한다")
+        void 저장된_모든_emitter를_userId_기준_맵으로_반환한다() {
+            // given
+            UUID userId1 = UUID.randomUUID();
+            UUID userId2 = UUID.randomUUID();
+            SseEmitter emitter1 = new SseEmitter();
+            SseEmitter emitter2 = new SseEmitter();
+            sseEmitterRepository.save(userId1, emitter1);
+            sseEmitterRepository.save(userId2, emitter2);
+
+            // when & then
+            assertThat(sseEmitterRepository.findAll())
+                    .containsEntry(userId1, emitter1)
+                    .containsEntry(userId2, emitter2);
+        }
+    }
 }
