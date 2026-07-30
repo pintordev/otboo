@@ -1,8 +1,11 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +15,8 @@ import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPl
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.Notification;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationForbiddenException;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationNotFoundException;
 import com.sprint.mission.otboo.domain.weathernotification.notification.mapper.NotificationMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
@@ -20,6 +25,7 @@ import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -151,6 +157,57 @@ class NotificationServiceTest {
       // then
       assertThat(result).isEqualTo(repoPage);
       verify(notificationRepository).findNotifications(receiverId, params);
+    }
+  }
+
+  @Nested
+  @DisplayName("알림 삭제")
+  class Delete {
+
+    @Test
+    @DisplayName("본인_알림이면_삭제한다")
+    void 본인_알림이면_삭제한다() {
+      // given
+      UUID receiverId = UUID.randomUUID();
+      Notification notification = Notification.create(receiverId, "제목", "내용", NotificationLevel.INFO);
+      UUID notificationId = notification.getId();
+      given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
+
+      // when
+      notificationService.delete(notificationId, receiverId);
+
+      // then
+      verify(notificationRepository).delete(notification);
+    }
+
+    @Test
+    @DisplayName("대상_알림이_없으면_NotificationNotFoundException을_던지고_삭제하지_않는다")
+    void 대상_알림이_없으면_NotificationNotFoundException을_던지고_삭제하지_않는다() {
+      // given
+      UUID notificationId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      given(notificationRepository.findById(notificationId)).willReturn(Optional.empty());
+
+      // when & then
+      assertThatThrownBy(() -> notificationService.delete(notificationId, currentUserId))
+          .isInstanceOf(NotificationNotFoundException.class);
+      verify(notificationRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("본인_알림이_아니면_NotificationForbiddenException을_던지고_삭제하지_않는다")
+    void 본인_알림이_아니면_NotificationForbiddenException을_던지고_삭제하지_않는다() {
+      // given
+      UUID receiverId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Notification notification = Notification.create(receiverId, "제목", "내용", NotificationLevel.INFO);
+      UUID notificationId = notification.getId();
+      given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
+
+      // when & then
+      assertThatThrownBy(() -> notificationService.delete(notificationId, currentUserId))
+          .isInstanceOf(NotificationForbiddenException.class);
+      verify(notificationRepository, never()).delete(any());
     }
   }
 }
