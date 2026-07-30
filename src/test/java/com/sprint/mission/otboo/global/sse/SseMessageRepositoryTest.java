@@ -111,4 +111,25 @@ class SseMessageRepositoryTest {
             assertThat(result).containsExactly(message);
         }
     }
+
+    @Nested
+    @DisplayName("최대 크기 초과 시 eviction")
+    class Eviction {
+
+        @Test
+        @DisplayName("최대_크기를_초과하면_가장_오래된_메시지부터_제거해_최대_1000건만_유지한다")
+        void 최대_크기를_초과하면_가장_오래된_메시지부터_제거해_최대_1000건만_유지한다() {
+            // given
+            UUID userId = UUID.randomUUID();
+            for (int i = 0; i < 1001; i++) {
+                sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "payload-" + i));
+            }
+
+            // when — 존재하지 않는 lastEventId를 넘겨 큐 전체를 재생 대상으로 조회
+            List<SseMessage> result = sseMessageRepository.findAllAfter(UUID.randomUUID(), userId);
+
+            // then
+            assertThat(result).hasSize(1000);
+        }
+    }
 }
