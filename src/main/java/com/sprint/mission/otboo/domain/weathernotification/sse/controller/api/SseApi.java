@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.sse.controller.api;
+package com.sprint.mission.otboo.domain.weathernotification.sse.controller.api;
 
 import com.sprint.mission.otboo.global.security.jwt.filter.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;

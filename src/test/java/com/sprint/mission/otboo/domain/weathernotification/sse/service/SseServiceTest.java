@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.sse;
+package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +13,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.sse.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
+import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import java.io.IOException;
 import java.time.Instant;

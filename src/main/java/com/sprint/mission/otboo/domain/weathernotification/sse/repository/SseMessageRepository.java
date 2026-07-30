@@ -1,5 +1,6 @@
-package com.sprint.mission.otboo.global.sse;
+package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
+import com.sprint.mission.otboo.domain.weathernotification.sse.SseMessage;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;

@@ -5,9 +5,9 @@ import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
+import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
-import com.sprint.mission.otboo.global.sse.SseService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;

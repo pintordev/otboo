@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.sse.controller;
+package com.sprint.mission.otboo.domain.weathernotification.sse.controller;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.security.jwt.filter.UserPrincipal;
-import com.sprint.mission.otboo.global.sse.SseService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;

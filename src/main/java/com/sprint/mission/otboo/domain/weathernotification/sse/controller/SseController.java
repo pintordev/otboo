@@ -1,9 +1,9 @@
-package com.sprint.mission.otboo.global.sse.controller;
+package com.sprint.mission.otboo.domain.weathernotification.sse.controller;
 
+import com.sprint.mission.otboo.domain.weathernotification.sse.controller.api.SseApi;
+import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.security.jwt.filter.CurrentUser;
 import com.sprint.mission.otboo.global.security.jwt.filter.UserPrincipal;
-import com.sprint.mission.otboo.global.sse.SseService;
-import com.sprint.mission.otboo.global.sse.controller.api.SseApi;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -19,7 +19,7 @@ public class SseController implements SseApi {
   private final SseService sseService;
 
   @Override
-  @GetMapping(value = "/api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @GetMapping(path = "api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter subscribe(
       @CurrentUser UserPrincipal principal,
       @RequestParam(value = "LastEventId", required = false) UUID lastEventId

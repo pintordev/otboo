@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.sse;
+package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import java.util.Map;
 import java.util.Optional;

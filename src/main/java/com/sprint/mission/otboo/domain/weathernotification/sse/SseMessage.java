@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.sse;
+package com.sprint.mission.otboo.domain.weathernotification.sse;
 
 import java.time.Instant;
 import java.util.Set;

@@ -68,11 +68,9 @@ com.sprint.mission.otboo/
 │   ├── exception/
 │   │   ├── OtbooException.java          # 추상 기본 예외, status를 직접 보유
 │   │   └── GlobalExceptionHandler.java  # @RestControllerAdvice, 공통 케이스만 처리
-│   ├── security/
-│   │   ├── JwtTokenProvider.java        # 토큰 발급/검증
-│   │   └── JwtAuthenticationFilter.java # Authorization: Bearer 파싱
-│   └── sse/
-│       └── SseEmitterRepository.java    # 사용자별 SseEmitter 관리 (LastEventId 재연결 포함)
+│   └── security/
+│       ├── JwtTokenProvider.java        # 토큰 발급/검증
+│       └── JwtAuthenticationFilter.java # Authorization: Bearer 파싱
 ├── domain/                              # 대분류는 GitHub 도메인 라벨(auth-user/clothes-recommend/weather-notification/social) 기준
 │   ├── authuser/                        # 라벨: auth-user
 │   │   ├── user/                        # 회원가입/로그인/권한/계정잠금 — 인증 관리 태그
@@ -83,7 +81,8 @@ com.sprint.mission.otboo/
 │   │   └── recommendation/              # 추천 알고리즘, (선택) LLM 챗봇 태그
 │   ├── weathernotification/             # 라벨: weather-notification
 │   │   ├── weather/                     # 날씨 조회, 위치(좌표) 변환 태그 — 배치는 domain에 안 두고 batch/weatherfetch/로 분리(아래 참고)
-│   │   └── notification/                # 알림 태그, event/ — NotificationEventListener (SSE + Kafka 발행)
+│   │   ├── notification/                # 알림 태그, event/ — NotificationRequestedEventListener (Notification 저장 + SSE 발행)
+│   │   └── sse/                         # api-docs.json 태그 `sse-controller` 단위(알림과 별개) — SseMessage.java(재생 버퍼 엔트리), repository/(SseEmitterRepository·SseMessageRepository), service/(SseService), controller/·controller/api/
 │   └── social/                          # 라벨: social
 │       ├── feed/                        # OOTD 피드, 댓글, 좋아요 태그 (Comment는 별도 태그가 없어 feed/ 안에 포함)
 │       ├── follow/                      # 팔로우 관리 태그
