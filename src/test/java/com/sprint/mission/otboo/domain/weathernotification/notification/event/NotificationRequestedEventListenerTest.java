@@ -23,33 +23,33 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class NotificationRequestedEventListenerTest {
 
-    @InjectMocks
-    private NotificationRequestedEventListener notificationRequestedEventListener;
+  @InjectMocks
+  private NotificationRequestedEventListener notificationRequestedEventListener;
 
-    @Mock
-    private NotificationService notificationService;
-    @Mock
-    private SseService sseService;
+  @Mock
+  private NotificationService notificationService;
+  @Mock
+  private SseService sseService;
 
-    @Nested
-    @DisplayName("on")
-    class On {
+  @Nested
+  @DisplayName("on")
+  class On {
 
-        @Test
-        @DisplayName("이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다")
-        void 이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다() {
-            // given
-            NotificationRequestedEvent event = new NotificationRequestedEvent(
-                    Set.of(UUID.randomUUID()), "제목", "내용", NotificationLevel.INFO);
-            List<NotificationDto> notificationDtos = List.of(new NotificationDto(
-                    UUID.randomUUID(), Instant.now(), UUID.randomUUID(), "제목", "내용", NotificationLevel.INFO));
-            given(notificationService.create(event)).willReturn(notificationDtos);
+    @Test
+    @DisplayName("이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다")
+    void 이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다() {
+      // given
+      NotificationRequestedEvent event = new NotificationRequestedEvent(
+          Set.of(UUID.randomUUID()), "제목", "내용", NotificationLevel.INFO);
+      List<NotificationDto> notificationDtos = List.of(new NotificationDto(
+          UUID.randomUUID(), Instant.now(), UUID.randomUUID(), "제목", "내용", NotificationLevel.INFO));
+      given(notificationService.create(event)).willReturn(notificationDtos);
 
-            // when
-            notificationRequestedEventListener.on(event);
+      // when
+      notificationRequestedEventListener.on(event);
 
-            // then
-            verify(sseService).send(notificationDtos, "notifications");
-        }
+      // then
+      verify(sseService).send(notificationDtos, "notifications");
     }
+  }
 }

@@ -12,29 +12,30 @@ import org.junit.jupiter.api.Test;
 
 class NotificationMapperTest {
 
-    private final NotificationMapper notificationMapper = new NotificationMapper();
+  private final NotificationMapper notificationMapper = new NotificationMapper();
 
-    @Nested
-    @DisplayName("ToDto")
-    class ToDto {
+  @Nested
+  @DisplayName("ToDto")
+  class ToDto {
 
-        @Test
-        @DisplayName("Notification을_NotificationDto로_정확히_변환한다")
-        void Notification을_NotificationDto로_정확히_변환한다() {
-            // given
-            UUID receiverId = UUID.randomUUID();
-            Notification notification = Notification.create(receiverId, "제목", "내용", NotificationLevel.WARNING);
+    @Test
+    @DisplayName("Notification을_NotificationDto로_정확히_변환한다")
+    void Notification을_NotificationDto로_정확히_변환한다() {
+      // given
+      UUID receiverId = UUID.randomUUID();
+      Notification notification = Notification.create(receiverId, "제목", "내용",
+          NotificationLevel.WARNING);
 
-            // when
-            NotificationDto dto = notificationMapper.toDto(notification);
+      // when
+      NotificationDto dto = notificationMapper.toDto(notification);
 
-            // then
-            assertThat(dto.id()).isEqualTo(notification.getId());
-            assertThat(dto.createdAt()).isEqualTo(notification.getCreatedAt());
-            assertThat(dto.receiverId()).isEqualTo(receiverId);
-            assertThat(dto.title()).isEqualTo("제목");
-            assertThat(dto.content()).isEqualTo("내용");
-            assertThat(dto.level()).isEqualTo(NotificationLevel.WARNING);
-        }
+      // then
+      assertThat(dto.id()).isEqualTo(notification.getId());
+      assertThat(dto.createdAt()).isEqualTo(notification.getCreatedAt());
+      assertThat(dto.receiverId()).isEqualTo(receiverId);
+      assertThat(dto.title()).isEqualTo("제목");
+      assertThat(dto.content()).isEqualTo("내용");
+      assertThat(dto.level()).isEqualTo(NotificationLevel.WARNING);
     }
+  }
 }

@@ -11,9 +11,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Tag(name = "sse-controller")
 public interface SseApi {
 
-    @Operation(summary = "SSE 구독", description = "알림 SSE 스트림을 구독합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "OK")
-    })
-    SseEmitter subscribe(UserPrincipal principal, UUID lastEventId);
+  @Operation(summary = "SSE 구독", description = "알림 SSE 스트림을 구독합니다.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "OK")
+  })
+  SseEmitter subscribe(UserPrincipal principal, UUID lastEventId);
 }

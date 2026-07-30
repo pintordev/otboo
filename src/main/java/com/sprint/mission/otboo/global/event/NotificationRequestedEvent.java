@@ -8,4 +8,6 @@ public record NotificationRequestedEvent(
     String title,
     String content,
     NotificationLevel level
-) {}
+) {
+
+}

@@ -37,63 +37,64 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Import(SseControllerTest.SecurityArgumentResolverConfig.class)
 class SseControllerTest {
 
-    @TestConfiguration
-    static class SecurityArgumentResolverConfig implements WebMvcConfigurer {
-        @Override
-        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new AuthenticationPrincipalArgumentResolver());
-        }
+  @Autowired
+  private MockMvc mockMvc;
+  @MockitoBean
+  private SseService sseService;
+
+  private Authentication authenticationOf(UUID userId) {
+    UserPrincipal principal = new UserPrincipal(userId, "USER");
+    return new UsernamePasswordAuthenticationToken(principal, null,
+        List.of(new SimpleGrantedAuthority("USER")));
+  }
+
+  @TestConfiguration
+  static class SecurityArgumentResolverConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+      resolvers.add(new AuthenticationPrincipalArgumentResolver());
+    }
+  }
+
+  @Nested
+  @DisplayName("구독")
+  class Subscribe {
+
+    @AfterEach
+    void tearDown() {
+      SecurityContextHolder.clearContext();
     }
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Test
+    @DisplayName("인증된_사용자가_구독하면_200과_text_event_stream으로_응답한다")
+    void 인증된_사용자가_구독하면_200과_text_event_stream으로_응답한다() throws Exception {
+      // given
+      UUID userId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
+      given(sseService.connect(eq(userId), isNull())).willReturn(new SseEmitter());
 
-    @MockitoBean
-    private SseService sseService;
-
-    private Authentication authenticationOf(UUID userId) {
-        UserPrincipal principal = new UserPrincipal(userId, "USER");
-        return new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority("USER")));
+      // when & then
+      mockMvc.perform(get("/api/sse"))
+          .andExpect(request().asyncStarted())
+          .andExpect(status().isOk())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM));
     }
 
-    @Nested
-    @DisplayName("구독")
-    class Subscribe {
+    @Test
+    @DisplayName("LastEventId_쿼리_파라미터를_전달하면_connect에_그대로_넘긴다")
+    void LastEventId_쿼리_파라미터를_전달하면_connect에_그대로_넘긴다() throws Exception {
+      // given
+      UUID userId = UUID.randomUUID();
+      UUID lastEventId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
+      given(sseService.connect(userId, lastEventId)).willReturn(new SseEmitter());
 
-        @AfterEach
-        void tearDown() {
-            SecurityContextHolder.clearContext();
-        }
+      // when & then
+      mockMvc.perform(get("/api/sse").param("LastEventId", lastEventId.toString()))
+          .andExpect(request().asyncStarted());
 
-        @Test
-        @DisplayName("인증된_사용자가_구독하면_200과_text_event_stream으로_응답한다")
-        void 인증된_사용자가_구독하면_200과_text_event_stream으로_응답한다() throws Exception {
-            // given
-            UUID userId = UUID.randomUUID();
-            SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
-            given(sseService.connect(eq(userId), isNull())).willReturn(new SseEmitter());
-
-            // when & then
-            mockMvc.perform(get("/api/sse"))
-                    .andExpect(request().asyncStarted())
-                    .andExpect(status().isOk())
-                    .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM));
-        }
-
-        @Test
-        @DisplayName("LastEventId_쿼리_파라미터를_전달하면_connect에_그대로_넘긴다")
-        void LastEventId_쿼리_파라미터를_전달하면_connect에_그대로_넘긴다() throws Exception {
-            // given
-            UUID userId = UUID.randomUUID();
-            UUID lastEventId = UUID.randomUUID();
-            SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
-            given(sseService.connect(userId, lastEventId)).willReturn(new SseEmitter());
-
-            // when & then
-            mockMvc.perform(get("/api/sse").param("LastEventId", lastEventId.toString()))
-                    .andExpect(request().asyncStarted());
-
-            verify(sseService).connect(userId, lastEventId);
-        }
+      verify(sseService).connect(userId, lastEventId);
     }
+  }
 }

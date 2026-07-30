@@ -23,6 +23,7 @@ import com.sprint.mission.otboo.domain.authuser.auth.exception.InvalidCredential
 import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
+import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
@@ -94,6 +95,7 @@ class AuthServiceTest {
   private User fixtureUnlockedUser() {
     User user = entityFixtureMonkey.giveMeBuilder(User.class)
         .set("id", UUID.randomUUID())
+        .set("role", Role.USER)
         .sample();
     user.unlock();
     return user;
@@ -457,6 +459,7 @@ class AuthServiceTest {
       // given
       User lockedUser = entityFixtureMonkey.giveMeBuilder(User.class)
           .set("id", UUID.randomUUID())
+          .set("email", "fixture@example.com")
           .sample();
       lockedUser.lock(LockReason.ADMIN_ACTION);
       UUID sid = UUID.randomUUID();

@@ -16,14 +16,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 public class SseController implements SseApi {
 
-    private final SseService sseService;
+  private final SseService sseService;
 
-    @Override
-    @GetMapping(value = "/api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribe(
-            @CurrentUser UserPrincipal principal,
-            @RequestParam(value = "LastEventId", required = false) UUID lastEventId
-    ) {
-        return sseService.connect(principal.userId(), lastEventId);
-    }
+  @Override
+  @GetMapping(value = "/api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter subscribe(
+      @CurrentUser UserPrincipal principal,
+      @RequestParam(value = "LastEventId", required = false) UUID lastEventId
+  ) {
+    return sseService.connect(principal.userId(), lastEventId);
+  }
 }
