@@ -1,8 +1,10 @@
 package com.sprint.mission.otboo.global.sse;
 
+import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +45,15 @@ public class SseService {
             }
         }
         return emitter;
+    }
+
+    public void send(List<NotificationDto> notificationDtos, String eventName) {
+        notificationDtos.forEach(dto -> {
+            SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
+            sseMessageRepository.save(message);
+            sseEmitterRepository.findByUserId(dto.receiverId())
+                    .ifPresent(emitter -> sendToEmitter(emitter, message));
+        });
     }
 
     public void disconnectAll(UUID userId) {
