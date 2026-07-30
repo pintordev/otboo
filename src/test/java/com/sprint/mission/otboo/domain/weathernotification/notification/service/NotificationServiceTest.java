@@ -185,10 +185,11 @@ class NotificationServiceTest {
     void 본인_알림이면_삭제한다() {
       // given
       UUID receiverId = UUID.randomUUID();
+      UUID notificationId = UUID.randomUUID();
       Notification notification = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("id", notificationId)
           .set("receiverId", receiverId)
           .sample();
-      UUID notificationId = notification.getId();
       given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
 
       // when
@@ -218,10 +219,11 @@ class NotificationServiceTest {
       // given
       UUID receiverId = UUID.randomUUID();
       UUID currentUserId = UUID.randomUUID();
+      UUID notificationId = UUID.randomUUID();
       Notification notification = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("id", notificationId)
           .set("receiverId", receiverId)
           .sample();
-      UUID notificationId = notification.getId();
       given(notificationRepository.findById(notificationId)).willReturn(Optional.of(notification));
 
       // when & then
