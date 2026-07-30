@@ -3,6 +3,8 @@ package com.sprint.mission.otboo.domain.weathernotification.notification.service
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.Notification;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationForbiddenException;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationNotFoundException;
 import com.sprint.mission.otboo.domain.weathernotification.notification.mapper.NotificationMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
@@ -39,5 +41,16 @@ public class NotificationService {
         notificationRepository.findNotifications(receiverId, params);
     log.info("알림 목록 조회 완료: 조회 건수={}, hasNext={}", result.data().size(), result.hasNext());
     return result;
+  }
+
+  @Transactional
+  public void delete(UUID notificationId, UUID currentUserId) {
+    Notification notification = notificationRepository.findById(notificationId)
+        .orElseThrow(() -> NotificationNotFoundException.withId(notificationId));
+    if (!notification.getReceiverId().equals(currentUserId)) {
+      throw NotificationForbiddenException.receiverMismatch();
+    }
+    notificationRepository.delete(notification);
+    log.info("알림 삭제 완료: notificationId={}", notificationId);
   }
 }
