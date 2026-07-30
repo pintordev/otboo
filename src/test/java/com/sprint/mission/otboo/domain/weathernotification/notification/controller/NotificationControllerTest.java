@@ -3,14 +3,18 @@ package com.sprint.mission.otboo.domain.weathernotification.notification.control
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationListParams;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationForbiddenException;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationNotFoundException;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
@@ -147,6 +151,56 @@ class NotificationControllerTest {
               .param("cursor", "invalid-instant")
               .param("idAfter", UUID.randomUUID().toString()))
           .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Nested
+  @DisplayName("알림 삭제 - DELETE /api/notifications/{notificationId}")
+  class Delete {
+
+    @Test
+    @DisplayName("정상 요청이면 204를 반환한다")
+    void 정상_요청이면_204를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID notificationId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      // when & then
+      mockMvc.perform(delete("/api/notifications/{notificationId}", notificationId))
+          .andExpect(status().isNoContent());
+
+      verify(notificationService).delete(notificationId, currentUserId);
+    }
+
+    @Test
+    @DisplayName("대상 알림이 없으면 404를 반환한다")
+    void 대상_알림이_없으면_404를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID notificationId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      doThrow(NotificationNotFoundException.withId(notificationId))
+          .when(notificationService).delete(eq(notificationId), eq(currentUserId));
+
+      // when & then
+      mockMvc.perform(delete("/api/notifications/{notificationId}", notificationId))
+          .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("본인 알림이 아니면 403을 반환한다")
+    void 본인_알림이_아니면_403을_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID notificationId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      doThrow(NotificationForbiddenException.receiverMismatch())
+          .when(notificationService).delete(eq(notificationId), eq(currentUserId));
+
+      // when & then
+      mockMvc.perform(delete("/api/notifications/{notificationId}", notificationId))
+          .andExpect(status().isForbidden());
     }
   }
 }
