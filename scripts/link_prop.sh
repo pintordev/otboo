@@ -21,9 +21,15 @@ CONFIG_FILES=(application.yaml application-local.yaml application-test.yaml)
 if [ -d "$SECRET_DIR/.git" ]; then
   # git의 pull.rebase/rebase.autostash 전역 설정에 기대지 않고, stash/pull/pop을 직접 제어한다.
   # (설정 조합에 따라 git pull이 조용히 exit 0으로 끝나면서 충돌 마커만 남기는 경우가 있어 안전하지 않음)
-  dirty=""
+  stash_before=$(git -C "$SECRET_DIR" stash list | wc -l | tr -d ' ')
+
   if [ -n "$(git -C "$SECRET_DIR" status --porcelain -- "${CONFIG_FILES[@]}")" ]; then
-    git -C "$SECRET_DIR" stash push --quiet -- "${CONFIG_FILES[@]}"
+    git -C "$SECRET_DIR" stash push --include-untracked --quiet -- "${CONFIG_FILES[@]}"
+  fi
+
+  stash_after=$(git -C "$SECRET_DIR" stash list | wc -l | tr -d ' ')
+  dirty=""
+  if [ "$stash_after" -gt "$stash_before" ]; then
     dirty=1
   fi
 
