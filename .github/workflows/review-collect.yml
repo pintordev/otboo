@@ -34,7 +34,7 @@ jobs:
           fi
 
           COUNT=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/comments" \
-            --jq 'length' 2>/dev/null || echo 0)
+            --paginate --jq 'length' 2>/dev/null | jq -s 'add // 0')
           COUNT=${COUNT:-0}
 
           # 인라인 코멘트 수 + 리뷰 본문(요약 메시지) 유무를 합산 — 본문만 남긴 리뷰가 0으로 잡히는 걸 방지
