@@ -14,6 +14,7 @@
 | `LLM_API_KEY` | OpenAI / Hugging Face / OpenRouter 중 확정본 | 김하빈 | 4차 스프린트 착수 전 결정·발급 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3(이미지), ECS 배포 등 | 김호현 | 팀원 개별 IAM 계정 발급 후 각자 사용, 배포용은 GitHub Actions Secrets |
 | `AWS_ROLE_TO_ASSUME` | CI에서 OIDC로 가정할 IAM 역할 ARN | 김호현 | 팀원 개별 IAM 키와 별개 |
+| `AWS_REGION` | CI에서 사용할 AWS 리전 | 김호현 | 시크릿이 아니라 GitHub Actions Variables에 등록 |
 | `AWS_S3_BUCKET` | CI 테스트용 설정 파일 보관 버킷 | 김호현 | |
 | `CODECOV_TOKEN` | 커버리지 리포트 업로드 | 김호현 | |
 | `DISCORD_WEBHOOK_URL` | PR 생성/변경 채널 알림 | 김호현 | 팀 채널 웹훅 |

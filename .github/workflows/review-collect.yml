@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   collect:
-    if: github.event.review.user.login != github.event.pull_request.user.login
     runs-on: ubuntu-latest
     steps:
       - name: Collect review metadata
@@ -26,6 +25,14 @@ jobs:
           REVIEW_BODY: ${{ github.event.review.body }}
           REPO: ${{ github.repository }}
         run: |
+          # 셀프 리뷰는 API 조회 없이 skip_notification만 표시한 최소 payload로 처리
+          # (아티팩트 계약을 항상 유지해야 review-discord.yml의 download-artifact가 안 깨짐)
+          if [[ "$REVIEWER" == "$PR_AUTHOR" ]]; then
+            jq -n --argjson pr_number "$PR_NUMBER" \
+              '{pr_number: $pr_number, skip_notification: true}' > review-data.json
+            exit 0
+          fi
+
           COUNT=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/comments" \
             --jq 'length' 2>/dev/null || echo 0)
           COUNT=${COUNT:-0}
@@ -62,7 +69,8 @@ jobs:
               review_html_url: $review_html_url,
               reviewer: $reviewer,
               comment_count: $comment_count,
-              approval_count: $approval_count
+              approval_count: $approval_count,
+              skip_notification: false
             }' > review-data.json
 
       - name: Upload artifact
