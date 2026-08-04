@@ -68,6 +68,14 @@ public class Clothes {
     this.imageUrl = imageUrl;
   }
 
+  public void changeName(String name) {
+    this.name = name;
+  }
+
+  public void changeType(ClothesType type) {
+    this.type = type;
+  }
+
   public void delete() {
     softDeletable.delete();
   }

@@ -19,4 +19,6 @@ public interface ClothesAttributeRepository extends JpaRepository<ClothesAttribu
       + "WHERE ca.clothesId IN :clothesIds")
   List<ClothesAttribute> findAllByClothesIdsWithDefinition(
       @Param("clothesIds") List<UUID> clothesIds);
+
+  void deleteAllByClothesId(UUID clothesId);
 }

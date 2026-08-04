@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDef;
@@ -16,14 +19,17 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesCreat
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesDto;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesListParams;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesType;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesUpdateRequest;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.exception.ClothesNotFoundException;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.mapper.ClothesMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesAttributeRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -32,6 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ClothesServiceTest {
@@ -201,6 +208,161 @@ class ClothesServiceTest {
       assertThat(result.data().get(0).name()).isEqualTo("상의1");
       assertThat(result.data().get(1).name()).isEqualTo("하의1");
       assertThat(result.totalCount()).isEqualTo(2L);
+    }
+  }
+
+  @Nested
+  @DisplayName("의상 수정")
+  class Update {
+
+    @Test
+    @DisplayName("정상 요청이면 이름, 타입, 속성이 수정된다")
+    void 정상_요청이면_이름_타입_속성이_수정된다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      UUID ownerId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(ownerId, "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+
+      ClothesAttributeDef colorDef = ClothesAttributeDef.create("색상");
+      given(clothesAttributeDefRepository.findAllById(anyList()))
+          .willReturn(List.of(colorDef));
+
+      given(clothesAttributeRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+
+      given(clothesAttributeDefValueRepository.findAllByDefinitionIds(anyList()))
+          .willReturn(List.of());
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest(
+          "긴팔티",
+          ClothesType.OUTER,
+          List.of(new ClothesAttributeDto(colorDef.getId(), "빨강"))
+      );
+
+      ClothesDto expectedDto = new ClothesDto(
+          clothesId, ownerId, "긴팔티", null, ClothesType.OUTER, List.of());
+      given(clothesMapper.toDto(any(), anyList(), anyMap())).willReturn(expectedDto);
+
+      // when
+      ClothesDto result = clothesService.update(clothesId, request, null);
+
+      // then
+      assertThat(result.name()).isEqualTo("긴팔티");
+      assertThat(result.type()).isEqualTo(ClothesType.OUTER);
+      verify(clothesAttributeRepository).deleteAllByClothesId(clothesId);
+    }
+
+    @Test
+    @DisplayName("name만 보내면 name만 수정된다")
+    void name만_보내면_name만_수정된다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      UUID ownerId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(ownerId, "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+      given(clothesAttributeRepository.findAllByClothesIdWithDefinition(clothesId))
+          .willReturn(List.of());
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest("긴팔티", null, null);
+
+      ClothesDto expectedDto = new ClothesDto(
+          clothesId, ownerId, "긴팔티", null, ClothesType.TOP, List.of());
+      given(clothesMapper.toDto(any(), anyList(), anyMap())).willReturn(expectedDto);
+
+      // when
+      ClothesDto result = clothesService.update(clothesId, request, null);
+
+      // then
+      assertThat(result.name()).isEqualTo("긴팔티");
+      assertThat(result.type()).isEqualTo(ClothesType.TOP);
+      verify(clothesAttributeRepository, never()).deleteAllByClothesId(any());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 옷이면 예외가 발생한다")
+    void 존재하지_않는_옷이면_예외가_발생한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.empty());
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest("긴팔티", null, null);
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.update(clothesId, request, null))
+          .isInstanceOf(ClothesNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 옷이면 예외가 발생한다")
+    void 소프트_삭제된_옷이면_예외가_발생한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(UUID.randomUUID(), "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+      clothes.delete();
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest("긴팔티", null, null);
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.update(clothesId, request, null))
+          .isInstanceOf(ClothesNotFoundException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("의상 삭제")
+  class Delete {
+
+    @Test
+    @DisplayName("정상 요청이면 소프트 삭제된다")
+    void 정상_요청이면_소프트_삭제된다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(UUID.randomUUID(), "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+
+      // when
+      clothesService.delete(clothesId);
+
+      // then
+      assertThat(clothes.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 옷이면 예외가 발생한다")
+    void 존재하지_않는_옷이면_예외가_발생한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.empty());
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.delete(clothesId))
+          .isInstanceOf(ClothesNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("이미 삭제된 옷이면 예외가 발생한다")
+    void 이미_삭제된_옷이면_예외가_발생한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(UUID.randomUUID(), "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+      clothes.delete();
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.delete(clothesId))
+          .isInstanceOf(ClothesNotFoundException.class);
     }
   }
 }
