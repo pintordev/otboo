@@ -89,16 +89,25 @@ else
   esac
 fi
 
-# 변경이 없었을 때(이전 실행에서 S3만 실패했을 수 있음)나 이번에 실제로 push했을 때만 S3에 올린다.
-# 변경이 있는데 취소한 경우엔 절대 올리지 않는다 — git엔 없는 내용이 S3(CI가 읽는 곳)에만 남는 걸 막기 위함.
-if [ -z "$HAS_CHANGES" ] || [ -n "$PUSHED" ]; then
+# 워킹트리가 깨끗해도 이전 실행에서 push만 실패했으면 HEAD가 upstream보다 앞서 있을 수 있다 —
+# 그 상태에서 S3만 올리면 git엔 없는 커밋 내용이 S3에만 반영되므로, upstream과 완전히 일치할 때만 허용한다.
+UP_TO_DATE=""
+if [ -z "$HAS_CHANGES" ] &&
+   git -C "$SECRET_DIR" rev-parse --verify -q '@{upstream}' > /dev/null 2>&1 &&
+   [ "$(git -C "$SECRET_DIR" rev-parse HEAD)" = "$(git -C "$SECRET_DIR" rev-parse '@{upstream}')" ]; then
+  UP_TO_DATE=1
+fi
+
+# 위 조건(upstream과 완전히 동기화된 상태)이거나 이번에 실제로 push했을 때만 S3에 올린다.
+# 변경이 있는데 취소했거나 push가 아직 안 된 로컬 커밋이 남아있으면 절대 올리지 않는다.
+if [ -n "$UP_TO_DATE" ] || [ -n "$PUSHED" ]; then
   if [ -n "${AWS_S3_BUCKET:-}" ]; then
-    AWS_PROFILE_ARGS=()
-    if [ -n "${AWS_PROFILE:-}" ]; then
-      AWS_PROFILE_ARGS=(--profile "$AWS_PROFILE")
-    fi
     for f in "${S3_CONFIG_FILES[@]}"; do
-      aws s3 cp --quiet "${AWS_PROFILE_ARGS[@]}" "$SECRET_DIR/$f" "s3://$AWS_S3_BUCKET/config/test/$f"
+      if [ -n "${AWS_PROFILE:-}" ]; then
+        aws s3 cp --quiet --profile "$AWS_PROFILE" "$SECRET_DIR/$f" "s3://$AWS_S3_BUCKET/config/test/$f"
+      else
+        aws s3 cp --quiet "$SECRET_DIR/$f" "s3://$AWS_S3_BUCKET/config/test/$f"
+      fi
     done
     echo "S3에도 설정 파일을 업로드했습니다."
   else
