@@ -3,65 +3,31 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SECRET_DIR="$REPO_ROOT/.claude/otboo-secret"
-RESOURCES_DIR="$REPO_ROOT/src/main/resources"
+CONFIG_FILES=(application.yaml application-local.yaml application-test.yaml)
 
-if [ -f "$REPO_ROOT/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/.env"
-  set +a
-fi
-
-if [ -z "${SECRET_REPO_URL:-}" ]; then
-  echo "SECRET_REPO_URL이 없습니다 (.env 확인)." >&2
+if [ ! -d "$SECRET_DIR/.git" ]; then
+  echo "SECRET_DIR이 없습니다: $SECRET_DIR" >&2
+  echo "먼저 scripts/link_prop.sh를 실행하세요." >&2
   exit 1
 fi
 
-if [ -d "$SECRET_DIR/.git" ]; then
-  git -C "$SECRET_DIR" pull --quiet
-else
-  mkdir -p "$(dirname "$SECRET_DIR")"
-  git clone --quiet "$SECRET_REPO_URL" "$SECRET_DIR"
+# git의 pull.rebase/rebase.autostash 전역 설정에 기대지 않고, stash/pull/pop을 직접 제어한다.
+# (설정 조합에 따라 git pull이 조용히 exit 0으로 끝나면서 충돌 마커만 남기는 경우가 있어 안전하지 않음)
+dirty=""
+if [ -n "$(git -C "$SECRET_DIR" status --porcelain -- "${CONFIG_FILES[@]}")" ]; then
+  git -C "$SECRET_DIR" stash push --quiet -- "${CONFIG_FILES[@]}"
+  dirty=1
 fi
 
-BACKUP_DIR="$SECRET_DIR/bak"
-mkdir -p "$BACKUP_DIR"
+git -C "$SECRET_DIR" pull --quiet --no-rebase
 
-shopt -s nullglob
-files=("$SECRET_DIR"/application*.yaml)
-shopt -u nullglob
-
-if [ ${#files[@]} -eq 0 ]; then
-  echo "otboo-secret에 application*.yaml 파일이 없습니다." >&2
+if [ -n "$dirty" ] && ! git -C "$SECRET_DIR" stash pop --quiet; then
+  echo "FAIL: 설정 파일 동기화 중 충돌이 발생했습니다. $SECRET_DIR 에서 직접 해결하세요:" >&2
+  echo "  1) 충돌 마커(<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes)를 열어 직접 수정" >&2
+  echo "  2) git -C \"$SECRET_DIR\" add <파일>" >&2
+  echo "  3) git -C \"$SECRET_DIR\" stash drop" >&2
+  echo "해결 후 다시 실행하세요." >&2
   exit 1
 fi
 
-for src in "${files[@]}"; do
-  name="$(basename "$src")"
-  dest="$RESOURCES_DIR/$name"
-
-  if [ ! -f "$dest" ]; then
-    cp "$src" "$dest"
-    echo "새로 추가됨: $name"
-    continue
-  fi
-
-  if diff -q "$dest" "$src" > /dev/null; then
-    echo "변경 없음: $name"
-    continue
-  fi
-
-  echo "=== $name 변경 사항 ==="
-  diff -u "$dest" "$src" || true
-  read -r -p "$name 을(를) 교체할까요? [y/N] " answer
-  case "$answer" in
-    [yY]*)
-      cp "$dest" "$BACKUP_DIR/$name.bak"
-      cp "$src" "$dest"
-      echo "교체 완료 (백업: $BACKUP_DIR/$name.bak)"
-      ;;
-    *)
-      echo "건너뜀: $name"
-      ;;
-  esac
-done
+echo "SECRET_DIR을 최신 상태로 동기화했습니다."

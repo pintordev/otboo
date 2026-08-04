@@ -16,6 +16,7 @@
 | `AWS_ROLE_TO_ASSUME` | CI에서 OIDC로 가정할 IAM 역할 ARN | 김호현 | 팀원 개별 IAM 키와 별개 |
 | `AWS_REGION` | CI에서 사용할 AWS 리전 | 김호현 | 시크릿이 아니라 GitHub Actions Variables에 등록 |
 | `AWS_S3_BUCKET` | CI 테스트용 설정 파일 보관 버킷 | 김호현 | |
+| `AWS_PROFILE` | `push_prop.sh`가 S3 업로드 시 사용할 로컬 AWS CLI 프로파일 이름 | 김호현 | 팀원마다 로컬 `~/.aws/config` 프로파일 이름이 다를 수 있어 `.env`로 개별 지정, 없으면 S3 업로드는 기본 프로파일 사용 |
 | `CODECOV_TOKEN` | 커버리지 리포트 업로드 | 김호현 | |
 | `DISCORD_WEBHOOK_URL` | PR 생성/변경 채널 알림 | 김호현 | 팀 채널 웹훅 |
 | `DISCORD_BOT_TOKEN` | 리뷰/머지가능 DM 전송 | 김호현 | Discord Bot 생성 + 팀 서버 초대 필요, Public Bot OFF |
