@@ -1,0 +1,122 @@
+name: Review Discord Notification (DM)
+
+on:
+  workflow_run:
+    workflows: ["Collect Review Data"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download review data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: review-data
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send review DM
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_USER_MAP: ${{ secrets.DISCORD_USER_MAP }}
+        run: |
+          PR_NUM=$(jq -r '.pr_number' review-data.json)
+          PR_TITLE=$(jq -r '.pr_title' review-data.json)
+          PR_AUTHOR=$(jq -r '.pr_author' review-data.json)
+          REVIEW_STATE=$(jq -r '.review_state' review-data.json)
+          REVIEW_URL=$(jq -r '.review_html_url' review-data.json)
+          REVIEWER=$(jq -r '.reviewer' review-data.json)
+          COMMENT_COUNT=$(jq -r '.comment_count' review-data.json)
+          APPROVAL_COUNT=$(jq -r '.approval_count' review-data.json)
+
+          RECIPIENT_ID=$(echo "$DISCORD_USER_MAP" | jq -r --arg gh "$PR_AUTHOR" '.[$gh].discord_id // empty')
+          if [[ -z "$RECIPIENT_ID" ]]; then
+            echo "PR 작성자($PR_AUTHOR)가 DISCORD_USER_MAP에 없음 — DM 스킵"
+            exit 0
+          fi
+
+          REVIEWER_NAME=$(echo "$DISCORD_USER_MAP" | jq -r --arg gh "$REVIEWER" '.[$gh].name // empty')
+          if [[ -z "$REVIEWER_NAME" ]]; then
+            REVIEWER_NAME="$REVIEWER"
+          fi
+
+          case "$REVIEW_STATE" in
+            approved)           STATE_LABEL="✅ 승인" ;;
+            changes_requested)  STATE_LABEL="🔄 수정 요청" ;;
+            commented)          STATE_LABEL="💬 코멘트" ;;
+            dismissed)          STATE_LABEL="❌ 기각" ;;
+            *)                  STATE_LABEL="$REVIEW_STATE" ;;
+          esac
+
+          if [[ "$APPROVAL_COUNT" -ge 2 ]]; then
+            COLOR=5763719
+            MERGE_READY=true
+          else
+            COLOR=15105570
+            MERGE_READY=false
+          fi
+
+          FIELDS=$(jq -n \
+            --arg reviewer "$REVIEWER_NAME" \
+            --arg state "$STATE_LABEL" \
+            --arg count "$COMMENT_COUNT" \
+            '[
+              {"name": "👤 리뷰어", "value": $reviewer, "inline": true},
+              {"name": "📊 상태", "value": $state, "inline": true},
+              {"name": "💬 코멘트", "value": $count, "inline": true}
+            ]')
+
+          if [[ "$MERGE_READY" == "true" ]]; then
+            FIELDS=$(echo "$FIELDS" | jq '. + [{"name": "🎉 머지 가능", "value": "승인 2건 충족 — 머지 가능합니다", "inline": false}]')
+          fi
+
+          # DM 채널 열기
+          CHANNEL_ID=$(curl -sS -X POST "https://discord.com/api/v10/users/@me/channels" \
+            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg id "$RECIPIENT_ID" '{recipient_id: $id}')" \
+            | jq -r '.id')
+
+          if [[ -z "$CHANNEL_ID" || "$CHANNEL_ID" == "null" ]]; then
+            echo "DM 채널 오픈 실패"
+            exit 1
+          fi
+
+          # embed DM 전송
+          jq -n \
+            --arg title "💬 리뷰 등록 | PR #${PR_NUM}" \
+            --arg url "$REVIEW_URL" \
+            --arg desc "$PR_TITLE" \
+            --argjson color "$COLOR" \
+            --argjson fields "$FIELDS" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: $color,
+                fields: $fields,
+                footer: {"text": "Otboo Bot"}
+              }]
+            }' \
+          | curl -sS --fail --retry 3 --retry-delay 2 --max-time 15 \
+              -X POST "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages" \
+              -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @-
+
+      - name: Delete artifact
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            "repos/${{ github.repository }}/actions/artifacts" \
+            --jq ".artifacts[] | select(.workflow_run.id == ${{ github.event.workflow_run.id }}) | .id" \
+          | xargs -I{} gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/{}"

@@ -1,0 +1,56 @@
+name: PR Notify (Discord Channel)
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  discord-pr-notify:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if merge commit (dev/main sync)
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PARENTS=$(gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}" --jq '.parents | length')
+          echo "is_merge=$([[ "$PARENTS" -gt 1 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Send Discord embed
+        if: steps.check.outputs.is_merge != 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          ACTION="${{ github.event.action }}"
+          if [[ "$ACTION" == "synchronize" ]]; then
+            LABEL="🔄 PR 변경"
+            COLOR=15105570
+          else
+            LABEL="📌 PR 등록"
+            COLOR=3447003
+          fi
+
+          jq -n \
+            --arg title "${LABEL} | ${{ github.event.pull_request.title }}" \
+            --arg url "${{ github.event.pull_request.html_url }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg base "${{ github.event.pull_request.base.ref }}" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                color: $color,
+                fields: [
+                  {"name": "👤 작성자", "value": $actor, "inline": true},
+                  {"name": "🎯 대상 브랜치", "value": $base, "inline": true}
+                ],
+                footer: {"text": "Otboo Bot"}
+              }]
+            }' \
+          | curl -sS --fail --retry 3 --retry-delay 2 --max-time 15 -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"

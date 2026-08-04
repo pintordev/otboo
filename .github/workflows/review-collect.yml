@@ -1,0 +1,73 @@
+name: Collect Review Data
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  collect:
+    if: github.event.review.user.login != github.event.pull_request.user.login
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect review metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_HTML_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REVIEW_ID: ${{ github.event.review.id }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEW_HTML_URL: ${{ github.event.review.html_url }}
+          REVIEWER: ${{ github.event.review.user.login }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}/comments" \
+            --jq 'length' 2>/dev/null || echo 0)
+          COUNT=${COUNT:-0}
+
+          # 인라인 코멘트 수 + 리뷰 본문(요약 메시지) 유무를 합산 — 본문만 남긴 리뷰가 0으로 잡히는 걸 방지
+          if [[ -n "$REVIEW_BODY" ]]; then
+            COUNT=$((COUNT + 1))
+          fi
+
+          APPROVAL_COUNT=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+            --paginate 2>/dev/null \
+            | jq -s '[.[][] ] | group_by(.user.login) | [.[] | last | select(.state == "APPROVED")] | length' \
+            || echo 0)
+          APPROVAL_COUNT=${APPROVAL_COUNT:-0}
+
+          jq -n \
+            --argjson pr_number "$PR_NUMBER" \
+            --arg pr_title "$PR_TITLE" \
+            --arg pr_html_url "$PR_HTML_URL" \
+            --arg pr_author "$PR_AUTHOR" \
+            --argjson review_id "$REVIEW_ID" \
+            --arg review_state "$REVIEW_STATE" \
+            --arg review_html_url "$REVIEW_HTML_URL" \
+            --arg reviewer "$REVIEWER" \
+            --argjson comment_count "$COUNT" \
+            --argjson approval_count "$APPROVAL_COUNT" \
+            '{
+              pr_number: $pr_number,
+              pr_title: $pr_title,
+              pr_html_url: $pr_html_url,
+              pr_author: $pr_author,
+              review_id: $review_id,
+              review_state: $review_state,
+              review_html_url: $review_html_url,
+              reviewer: $reviewer,
+              comment_count: $comment_count,
+              approval_count: $approval_count
+            }' > review-data.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: review-data
+          path: review-data.json
+          retention-days: 1

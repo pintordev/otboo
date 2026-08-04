@@ -1,0 +1,1 @@
+# Otboo [![codecov](https://codecov.io/gh/sb11-code-rangers/sb11-otboo-team4/branch/dev/graph/badge.svg)](https://codecov.io/gh/sb11-code-rangers/sb11-otboo-team4)

@@ -13,6 +13,12 @@
 | `KAKAO_LOCAL_API_KEY` | Kakao 로컬 API(좌표→행정구역) | 김호현 | `GET /api/weathers/location`용, 소셜 로그인 키와 별개 |
 | `LLM_API_KEY` | OpenAI / Hugging Face / OpenRouter 중 확정본 | 김하빈 | 4차 스프린트 착수 전 결정·발급 |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3(이미지), ECS 배포 등 | 김호현 | 팀원 개별 IAM 계정 발급 후 각자 사용, 배포용은 GitHub Actions Secrets |
+| `AWS_ROLE_TO_ASSUME` | CI에서 OIDC로 가정할 IAM 역할 ARN | 김호현 | 팀원 개별 IAM 키와 별개 |
+| `AWS_S3_BUCKET` | CI 테스트용 설정 파일 보관 버킷 | 김호현 | |
+| `CODECOV_TOKEN` | 커버리지 리포트 업로드 | 김호현 | |
+| `DISCORD_WEBHOOK_URL` | PR 생성/변경 채널 알림 | 김호현 | 팀 채널 웹훅 |
+| `DISCORD_BOT_TOKEN` | 리뷰/머지가능 DM 전송 | 김호현 | Discord Bot 생성 + 팀 서버 초대 필요, Public Bot OFF |
+| `DISCORD_USER_MAP` | GitHub username ↔ Discord user ID ↔ 실명 매핑(JSON 문자열) | 김호현 | 팀원 개인정보 포함이라 리포지토리 파일이 아니라 시크릿으로만 관리 |
 | `REDIS_HOST` / `REDIS_PORT` | 캐시·SSE 세션 | 김호현 | 초기엔 외부(비-AWS) 서버, 3차 이후 ElastiCache |
 | `KAFKA_BOOTSTRAP_SERVERS` | SSE 알림 발행 파이프라인 `심화` | 김호현 | 5차 스프린트, 대안 검토 중(Confluent Cloud 등) |
 | `ES_HOST` / `ES_PORT` | Elasticsearch 검색 `심화` | 이경신 | 3차 스프린트 |
