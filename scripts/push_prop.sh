@@ -59,11 +59,19 @@ sync_secret_dir() {
 
 sync_secret_dir
 
+# git diff는 untracked 파일을 못 보므로(sync_secret_dir가 stash pop으로 복원한 untracked 설정 파일이
+# 있을 수 있음) status --porcelain으로 판단한다.
+HAS_CHANGES=""
+if [ -n "$(git -C "$SECRET_DIR" status --porcelain -- "${CONFIG_FILES[@]}")" ]; then
+  HAS_CHANGES=1
+fi
+
 PUSHED=""
-if git -C "$SECRET_DIR" diff --quiet -- "${CONFIG_FILES[@]}"; then
+if [ -z "$HAS_CHANGES" ]; then
   echo "변경된 설정 파일이 없습니다."
 else
   echo "=== 업로드될 변경 사항 ==="
+  git -C "$SECRET_DIR" status --short -- "${CONFIG_FILES[@]}"
   git -C "$SECRET_DIR" diff -- "${CONFIG_FILES[@]}"
   read -r -p "otboo-secret에 업로드할까요? [y/N] " answer
   case "$answer" in
@@ -81,18 +89,21 @@ else
   esac
 fi
 
-# git diff가 없거나 이번에 push를 안 했어도, 이전 실행에서 S3 업로드만 실패했을 수 있으므로 매번 재시도한다.
-if [ -n "${AWS_S3_BUCKET:-}" ]; then
-  AWS_PROFILE_ARGS=()
-  if [ -n "${AWS_PROFILE:-}" ]; then
-    AWS_PROFILE_ARGS=(--profile "$AWS_PROFILE")
+# 변경이 없었을 때(이전 실행에서 S3만 실패했을 수 있음)나 이번에 실제로 push했을 때만 S3에 올린다.
+# 변경이 있는데 취소한 경우엔 절대 올리지 않는다 — git엔 없는 내용이 S3(CI가 읽는 곳)에만 남는 걸 막기 위함.
+if [ -z "$HAS_CHANGES" ] || [ -n "$PUSHED" ]; then
+  if [ -n "${AWS_S3_BUCKET:-}" ]; then
+    AWS_PROFILE_ARGS=()
+    if [ -n "${AWS_PROFILE:-}" ]; then
+      AWS_PROFILE_ARGS=(--profile "$AWS_PROFILE")
+    fi
+    for f in "${S3_CONFIG_FILES[@]}"; do
+      aws s3 cp --quiet "${AWS_PROFILE_ARGS[@]}" "$SECRET_DIR/$f" "s3://$AWS_S3_BUCKET/config/test/$f"
+    done
+    echo "S3에도 설정 파일을 업로드했습니다."
+  else
+    echo "AWS_S3_BUCKET이 없어 S3 업로드를 건너뛰었습니다 (.env 확인)." >&2
   fi
-  for f in "${S3_CONFIG_FILES[@]}"; do
-    aws s3 cp --quiet "${AWS_PROFILE_ARGS[@]}" "$SECRET_DIR/$f" "s3://$AWS_S3_BUCKET/config/test/$f"
-  done
-  echo "S3에도 설정 파일을 업로드했습니다."
-else
-  echo "AWS_S3_BUCKET이 없어 S3 업로드를 건너뛰었습니다 (.env 확인)." >&2
 fi
 
 if [ -n "$PUSHED" ]; then
