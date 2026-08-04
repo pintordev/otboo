@@ -28,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesUpdateRequest;
+
 
 @Slf4j
 @RequiredArgsConstructor
@@ -48,8 +50,7 @@ public class ClothesService {
 
     if (image != null && !image.isEmpty()) {
       // TODO: S3 연동 후 이미지 업로드 구현
-      log.info("이미지 파일 수신됨 (아직 저장 미구현) fileName={}, size={}",
-          image.getOriginalFilename(), image.getSize());
+      log.info("이미지 파일 수신됨 (아직 저장 미구현) size={}", image.getSize());
     }
 
     List<ClothesAttribute> savedAttributes = saveAttributes(clothes.getId(),
@@ -120,6 +121,51 @@ public class ClothesService {
             attributesByClothesId.getOrDefault(clothes.getId(), List.of()),
             defValuesByDefId))
         .toList();
+  }
+
+
+  @Transactional
+  public ClothesDto update(UUID clothesId, ClothesUpdateRequest request, MultipartFile image) {
+    Clothes clothes = clothesRepository.findById(clothesId)
+        .filter(c -> !c.isDeleted())
+        .orElseThrow(() -> ClothesNotFoundException.withId(clothesId));
+
+    if (request.name() != null) {
+      clothes.changeName(request.name());
+    }
+    if (request.type() != null) {
+      clothes.changeType(request.type());
+    }
+
+    if (image != null && !image.isEmpty()) {
+      // TODO: S3 연동 후 이미지 업로드 구현
+      log.info("이미지 파일 수신됨 (아직 저장 미구현) size={}", image.getSize());;
+    }
+
+    List<ClothesAttribute> savedAttributes;
+    if (request.attributes() != null) {
+      clothesAttributeRepository.deleteAllByClothesId(clothesId);
+      savedAttributes = saveAttributes(clothesId, request.attributes());
+    } else {
+      savedAttributes = clothesAttributeRepository
+          .findAllByClothesIdWithDefinition(clothesId);
+    }
+
+    Map<UUID, List<ClothesAttributeDefValue>> defValuesByDefId =
+        loadDefValues(savedAttributes);
+
+    log.info("의상 수정 완료 clothesId={}", clothesId);
+    return clothesMapper.toDto(clothes, savedAttributes, defValuesByDefId);
+  }
+
+  @Transactional
+  public void delete(UUID clothesId) {
+    Clothes clothes = clothesRepository.findById(clothesId)
+        .filter(c -> !c.isDeleted())
+        .orElseThrow(() -> ClothesNotFoundException.withId(clothesId));
+
+    clothes.delete();
+    log.info("의상 삭제 완료 clothesId={}", clothesId);
   }
 
   private List<ClothesAttribute> saveAttributes(UUID clothesId,
