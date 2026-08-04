@@ -14,6 +14,11 @@ labels: feat
 - Method / Path:
 - `docs/api-docs.json` 기준 요청·응답 스키마 확인함
 
+## Notion 카드 (해당 시)
+
+<!-- 계획서 단계에서 이미 만들어둔 작업 카드(작업 트래커 DB)가 있으면 그 카드 URL을 적어주세요.
+     제목만으로는 매칭이 잘 안 돼서(예: 카드 1개가 이슈 여러 개로 쪼개지는 경우) 여기 기재된 URL로 자동 연결합니다. -->
+
 ## 체크리스트
 
 - [ ] TDD로 진행 (`test(red)` → `test(green)` → `refactor` 커밋 순서)
