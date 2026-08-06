@@ -58,6 +58,10 @@ class WeatherFetchJobConfigTest {
       skipLimitField.setAccessible(true);
       skipLimitField.set(config, 10);
 
+      var retryLimitField = WeatherFetchJobConfig.class.getDeclaredField("retryLimit");
+      retryLimitField.setAccessible(true);
+      retryLimitField.set(config, 3);
+
       // when
       Job job = config.weatherFetchJob();
       Step step = config.weatherFetchStep();
