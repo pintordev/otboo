@@ -31,6 +31,20 @@ public class WeatherRefresher {
   private final Clock clock;
 
   public List<Weather> refresh(WeatherGrid weatherGrid, KmaGridPoint grid, BaseTime baseTime) {
+    Fetched fetched = fetch(weatherGrid, grid, baseTime);
+    List<Weather> saved = weatherWriter.save(weatherGrid, baseTime.toInstant(),
+        fetched.dailyForecasts(), fetched.existingByDate());
+    log.info("기상청 라이브 재조회 저장 완료: nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(), saved.size());
+    return saved;
+  }
+
+  public List<Weather> build(WeatherGrid weatherGrid, KmaGridPoint grid, BaseTime baseTime) {
+    Fetched fetched = fetch(weatherGrid, grid, baseTime);
+    return weatherWriter.build(weatherGrid, baseTime.toInstant(), fetched.dailyForecasts(),
+        fetched.existingByDate());
+  }
+
+  private Fetched fetch(WeatherGrid weatherGrid, KmaGridPoint grid, BaseTime baseTime) {
     LocalDate yesterday = LocalDate.now(clock.withZone(KST)).minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
     Map<LocalDate, Weather> existingByDate = weatherRepository.findLatestRevisions(weatherGrid,
@@ -42,13 +56,15 @@ public class WeatherRefresher {
         baseTime.baseDate(), baseTime.baseTime());
     List<DailyWeatherForecastDto> dailyForecasts = kmaForecastFetcher.fetch(grid, baseTime,
         clock.instant());
-    List<Weather> saved = weatherWriter.save(weatherGrid, baseTime.toInstant(), dailyForecasts,
-        existingByDate);
-    log.info("기상청 라이브 재조회 저장 완료: nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(), saved.size());
-    return saved;
+    return new Fetched(dailyForecasts, existingByDate);
   }
 
   private LocalDate toForecastDate(Weather weather) {
     return weather.getForecastAt().atZone(KST).toLocalDate();
+  }
+
+  private record Fetched(List<DailyWeatherForecastDto> dailyForecasts,
+      Map<LocalDate, Weather> existingByDate) {
+
   }
 }
