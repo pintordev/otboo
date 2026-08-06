@@ -10,7 +10,7 @@ public interface TokenProvider {
 
   String createAccessToken(UUID userId, String role, UUID sessionId, Instant now);
 
-  String createRefreshToken(UUID userId, UUID sessionId, UUID jti, Instant now, Instant expiresAt);
+  String createRefreshToken(UUID userId, UUID jti, UUID sessionId, Instant now, Instant expiresAt);
 
   AccessTokenClaims parseAccessToken(String token);
 

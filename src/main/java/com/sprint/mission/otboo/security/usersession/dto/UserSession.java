@@ -4,8 +4,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record UserSession(
-    UUID sessionId,
     UUID currentRefreshJti,
+    UUID sessionId,
     Instant issuedAt
 ) {
 
@@ -14,6 +14,6 @@ public record UserSession(
   }
 
   public UserSession rotate() {
-    return new UserSession(sessionId, UUID.randomUUID(), issuedAt);
+    return new UserSession(UUID.randomUUID(), sessionId, issuedAt);
   }
 }

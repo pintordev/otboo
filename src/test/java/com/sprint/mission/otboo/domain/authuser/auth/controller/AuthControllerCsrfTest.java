@@ -8,7 +8,7 @@ import com.sprint.mission.otboo.domain.authuser.auth.service.AuthService;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.security.config.SecurityConfig;
 import com.sprint.mission.otboo.security.cookie.RefreshTokenCookieProvider;
-import com.sprint.mission.otboo.security.details.CustomUserDetailsService;
+import com.sprint.mission.otboo.domain.authuser.auth.details.CustomUserDetailsService;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;

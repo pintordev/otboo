@@ -1,7 +1,8 @@
-package com.sprint.mission.otboo.security.details;
+package com.sprint.mission.otboo.domain.authuser.auth.details;
 
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
+import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

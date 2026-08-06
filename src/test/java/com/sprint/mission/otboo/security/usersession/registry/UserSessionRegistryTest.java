@@ -64,7 +64,7 @@ class UserSessionRegistryTest {
       UUID sessionId = UUID.randomUUID();
       UUID currentJti = UUID.randomUUID();
       Instant issuedAt = Instant.now().minus(3, ChronoUnit.DAYS);
-      UserSession current = new UserSession(sessionId, currentJti, issuedAt);
+      UserSession current = new UserSession(currentJti, sessionId, issuedAt);
       Duration ttl = Duration.ofDays(14);
       given(registry.find(userId)).willReturn(Optional.of(current));
       given(registry.save(eq(userId), any(UserSession.class), any(Instant.class)))
@@ -106,7 +106,7 @@ class UserSessionRegistryTest {
     void rotate_reusedRefreshJti_throwsAndRevokesSession() {
       UUID userId = UUID.randomUUID();
       UUID sessionId = UUID.randomUUID();
-      UserSession current = new UserSession(sessionId, UUID.randomUUID(), Instant.now());
+      UserSession current = new UserSession(UUID.randomUUID(), sessionId, Instant.now());
       given(registry.find(userId)).willReturn(Optional.of(current));
 
       assertThatThrownBy(() ->

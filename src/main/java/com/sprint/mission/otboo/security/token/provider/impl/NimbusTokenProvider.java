@@ -70,12 +70,12 @@ public class NimbusTokenProvider implements TokenProvider {
   }
 
   @Override
-  public String createRefreshToken(UUID userId, UUID sessionId, UUID jti, Instant now,
+  public String createRefreshToken(UUID userId, UUID jti, UUID sessionId, Instant now,
       Instant expiresAt) {
     JWTClaimsSet claims = new JWTClaimsSet.Builder()
         .subject(userId.toString())
-        .claim("sid", sessionId.toString())
         .jwtID(jti.toString())
+        .claim("sid", sessionId.toString())
         .issueTime(Date.from(now))
         .expirationTime(Date.from(expiresAt))
         .build();

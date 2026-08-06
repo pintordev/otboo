@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.global.temppassword;
+package com.sprint.mission.otboo.domain.authuser.auth.authentication;
 
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;

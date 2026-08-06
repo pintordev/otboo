@@ -1,9 +1,8 @@
-package com.sprint.mission.otboo.security.details;
+package com.sprint.mission.otboo.domain.authuser.auth.details;
 
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
-import com.sprint.mission.otboo.security.details.CustomUserDetailsService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

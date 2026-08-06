@@ -28,8 +28,8 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
     String redisKey = key(userId);
 
     Map<String, String> fields = Map.of(
-        FIELD_SESSION_ID, session.sessionId().toString(),
         FIELD_REFRESH_JTI, session.currentRefreshJti().toString(),
+        FIELD_SESSION_ID, session.sessionId().toString(),
         FIELD_ISSUED_AT, session.issuedAt().toString()
     );
 
@@ -59,8 +59,8 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
     }
 
     return Optional.of(new UserSession(
-        UUID.fromString((String) entries.get(FIELD_SESSION_ID)),
         UUID.fromString((String) entries.get(FIELD_REFRESH_JTI)),
+        UUID.fromString((String) entries.get(FIELD_SESSION_ID)),
         Instant.parse((String) entries.get(FIELD_ISSUED_AT))
     ));
   }

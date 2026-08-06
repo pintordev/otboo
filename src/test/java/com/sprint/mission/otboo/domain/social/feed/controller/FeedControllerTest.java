@@ -3,8 +3,10 @@ package com.sprint.mission.otboo.domain.social.feed.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,6 +19,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedCreateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
+import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.service.FeedService;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
@@ -138,9 +141,12 @@ class FeedControllerTest {
     @DisplayName("정상 요청이면 200과 CursorPageResponse를 반환한다")
     void 정상_요청이면_200과_CursorPageResponse를_반환한다() throws Exception {
       // given
+      UUID currentUserId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
       CursorPageResponse<FeedDto> response = new CursorPageResponse<>(
           List.of(), null, null, false, 0L, "createdAt", SortDirection.DESCENDING);
-      when(feedService.getFeeds(any(FeedListParams.class))).thenReturn(response);
+      when(feedService.getFeeds(any(FeedListParams.class), eq(currentUserId))).thenReturn(response);
 
       // when & then
       mockMvc.perform(get("/api/feeds")
@@ -152,7 +158,7 @@ class FeedControllerTest {
           .andExpect(jsonPath("$.sortBy").value("createdAt"));
 
       ArgumentCaptor<FeedListParams> captor = ArgumentCaptor.forClass(FeedListParams.class);
-      verify(feedService).getFeeds(captor.capture());
+      verify(feedService).getFeeds(captor.capture(), eq(currentUserId));
       FeedListParams captured = captor.getValue();
       assertThat(captured.limit()).isEqualTo(10);
       assertThat(captured.sortBy()).isEqualTo(FeedSortBy.CREATED_AT);
@@ -162,6 +168,9 @@ class FeedControllerTest {
     @Test
     @DisplayName("limit이 1 미만이면 400을 반환한다")
     void limit이_1_미만이면_400을_반환한다() throws Exception {
+      // given
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(UUID.randomUUID()));
+
       // when & then
       mockMvc.perform(get("/api/feeds")
               .param("limit", "0")
@@ -174,9 +183,12 @@ class FeedControllerTest {
     @DisplayName("잘못된 정렬 기준이면 기본값(createdAt)으로 처리한다")
     void 잘못된_정렬_기준이면_기본값_createdAt으로_처리한다() throws Exception {
       // given
+      UUID currentUserId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
       CursorPageResponse<FeedDto> response = new CursorPageResponse<>(
           List.of(), null, null, false, 0L, "createdAt", SortDirection.DESCENDING);
-      when(feedService.getFeeds(any(FeedListParams.class))).thenReturn(response);
+      when(feedService.getFeeds(any(FeedListParams.class), eq(currentUserId))).thenReturn(response);
 
       // when & then
       mockMvc.perform(get("/api/feeds")
@@ -186,13 +198,16 @@ class FeedControllerTest {
           .andExpect(status().isOk());
 
       ArgumentCaptor<FeedListParams> captor = ArgumentCaptor.forClass(FeedListParams.class);
-      verify(feedService).getFeeds(captor.capture());
+      verify(feedService).getFeeds(captor.capture(), eq(currentUserId));
       assertThat(captor.getValue().sortBy()).isEqualTo(FeedSortBy.CREATED_AT);
     }
 
     @Test
     @DisplayName("createdAt 정렬에 잘못된 형식의 커서면 400을 반환한다")
     void createdAt_정렬에_잘못된_형식의_커서면_400을_반환한다() throws Exception {
+      // given
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(UUID.randomUUID()));
+
       // when & then
       mockMvc.perform(get("/api/feeds")
               .param("limit", "10")
@@ -201,6 +216,76 @@ class FeedControllerTest {
               .param("cursor", "invalid-instant")
               .param("idAfter", UUID.randomUUID().toString()))
           .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 좋아요 - POST /api/feeds/{feedId}/like")
+  class LikeFeed {
+
+    @Test
+    @DisplayName("정상 요청이면 204를 반환하고 인증 사용자로 좋아요를 위임한다")
+    void 정상_요청이면_204를_반환하고_인증_사용자로_좋아요를_위임한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      // when & then
+      mockMvc.perform(post("/api/feeds/{feedId}/like", feedId))
+          .andExpect(status().isNoContent());
+
+      verify(feedService).like(feedId, currentUserId);
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 404를 반환한다")
+    void 피드가_존재하지_않으면_404를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      willThrow(FeedNotFoundException.withId(feedId))
+          .given(feedService).like(feedId, currentUserId);
+
+      // when & then
+      mockMvc.perform(post("/api/feeds/{feedId}/like", feedId))
+          .andExpect(status().isNotFound());
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 좋아요 취소 - DELETE /api/feeds/{feedId}/like")
+  class UnlikeFeed {
+
+    @Test
+    @DisplayName("정상 요청이면 204를 반환하고 인증 사용자로 좋아요 취소를 위임한다")
+    void 정상_요청이면_204를_반환하고_인증_사용자로_좋아요_취소를_위임한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      // when & then
+      mockMvc.perform(delete("/api/feeds/{feedId}/like", feedId))
+          .andExpect(status().isNoContent());
+
+      verify(feedService).unlike(feedId, currentUserId);
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 404를 반환한다")
+    void 피드가_존재하지_않으면_404를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      willThrow(FeedNotFoundException.withId(feedId))
+          .given(feedService).unlike(feedId, currentUserId);
+
+      // when & then
+      mockMvc.perform(delete("/api/feeds/{feedId}/like", feedId))
+          .andExpect(status().isNotFound());
     }
   }
 }

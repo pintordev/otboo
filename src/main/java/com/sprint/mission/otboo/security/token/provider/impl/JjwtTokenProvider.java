@@ -53,12 +53,12 @@ public class JjwtTokenProvider implements TokenProvider {
   }
 
   @Override
-  public String createRefreshToken(UUID userId, UUID sessionId, UUID jti, Instant now,
+  public String createRefreshToken(UUID userId, UUID jti, UUID sessionId, Instant now,
       Instant expiresAt) {
     return Jwts.builder()
         .subject(userId.toString())
-        .claim("sid", sessionId.toString())
         .id(jti.toString())
+        .claim("sid", sessionId.toString())
         .issuedAt(Date.from(now))
         .expiration(Date.from(expiresAt))
         .signWith(refreshSecretKey)

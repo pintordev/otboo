@@ -175,7 +175,7 @@ class AuthServiceTest {
       given(mockTokenProvider.getRefreshTokenExpiresAt(issuedSession.issuedAt())).willReturn(
           refreshExpiresAt);
       given(mockTokenProvider.createRefreshToken(
-          principal.getUserId(), issuedSession.sessionId(), issuedSession.currentRefreshJti(),
+          principal.getUserId(), issuedSession.currentRefreshJti(), issuedSession.sessionId(),
           issuedSession.issuedAt(), refreshExpiresAt))
           .willReturn("refresh-token");
 
@@ -323,7 +323,7 @@ class AuthServiceTest {
 
       UUID newJti = UUID.randomUUID();
       Instant originalIssuedAt = FIXED_NOW.minus(3, ChronoUnit.DAYS);
-      UserSession rotated = new UserSession(sid, newJti, originalIssuedAt);
+      UserSession rotated = new UserSession(newJti, sid, originalIssuedAt);
       given(mockUserSessionRegistry.rotate(eq(user.getId()), eq(sid), eq(jti), any(Duration.class)))
           .willReturn(rotated);
 
@@ -334,7 +334,7 @@ class AuthServiceTest {
       Instant refreshExpiresAt = originalIssuedAt.plus(14, ChronoUnit.DAYS);
       given(mockTokenProvider.getRefreshTokenExpiresAt(originalIssuedAt)).willReturn(
           refreshExpiresAt);
-      given(mockTokenProvider.createRefreshToken(user.getId(), sid, newJti, originalIssuedAt,
+      given(mockTokenProvider.createRefreshToken(user.getId(), newJti, sid, originalIssuedAt,
           refreshExpiresAt))
           .willReturn("new-refresh-token");
 
@@ -362,7 +362,7 @@ class AuthServiceTest {
 
       // 절대 만료 정책: 원래 로그인이 오래 전이라 issuedAt(staleIssuedAt)이 FIXED_NOW와 다름 — access token은 이 과거 값이 아니라 FIXED_NOW로 발급돼야 한다
       Instant staleIssuedAt = FIXED_NOW.minus(10, ChronoUnit.DAYS);
-      UserSession rotated = new UserSession(sid, UUID.randomUUID(), staleIssuedAt);
+      UserSession rotated = new UserSession(UUID.randomUUID(), sid, staleIssuedAt);
       given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
       given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
           "new-access-token");
@@ -393,7 +393,7 @@ class AuthServiceTest {
 
       Instant originalIssuedAt = FIXED_NOW.minus(5, ChronoUnit.DAYS);
       UUID newJti = UUID.randomUUID();
-      UserSession rotated = new UserSession(sid, newJti, originalIssuedAt);
+      UserSession rotated = new UserSession(newJti, sid, originalIssuedAt);
       given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
       given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
           "new-access-token");
@@ -407,7 +407,7 @@ class AuthServiceTest {
 
       // then
       verify(mockTokenProvider).createRefreshToken(
-          eq(user.getId()), eq(sid), eq(newJti), eq(originalIssuedAt), any(Instant.class));
+          eq(user.getId()), eq(newJti), eq(sid), eq(originalIssuedAt), any(Instant.class));
     }
 
     @Test
@@ -423,7 +423,7 @@ class AuthServiceTest {
       given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
       given(mockClock.instant()).willReturn(FIXED_NOW);
 
-      UserSession rotated = new UserSession(sid, UUID.randomUUID(), FIXED_NOW);
+      UserSession rotated = new UserSession(UUID.randomUUID(), sid, FIXED_NOW);
       given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
       given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
           "new-access-token");

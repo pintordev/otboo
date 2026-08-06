@@ -1,11 +1,13 @@
 package com.sprint.mission.otboo.domain.social.feed.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,9 +25,12 @@ import com.sprint.mission.otboo.domain.social.feed.dto.OotdDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
+import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
+import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.exception.WeatherNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.mapper.FeedMapper;
+import com.sprint.mission.otboo.domain.social.feed.repository.FeedLikeRepository;
 import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.PrecipitationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.TemperatureDto;
@@ -34,8 +39,11 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -44,6 +52,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,6 +86,22 @@ class FeedServiceTest {
 
   @Mock
   OotdSnapshotProvider ootdSnapshotProvider;
+
+  @Mock
+  FeedLikeRepository feedLikeRepository;
+
+  @Mock
+  ApplicationEventPublisher eventPublisher;
+
+  private static void setFeedId(Feed feed, UUID id) {
+    try {
+      var field = Feed.class.getDeclaredField("id");
+      field.setAccessible(true);
+      field.set(feed, id);
+    } catch (ReflectiveOperationException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   @Nested
   @DisplayName("피드 등록")
@@ -352,6 +378,7 @@ class FeedServiceTest {
       when(feedRepository.findFeeds(params)).thenReturn(repoPage);
       given(userSummaryQueryRepository.findByUserIds(anyList()))
           .willReturn(List.of(summary1, summary2));
+      given(feedLikeRepository.findLikedFeedIds(any(), anyList())).willReturn(List.of());
 
       FeedDto dto1 = new FeedDto(feed1.getId(), null, null, summary1, null, null, "피드1", 0L, 0,
           false);
@@ -361,7 +388,7 @@ class FeedServiceTest {
       when(feedMapper.toDto(feed2, summary2, false)).thenReturn(dto2);
 
       // when
-      CursorPageResponse<FeedDto> result = feedService.getFeeds(params);
+      CursorPageResponse<FeedDto> result = feedService.getFeeds(params, UUID.randomUUID());
 
       // then
       assertThat(result.data()).containsExactly(dto1, dto2);
@@ -393,6 +420,7 @@ class FeedServiceTest {
       when(feedRepository.findFeeds(params)).thenReturn(repoPage);
       given(userSummaryQueryRepository.findByUserIds(anyList()))
           .willReturn(List.of(summary1, summary2));
+      given(feedLikeRepository.findLikedFeedIds(any(), anyList())).willReturn(List.of());
 
       FeedDto dto1 = new FeedDto(feed1.getId(), null, null, summary1, null, null, "피드1", 0L, 0,
           false);
@@ -402,7 +430,7 @@ class FeedServiceTest {
       when(feedMapper.toDto(feed2, summary2, false)).thenReturn(dto2);
 
       // when
-      CursorPageResponse<FeedDto> result = feedService.getFeeds(params);
+      CursorPageResponse<FeedDto> result = feedService.getFeeds(params, UUID.randomUUID());
 
       // then
       assertThat(result.hasNext()).isFalse();
@@ -435,6 +463,7 @@ class FeedServiceTest {
       UserSummary summary2 = new UserSummary(authorId2, "유저2", "img2.png");
       given(userSummaryQueryRepository.findByUserIds(anyList()))
           .willReturn(List.of(summary1, summary2));
+      given(feedLikeRepository.findLikedFeedIds(any(), anyList())).willReturn(List.of());
 
       FeedDto dto1 = new FeedDto(feed1.getId(), null, null, summary1, null, null, "피드1", 0L, 0,
           false);
@@ -444,11 +473,227 @@ class FeedServiceTest {
       when(feedMapper.toDto(feed2, summary2, false)).thenReturn(dto2);
 
       // when
-      CursorPageResponse<FeedDto> result = feedService.getFeeds(params);
+      CursorPageResponse<FeedDto> result = feedService.getFeeds(params, UUID.randomUUID());
 
       // then
       verify(userSummaryQueryRepository).findByUserIds(anyList());
       assertThat(result.data()).containsExactly(dto1, dto2);
+    }
+
+    @Test
+    @DisplayName("내가 좋아요한 피드는 likedByMe=true로 반환한다")
+    void 내가_좋아요한_피드는_likedByMe_true로_반환한다() {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      FeedListParams params = new FeedListParams(
+          null, null, 2, FeedSortBy.CREATED_AT, SortDirection.DESCENDING, null, null);
+
+      UUID authorId = UUID.randomUUID();
+      UserSummary summary = new UserSummary(authorId, "유저", "img.png");
+
+      UUID likedFeedId = UUID.randomUUID();
+      UUID notLikedFeedId = UUID.randomUUID();
+      Feed likedFeed = Feed.create(authorId, UUID.randomUUID(), "좋아요한 피드", DUMMY_SNAPSHOT,
+          List.of());
+      Feed notLikedFeed = Feed.create(authorId, UUID.randomUUID(), "안 누른 피드", DUMMY_SNAPSHOT,
+          List.of());
+      setFeedId(likedFeed, likedFeedId);
+      setFeedId(notLikedFeed, notLikedFeedId);
+
+      CursorPageResponse<Feed> repoPage = new CursorPageResponse<>(
+          List.of(likedFeed, notLikedFeed), null, null, false, 2L,
+          "createdAt", SortDirection.DESCENDING);
+
+      FeedDto likedDto = new FeedDto(likedFeedId, null, null, summary, null, null,
+          "좋아요한 피드", 0L, 0, true);
+      FeedDto notLikedDto = new FeedDto(notLikedFeedId, null, null, summary, null, null,
+          "안 누른 피드", 0L, 0, false);
+
+      when(feedRepository.findFeeds(params)).thenReturn(repoPage);
+      when(userSummaryQueryRepository.findByUserIds(anyList())).thenReturn(List.of(summary));
+      when(feedLikeRepository.findLikedFeedIds(any(), anyList()))
+          .thenReturn(List.of(likedFeedId));
+      when(feedMapper.toDto(likedFeed, summary, true)).thenReturn(likedDto);
+      when(feedMapper.toDto(notLikedFeed, summary, false)).thenReturn(notLikedDto);
+
+      // when
+      CursorPageResponse<FeedDto> result = feedService.getFeeds(params, currentUserId);
+
+      // then
+      assertThat(result.data()).containsExactly(likedDto, notLikedDto);
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 좋아요")
+  class Like {
+
+    @Test
+    @DisplayName("피드가 존재하고 아직 좋아요하지 않았으면 좋아요를 저장하고 카운트를 증가시킨다")
+    void 피드가_존재하고_아직_좋아요하지_않았으면_좋아요를_저장하고_카운트를_증가시킨다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
+      given(feedRepository.findAuthorId(feedId)).willReturn(Optional.of(UUID.randomUUID()));
+      given(userSummaryQueryRepository.findByUserId(userId))
+          .willReturn(new UserSummary(userId, "좋아요누른사람", "img.png"));
+      // when
+      feedService.like(feedId, userId);
+
+      // then
+      ArgumentCaptor<FeedLike> captor = ArgumentCaptor.forClass(FeedLike.class);
+      verify(feedLikeRepository).save(captor.capture());
+      assertThat(captor.getValue().getFeedId()).isEqualTo(feedId);
+      assertThat(captor.getValue().getUserId()).isEqualTo(userId);
+      verify(feedRepository).incrementLikeCount(feedId);
+    }
+
+    @Test
+    @DisplayName("이미 좋아요한 상태면 저장과 카운트 증가를 하지 않는다")
+    void 이미_좋아요한_상태면_저장과_카운트_증가를_하지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(true);
+
+      // when
+      feedService.like(feedId, userId);
+
+      // then
+      verify(feedLikeRepository, never()).save(any());
+      verify(feedRepository, never()).incrementLikeCount(any());
+    }
+
+    @Test
+    @DisplayName("저장 중 동시 좋아요로 UQ 위반이 나면 예외를 삼키고 카운트를 증가시키지 않는다")
+    void 저장_중_동시_좋아요로_UQ_위반이_나면_예외를_삼키고_카운트를_증가시키지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
+
+      ConstraintViolationException cause =
+          new ConstraintViolationException("UQ 위반", null, "UQ_feed_likes_feed_id_user_id");
+      given(feedLikeRepository.save(any()))
+          .willThrow(new DataIntegrityViolationException("UQ 위반", cause));
+
+      // when & then
+      assertThatCode(() -> feedService.like(feedId, userId)).doesNotThrowAnyException();
+      verify(feedRepository, never()).incrementLikeCount(any());
+    }
+
+    @Test
+    @DisplayName("UQ가 아닌 제약 위반이면 삼키지 않고 전파한다")
+    void UQ가_아닌_제약_위반이면_삼키지_않고_전파한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
+
+      // 원인 제약명이 UQ_feed_likes_feed_id_user_id 가 아닌 다른 제약
+      ConstraintViolationException cause =
+          new ConstraintViolationException("FK 위반", null, "FK_feeds_TO_feed_likes_1");
+      given(feedLikeRepository.save(any()))
+          .willThrow(new DataIntegrityViolationException("FK 위반", cause));
+
+      // when & then
+      assertThatThrownBy(() -> feedService.like(feedId, userId))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      verify(feedRepository, never()).incrementLikeCount(any());
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 FeedNotFoundException을 던진다")
+    void 피드가_존재하지_않으면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(false);
+
+      // when & then
+      assertThatThrownBy(() -> feedService.like(feedId, userId))
+          .isInstanceOf(FeedNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("좋아요에 성공하면 피드 작성자에게 알림 이벤트를 발행한다")
+    void 좋아요에_성공하면_피드_작성자에게_알림_이벤트를_발행한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      UUID authorId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
+      given(feedRepository.findAuthorId(feedId)).willReturn(Optional.of(authorId));
+      given(userSummaryQueryRepository.findByUserId(userId))
+          .willReturn(new UserSummary(userId, "좋아요누른사람", "img.png"));
+
+      // when
+      feedService.like(feedId, userId);
+
+      // then
+      ArgumentCaptor<NotificationRequestedEvent> captor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(captor.capture());
+      NotificationRequestedEvent event = captor.getValue();
+      assertThat(event.receiverIds()).containsExactly(authorId);
+      assertThat(event.content()).contains("좋아요누른사람");
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 좋아요 취소")
+  class Unlike {
+
+    @Test
+    @DisplayName("피드가 존재하고 좋아요가 있었으면 삭제하고 카운트를 감소시킨다")
+    void 피드가_존재하고_좋아요가_있었으면_삭제하고_카운트를_감소시킨다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.deleteByFeedIdAndUserId(feedId, userId)).willReturn(1L);
+
+      // when
+      feedService.unlike(feedId, userId);
+
+      // then
+      verify(feedLikeRepository).deleteByFeedIdAndUserId(feedId, userId);
+      verify(feedRepository).decrementLikeCount(feedId);
+    }
+
+    @Test
+    @DisplayName("좋아요가 없었으면 카운트를 감소시키지 않는다")
+    void 좋아요가_없었으면_카운트를_감소시키지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
+      given(feedLikeRepository.deleteByFeedIdAndUserId(feedId, userId)).willReturn(0L);
+
+      // when
+      feedService.unlike(feedId, userId);
+
+      // then
+      verify(feedRepository, never()).decrementLikeCount(any());
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 FeedNotFoundException을 던진다")
+    void 피드가_존재하지_않으면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID userId = UUID.randomUUID();
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(false);
+
+      // when & then
+      assertThatThrownBy(() -> feedService.unlike(feedId, userId))
+          .isInstanceOf(FeedNotFoundException.class);
     }
   }
 }

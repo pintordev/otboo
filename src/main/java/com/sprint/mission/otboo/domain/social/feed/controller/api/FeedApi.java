@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 
 @Tag(name = "피드 관리", description = "피드 관련 API")
@@ -27,5 +28,22 @@ public interface FeedApi {
       @ApiResponse(responseCode = "200", description = "피드 목록 조회 성공"),
       @ApiResponse(responseCode = "400", description = "피드 목록 조회 실패")
   })
-  ResponseEntity<CursorPageResponse<FeedDto>> getFeedList(FeedListParams params);
+  ResponseEntity<CursorPageResponse<FeedDto>> getFeedList(FeedListParams params,
+      UserPrincipal principal);
+
+  @Operation(summary = "피드 좋아요", description = "피드 좋아요 API")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "피드 좋아요 성공"),
+      @ApiResponse(responseCode = "400", description = "피드 좋아요 실패"),
+      @ApiResponse(responseCode = "404", description = "피드 없음")
+  })
+  ResponseEntity<Void> likeFeed(UUID feedId, UserPrincipal principal);
+
+  @Operation(summary = "피드 좋아요 취소", description = "피드 좋아요 취소 API")
+  @ApiResponses({
+      @ApiResponse(responseCode = "204", description = "피드 좋아요 취소 성공"),
+      @ApiResponse(responseCode = "400", description = "피드 좋아요 취소 실패"),
+      @ApiResponse(responseCode = "404", description = "피드 없음")
+  })
+  ResponseEntity<Void> unlikeFeed(UUID feedId, UserPrincipal principal);
 }

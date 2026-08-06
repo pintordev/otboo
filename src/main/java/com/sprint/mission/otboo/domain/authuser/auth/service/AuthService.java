@@ -64,7 +64,7 @@ public class AuthService {
         principal.getUserId(), principal.getRole().name(), issued.sessionId(), issued.issuedAt());
 
     String refreshToken = tokenProvider.createRefreshToken(
-        principal.getUserId(), issued.sessionId(), issued.currentRefreshJti(),
+        principal.getUserId(), issued.currentRefreshJti(), issued.sessionId(),
         issued.issuedAt(), tokenProvider.getRefreshTokenExpiresAt(issued.issuedAt()));
 
     SignInDto result = authMapper.signInDtoFrom(principal, accessToken, refreshToken);
@@ -118,7 +118,7 @@ public class AuthService {
     String newAccessToken = tokenProvider.createAccessToken(
         foundUser.getId(), foundUser.getRole().name(), rotated.sessionId(), Instant.now(clock));
     String newRefreshToken = tokenProvider.createRefreshToken(
-        foundUser.getId(), rotated.sessionId(), rotated.currentRefreshJti(),
+        foundUser.getId(), rotated.currentRefreshJti(), rotated.sessionId(),
         rotated.issuedAt(), tokenProvider.getRefreshTokenExpiresAt(rotated.issuedAt()));
 
     CustomUserDetails principal = new CustomUserDetails(foundUser);

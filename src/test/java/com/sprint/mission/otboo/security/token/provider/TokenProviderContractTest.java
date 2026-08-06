@@ -107,7 +107,7 @@ public abstract class TokenProviderContractTest {
       UUID jti = UUID.randomUUID();
       Instant now = Instant.now();
 
-      String token = provider.createRefreshToken(userId, sessionId, jti, now,
+      String token = provider.createRefreshToken(userId, jti, sessionId, now,
           now.plus(14, ChronoUnit.DAYS));
       RefreshTokenClaims claims = provider.parseRefreshToken(token);
 
