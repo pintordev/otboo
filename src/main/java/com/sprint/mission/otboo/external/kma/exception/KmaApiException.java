@@ -18,4 +18,12 @@ public class KmaApiException extends KmaException {
         "resultCode", Objects.toString(resultCode, UNKNOWN),
         "resultMsg", Objects.toString(resultMsg, UNKNOWN)));
   }
+
+  public static KmaApiException wrap(Throwable cause) {
+    KmaApiException exception = new KmaApiException(Map.of(
+        "causeType", cause.getClass().getSimpleName(),
+        "causeMessage", Objects.toString(cause.getMessage(), UNKNOWN)));
+    exception.initCause(cause);
+    return exception;
+  }
 }
