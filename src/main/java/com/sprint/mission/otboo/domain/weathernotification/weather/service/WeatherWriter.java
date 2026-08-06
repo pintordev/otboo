@@ -24,8 +24,7 @@ public class WeatherWriter {
 
   private final WeatherRepository weatherRepository;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public List<Weather> save(WeatherGrid weatherGrid, Instant forecastedAt,
+  public List<Weather> build(WeatherGrid weatherGrid, Instant forecastedAt,
       List<DailyWeatherForecastDto> dailyForecasts, Map<LocalDate, Weather> existingByDate) {
     Weather previousDayWeather = dailyForecasts.isEmpty() ? null
         : existingByDate.get(dailyForecasts.get(0).date().minusDays(1));
@@ -34,25 +33,30 @@ public class WeatherWriter {
     Double previousHumidity =
         previousDayWeather != null ? previousDayWeather.getHumidityCurrent() : null;
 
-    List<Weather> saved = new ArrayList<>();
+    List<Weather> built = new ArrayList<>();
     for (DailyWeatherForecastDto dto : dailyForecasts) {
       double temperatureCompared =
           previousTemp != null ? dto.temperatureCurrent() - previousTemp : 0.0;
       double humidityCompared =
           previousHumidity != null ? dto.humidityCurrent() - previousHumidity : 0.0;
 
-      Weather weather = Weather.create(weatherGrid, forecastedAt,
+      built.add(Weather.create(weatherGrid, forecastedAt,
           dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
           dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
           humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),
-          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed()));
-
-      saved.add(weatherRepository.save(weather));
+          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed())));
 
       previousTemp = dto.temperatureCurrent();
       previousHumidity = dto.humidityCurrent();
     }
-    return saved;
+    return built;
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public List<Weather> save(WeatherGrid weatherGrid, Instant forecastedAt,
+      List<DailyWeatherForecastDto> dailyForecasts, Map<LocalDate, Weather> existingByDate) {
+    List<Weather> built = build(weatherGrid, forecastedAt, dailyForecasts, existingByDate);
+    return weatherRepository.saveAll(built);
   }
 
   private WindStrength toWindStrength(double speed) {
