@@ -2,12 +2,16 @@ package com.sprint.mission.otboo.batch.weatherfetch.reader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -25,14 +29,20 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchReaderTest {
 
+  private static final Instant NOW = Instant.parse("2026-07-27T09:00:00Z");
+
   @InjectMocks
   private WeatherFetchReader reader;
 
   @Mock
   private WeatherGridRepository weatherGridRepository;
 
+  @Mock
+  private Clock clock;
+
   @BeforeEach
   void setUp() {
+    given(clock.instant()).willReturn(NOW);
     ReflectionTestUtils.setField(reader, "chunkSize", 2);
   }
 
@@ -46,7 +56,7 @@ class WeatherFetchReaderTest {
       // given
       WeatherGrid grid1 = WeatherGrid.create(60, 127);
       WeatherGrid grid2 = WeatherGrid.create(61, 127);
-      given(weatherGridRepository.findPageByCursor(any(), any(), any()))
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
           .willReturn(List.of(grid1, grid2), List.of());
 
       // when
@@ -78,7 +88,7 @@ class WeatherFetchReaderTest {
 
       WeatherGrid grid3 = WeatherGrid.create(62, 127);
 
-      given(weatherGridRepository.findPageByCursor(any(), any(), any()))
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
           .willReturn(List.of(grid1, grid2), List.of(grid3), List.of());
 
       // when
@@ -90,7 +100,8 @@ class WeatherFetchReaderTest {
       ArgumentCaptor<Instant> createdAtCaptor = ArgumentCaptor.forClass(Instant.class);
       ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
       verify(weatherGridRepository, times(2))
-          .findPageByCursor(createdAtCaptor.capture(), idCaptor.capture(), any());
+          .findPageByCursorExcludingForecasted(createdAtCaptor.capture(), idCaptor.capture(),
+              any(), any());
 
       List<Instant> capturedCreatedAt = createdAtCaptor.getAllValues();
       List<UUID> capturedIds = idCaptor.getAllValues();
@@ -100,6 +111,22 @@ class WeatherFetchReaderTest {
 
       assertThat(capturedCreatedAt.get(1)).isEqualTo(grid2CreatedAt);
       assertThat(capturedIds.get(1)).isEqualTo(grid2Id);
+    }
+
+    @Test
+    @DisplayName("clock으로_계산한_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다")
+    void clock으로_계산한_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다() {
+      // given
+      BaseTime expectedBaseTime = KmaBaseTimeCalculator.calculate(NOW);
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
+          .willReturn(List.of());
+
+      // when
+      reader.read();
+
+      // then
+      verify(weatherGridRepository).findPageByCursorExcludingForecasted(any(), any(),
+          eq(expectedBaseTime.toInstant()), any());
     }
   }
 }
