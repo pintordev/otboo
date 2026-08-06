@@ -15,6 +15,7 @@ jobs:
     steps:
       - name: Skip if merge commit (dev/main sync)
         id: check
+        if: github.event.action == 'synchronize'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
