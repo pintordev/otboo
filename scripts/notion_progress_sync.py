@@ -350,6 +350,8 @@ def main():
         except (requests.RequestException, ValueError, RuntimeError) as exc:
             print(f"FAIL #{issue['number']}: {exc}")
 
+    cards = bf.fetch_notion_cards()
+    sprint_titles = bf.resolve_sprint_titles(cards)
     check_surplus_cards(cards, milestones, sprint_titles)
 
 
