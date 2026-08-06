@@ -2,6 +2,9 @@ package com.sprint.mission.otboo.batch.weatherfetch.reader;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
@@ -21,16 +24,24 @@ import org.springframework.stereotype.Component;
 public class WeatherFetchReader implements ItemReader<WeatherGrid> {
 
   private final WeatherGridRepository weatherGridRepository;
+  private final Clock clock;
 
   @Value("${batch.weather-fetch.chunk-size}")
   private int chunkSize;
 
+  private BaseTime baseTime;
   private Instant lastCreatedAt;
   private UUID lastId;
   private Iterator<WeatherGrid> iterator;
 
   @Override
   public WeatherGrid read() {
+    if (baseTime == null) {
+      baseTime = KmaBaseTimeCalculator.calculate(clock.instant());
+      log.info("WeatherFetchReader baseTime 계산: baseDate={}, baseTime={}", baseTime.baseDate(),
+          baseTime.baseTime());
+    }
+
     if (lastCreatedAt == null) {
       lastCreatedAt = Instant.EPOCH;
       lastId = new UUID(0L, 0L);
@@ -38,8 +49,8 @@ public class WeatherFetchReader implements ItemReader<WeatherGrid> {
     }
 
     while (iterator == null || !iterator.hasNext()) {
-      List<WeatherGrid> items = weatherGridRepository.findPageByCursor(lastCreatedAt, lastId,
-          PageRequest.of(0, chunkSize));
+      List<WeatherGrid> items = weatherGridRepository.findPageByCursorExcludingForecasted(
+          lastCreatedAt, lastId, baseTime.toInstant(), PageRequest.of(0, chunkSize));
 
       if (items.isEmpty()) {
         return null;

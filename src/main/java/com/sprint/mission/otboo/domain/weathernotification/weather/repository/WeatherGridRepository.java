@@ -31,4 +31,18 @@ public interface WeatherGridRepository extends JpaRepository<WeatherGrid, UUID> 
       """)
   List<WeatherGrid> findPageByCursor(@Param("lastCreatedAt") Instant lastCreatedAt,
       @Param("lastId") UUID lastId, Pageable pageable);
+
+  @Query("""
+      SELECT wg FROM WeatherGrid wg
+      WHERE (wg.createdAt > :lastCreatedAt
+         OR (wg.createdAt = :lastCreatedAt AND wg.id > :lastId))
+        AND NOT EXISTS (
+          SELECT 1 FROM Weather w
+          WHERE w.weatherGrid = wg AND w.forecastedAt = :forecastedAt
+        )
+      ORDER BY wg.createdAt ASC, wg.id ASC
+      """)
+  List<WeatherGrid> findPageByCursorExcludingForecasted(
+      @Param("lastCreatedAt") Instant lastCreatedAt, @Param("lastId") UUID lastId,
+      @Param("forecastedAt") Instant forecastedAt, Pageable pageable);
 }
