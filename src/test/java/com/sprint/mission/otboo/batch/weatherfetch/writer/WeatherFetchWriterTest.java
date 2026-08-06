@@ -1,5 +1,11 @@
 package com.sprint.mission.otboo.batch.weatherfetch.writer;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -33,8 +39,8 @@ class WeatherFetchWriterTest {
   class Write {
 
     @Test
-    @DisplayName("여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_saveAll에_넘긴다")
-    void 여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_saveAll에_넘긴다() {
+    @DisplayName("여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_각각_insertIfAbsent로_저장한다")
+    void 여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_각각_insertIfAbsent로_저장한다() {
       // given
       WeatherGrid grid1 = WeatherGrid.create(60, 127);
       WeatherGrid grid2 = WeatherGrid.create(61, 128);
@@ -49,12 +55,17 @@ class WeatherFetchWriterTest {
       writer.write(chunk);
 
       // then
-      verify(weatherRepository).saveAll(List.of(weather1, weather2, weather3));
+      verify(weatherRepository, times(3)).insertIfAbsent(any(), any(), any(), any(), anyString(),
+          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+      verify(weatherRepository).insertIfAbsent(eq(weather1.getId()), eq(grid1.getId()), any(),
+          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }
 
     @Test
-    @DisplayName("빈_청크는_saveAll을_빈_리스트로_호출한다")
-    void 빈_청크는_saveAll을_빈_리스트로_호출한다() {
+    @DisplayName("빈_청크는_insertIfAbsent를_호출하지_않는다")
+    void 빈_청크는_insertIfAbsent를_호출하지_않는다() {
       // given
       Chunk<List<Weather>> chunk = new Chunk<>(List.of());
 
@@ -62,7 +73,9 @@ class WeatherFetchWriterTest {
       writer.write(chunk);
 
       // then
-      verify(weatherRepository).saveAll(List.of());
+      verify(weatherRepository, never()).insertIfAbsent(any(), any(), any(), any(), anyString(),
+          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }
   }
 

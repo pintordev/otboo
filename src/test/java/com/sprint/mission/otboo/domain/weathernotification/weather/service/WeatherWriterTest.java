@@ -1,7 +1,10 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -16,8 +19,10 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.repository.We
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -103,8 +108,8 @@ class WeatherWriterTest {
   class Save {
 
     @Test
-    @DisplayName("build한_결과를_repository에_저장하고_반환한다")
-    void build한_결과를_repository에_저장하고_반환한다() {
+    @DisplayName("build한_결과를_insertIfAbsent로_저장하고_재조회해서_반환한다")
+    void build한_결과를_insertIfAbsent로_저장하고_재조회해서_반환한다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
@@ -112,16 +117,26 @@ class WeatherWriterTest {
               DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
           .sample();
-      given(weatherRepository.saveAll(anyList()))
-          .willAnswer(invocation -> invocation.getArgument(0));
+      Weather persisted = Weather.create(weatherGrid, forecastedAt,
+          todayForecast.date().atStartOfDay().toInstant(ZoneOffset.UTC),
+          todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
+      given(weatherRepository.insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
+          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString()))
+          .willReturn(1);
+      given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
+          any(), eq(forecastedAt))).willReturn(Optional.of(persisted));
 
       // when
       List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
           List.of(todayForecast), Map.of());
 
       // then
-      assertThat(result).hasSize(1);
-      verify(weatherRepository).saveAll(anyList());
+      assertThat(result).containsExactly(persisted);
+      verify(weatherRepository).insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
+          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }
   }
 }
