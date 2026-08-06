@@ -65,6 +65,7 @@ class WeatherFetchJobConfigTest {
       // when
       Job job = config.weatherFetchJob();
       Step step = config.weatherFetchStep();
+      Step retryStep = config.weatherFetchRetryStep();
 
       // then
       assertNotNull(job);
@@ -72,6 +73,9 @@ class WeatherFetchJobConfigTest {
 
       assertNotNull(step);
       assertThat(step.getName()).isEqualTo("weatherFetchStep");
+
+      assertNotNull(retryStep);
+      assertThat(retryStep.getName()).isEqualTo("weatherFetchRetryStep");
     }
   }
 }
