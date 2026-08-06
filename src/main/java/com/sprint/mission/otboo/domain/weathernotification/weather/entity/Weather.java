@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -25,7 +26,9 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "weathers")
+@Table(name = "weathers", uniqueConstraints = @UniqueConstraint(
+    name = "UQ_weathers_weather_grid_id_forecast_at_forecasted_at",
+    columnNames = {"weather_grid_id", "forecast_at", "forecasted_at"}))
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

@@ -101,10 +101,8 @@ class WeatherRepositoryTest {
 
       Weather duplicate = weatherOf(weatherGrid, forecastedAt, forecastAt, 29.0);
 
-      assertThatThrownBy(() -> {
-        weatherRepository.save(duplicate);
-        testEntityManager.flush();
-      }).isInstanceOf(DataIntegrityViolationException.class);
+      assertThatThrownBy(() -> weatherRepository.saveAndFlush(duplicate))
+          .isInstanceOf(DataIntegrityViolationException.class);
     }
   }
 
