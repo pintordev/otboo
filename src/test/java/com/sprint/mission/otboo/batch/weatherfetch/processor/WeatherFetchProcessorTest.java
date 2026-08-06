@@ -47,7 +47,7 @@ class WeatherFetchProcessorTest {
       given(clock.instant()).willReturn(Instant.parse("2026-07-27T08:30:00Z"));
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       List<Weather> saved = List.of();
-      given(weatherRefresher.refresh(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), any()))
+      given(weatherRefresher.build(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), any()))
           .willReturn(saved);
 
       // when
@@ -73,7 +73,7 @@ class WeatherFetchProcessorTest {
 
       // then
       ArgumentCaptor<BaseTime> baseTimeCaptor = ArgumentCaptor.forClass(BaseTime.class);
-      verify(weatherRefresher, times(2)).refresh(any(), any(), baseTimeCaptor.capture());
+      verify(weatherRefresher, times(2)).build(any(), any(), baseTimeCaptor.capture());
       List<BaseTime> capturedBaseTimes = baseTimeCaptor.getAllValues();
       assertThat(capturedBaseTimes.get(0)).isEqualTo(capturedBaseTimes.get(1));
     }
