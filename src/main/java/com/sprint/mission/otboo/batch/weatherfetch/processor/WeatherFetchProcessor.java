@@ -34,6 +34,6 @@ public class WeatherFetchProcessor implements ItemProcessor<WeatherGrid, List<We
     }
 
     KmaGridPoint grid = new KmaGridPoint(weatherGrid.getX(), weatherGrid.getY());
-    return weatherRefresher.refresh(weatherGrid, grid, baseTime);
+    return weatherRefresher.build(weatherGrid, grid, baseTime);
   }
 }
