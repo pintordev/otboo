@@ -252,7 +252,7 @@ def check_surplus_cards(cards, milestones, sprint_titles):
         if bf.card_github_issue_url(card):
             continue
         if bf.card_excluded(card):
-            continue  # 회의/의사결정 등 이슈 미대상 카드는 잉여 점검 대상 아님
+            continue
         props = card["properties"]
         sprint_rel = props["스프린트"]["relation"]
         phase_title = sprint_titles.get(sprint_rel[0]["id"]) if sprint_rel else None
@@ -263,7 +263,7 @@ def check_surplus_cards(cards, milestones, sprint_titles):
         )
         phase_ended = milestone_title and milestones[milestone_title]["state"] == "closed"
         if not phase_ended:
-            continue  # 스프린트 진행 중/시작 전 — 정상 백로그
+            continue
 
         assignee = props["담당자"]["select"]
         name = assignee["name"] if assignee else None
@@ -310,7 +310,6 @@ def main():
             continue
 
         if not issue.get("milestone"):
-            # 마일스톤 미설정 검증/알림은 별도 "이슈 라벨/마일스톤 검증 자동화"의 책임
             continue
 
         new_id = create_new_card(issue, project_item, milestones, sprint_page_by_title)

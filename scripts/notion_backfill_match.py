@@ -7,8 +7,8 @@ Notion/GitHub 어느 쪽도 실제로 쓰지 않는다(읽기 전용).
 
 사용법:
   pip install requests
-  export NOTION_TOKEN=ntn_xxx           # 대상 DB에 연결된 Integration secret
-  export NOTION_DB_ID=xxx               # `작업 트래커` DB id
+  export NOTION_TOKEN=ntn_xxx
+  export NOTION_DB_ID=xxx
   gh auth status로 로그인 확인 후(이 스크립트는 GitHub 쪽 조회에 gh CLI를 그대로 사용):
   python scripts/notion_backfill_match.py
 """
@@ -120,9 +120,9 @@ def build_candidate_index(cards, sprint_titles):
     index = {}
     for card in cards:
         if card_github_issue_url(card):
-            continue  # 이미 링크된 카드는 백필 대상 아님
+            continue
         if card_excluded(card):
-            continue  # 이슈 미대상 카드는 후보로 안 나옴
+            continue
         index.setdefault(card_key(card, sprint_titles), []).append(card)
     return index
 
@@ -153,8 +153,6 @@ def main():
             if len(key_issues) == 1:
                 confirmed.append((key_issues[0], candidates[0]))
             else:
-                # 서로 다른 이슈가 같은 카드 하나를 동시에 지목 — 우연한 3축 일치(키 충돌)라
-                # 자동 확정하면 오매칭 위험이 있음, 사람이 직접 판단해야 함
                 conflict.append((key_issues, candidates[0]))
         elif len(candidates) > 1:
             for issue in key_issues:

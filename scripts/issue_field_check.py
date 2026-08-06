@@ -294,7 +294,6 @@ def main():
         if not missing:
             continue
         issue_flagged += 1
-        # assignee가 누락 항목 중 하나일 수 있어서 담당자가 아니라 작성자(author)에게 알림
         login = issue["user"]["login"]
         line = f"- #{issue['number']} {issue['title']} ({issue['html_url']}) — 누락: {', '.join(missing)}"
         add_finding(recipients, login, "이슈", line)
