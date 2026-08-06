@@ -57,6 +57,10 @@ otboo.env
 ### App Properties ###
 application*.yaml
 
+### Python (scripts/) ###
+__pycache__/
+*.pyc
+
 ### Docs ###
 docs/intro
 docs/draft

@@ -96,6 +96,11 @@ def card_github_issue_url(card):
     return card["properties"]["GitHub Issue"]["url"]
 
 
+def card_excluded(card):
+    """회의/의사결정 등 애초에 GitHub 이슈가 안 생길 카드 — 후보 계산에서 제외."""
+    return card["properties"]["이슈 미대상"]["checkbox"]
+
+
 def card_notion_url(card):
     return f"https://www.notion.so/{card['id'].replace('-', '')}"
 
@@ -116,6 +121,8 @@ def build_candidate_index(cards, sprint_titles):
     for card in cards:
         if card_github_issue_url(card):
             continue  # 이미 링크된 카드는 백필 대상 아님
+        if card_excluded(card):
+            continue  # 이슈 미대상 카드는 후보로 안 나옴
         index.setdefault(card_key(card, sprint_titles), []).append(card)
     return index
 

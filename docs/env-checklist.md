@@ -26,6 +26,9 @@
 | `ES_HOST` / `ES_PORT` | Elasticsearch 검색 `심화` | 이경신 | 3차 스프린트 |
 | `APM_AGENT_KEY` (Pinpoint/Datadog) | 모니터링 | 김호현 | 2차 스프린트 말~3차 초 |
 | `CORS_ALLOWED_ORIGINS` | `otboo-fe` 배포 URL 허용 | 김호현 | 로컬(`http://localhost:5173` 등)·배포 도메인 둘 다 |
+| `NOTION_TOKEN` | Notion `작업 트래커` DB 진행 현황 자동 동기화 | 김호현 | Integration(`프로젝트 진행 트래킹`) secret, 대상 DB 연결 완료 |
+| `NOTION_DB_ID` | 동기화 대상 DB(`작업 트래커`) 식별 | 김호현 | `c9005aae-08f3-4a9e-b54f-62877d8bfb1f` |
+| `PROJECTS_PAT` | GitHub Projects(v2) `Status`/`Target date` GraphQL 조회 | 김호현 | 기본 `GITHUB_TOKEN`은 조직 Projects 접근 권한 없음, `project` 스코프 classic PAT 별도 발급 |
 
 ## 아직 값이 확정되지 않은 것 (사전기간~해당 스프린트 전 확정)
 
