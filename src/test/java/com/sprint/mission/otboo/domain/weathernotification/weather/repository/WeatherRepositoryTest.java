@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
@@ -20,6 +21,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -36,6 +38,13 @@ class WeatherRepositoryTest {
 
   @Autowired
   private TestEntityManager testEntityManager;
+
+  private Weather weatherOf(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
+      double temperatureCurrent) {
+    return Weather.create(weatherGrid, forecastedAt, forecastAt, SkyStatus.CLEAR,
+        PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, temperatureCurrent, 0.0, 25.0, 31.0, 2.5,
+        WindStrength.WEAK);
+  }
 
   @Nested
   @DisplayName("Save")
@@ -77,6 +86,26 @@ class WeatherRepositoryTest {
       assertThat(found.get().getTemperatureCurrent()).isEqualTo(28.0);
       assertThat(found.get().getCreatedAt()).isNotNull();
     }
+
+    @Test
+    @DisplayName("같은_weather_grid_id_forecast_at_forecasted_at_조합은_유니크_제약_위반으로_저장할_수_없다")
+    void 같은_weather_grid_id_forecast_at_forecasted_at_조합은_유니크_제약_위반으로_저장할_수_없다() {
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Instant forecastAt = Instant.parse("2026-07-27T00:00:00Z");
+
+      weatherRepository.save(weatherOf(weatherGrid, forecastedAt, forecastAt, 28.0));
+      testEntityManager.flush();
+
+      Weather duplicate = weatherOf(weatherGrid, forecastedAt, forecastAt, 29.0);
+
+      assertThatThrownBy(() -> {
+        weatherRepository.save(duplicate);
+        testEntityManager.flush();
+      }).isInstanceOf(DataIntegrityViolationException.class);
+    }
   }
 
   @Nested
@@ -107,13 +136,6 @@ class WeatherRepositoryTest {
       assertThat(latestRevisions).extracting(Weather::getId)
           .containsExactlyInAnyOrder(day1NewRevision.getId(), day2Revision.getId())
           .doesNotContain(day1OldRevision.getId());
-    }
-
-    private Weather weatherOf(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
-        double temperatureCurrent) {
-      return Weather.create(weatherGrid, forecastedAt, forecastAt, SkyStatus.CLEAR,
-          PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, temperatureCurrent, 0.0, 25.0, 31.0, 2.5,
-          WindStrength.WEAK);
     }
   }
 }
