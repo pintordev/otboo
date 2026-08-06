@@ -116,6 +116,8 @@ class WeatherWriterTest {
       DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
               DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
           .sample();
       Weather persisted = Weather.create(weatherGrid, forecastedAt,
           todayForecast.date().atStartOfDay().toInstant(ZoneOffset.UTC),

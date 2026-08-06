@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,7 +57,22 @@ public class WeatherWriter {
   public List<Weather> save(WeatherGrid weatherGrid, Instant forecastedAt,
       List<DailyWeatherForecastDto> dailyForecasts, Map<LocalDate, Weather> existingByDate) {
     List<Weather> built = build(weatherGrid, forecastedAt, dailyForecasts, existingByDate);
-    return weatherRepository.saveAll(built);
+    return built.stream()
+        .map(weather -> {
+          weatherRepository.insertIfAbsent(UUID.randomUUID(), weatherGrid.getId(), forecastedAt,
+              weather.getForecastAt(), weather.getSkyStatus().name(),
+              weather.getPrecipitationType().name(), weather.getPrecipitationAmount(),
+              weather.getPrecipitationProbability(), weather.getHumidityCurrent(),
+              weather.getHumidityCompared(), weather.getTemperatureCurrent(),
+              weather.getTemperatureCompared(), weather.getTemperatureMin(),
+              weather.getTemperatureMax(), weather.getWindSpeed(),
+              weather.getWindAsWord().name());
+          return weatherRepository
+              .findByWeatherGridAndForecastAtAndForecastedAt(weatherGrid, weather.getForecastAt(),
+                  forecastedAt)
+              .orElseThrow();
+        })
+        .toList();
   }
 
   private WindStrength toWindStrength(double speed) {

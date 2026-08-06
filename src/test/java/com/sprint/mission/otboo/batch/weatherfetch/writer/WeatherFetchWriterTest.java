@@ -55,12 +55,10 @@ class WeatherFetchWriterTest {
       writer.write(chunk);
 
       // then
-      verify(weatherRepository, times(3)).insertIfAbsent(any(), any(), any(), any(), anyString(),
-          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
-      verify(weatherRepository).insertIfAbsent(eq(weather1.getId()), eq(grid1.getId()), any(),
-          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+      verify(weatherRepository, times(3)).insertIfAbsent(any(), any(),
+          eq(weather1.getForecastedAt()), eq(weather1.getForecastAt()), anyString(), anyString(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyString());
     }
 
     @Test
