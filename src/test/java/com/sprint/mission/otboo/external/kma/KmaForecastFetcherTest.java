@@ -16,9 +16,13 @@ import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
 import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
+import feign.FeignException;
+import feign.Request;
+import feign.RequestTemplate;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -94,6 +98,33 @@ class KmaForecastFetcherTest {
       assertThatThrownBy(() -> kmaForecastFetcher.fetch(grid, baseTime, now))
           .isInstanceOf(KmaApiException.class);
       verifyNoInteractions(kmaForecastParser);
+    }
+
+    @Test
+    @DisplayName("클라이언트가_FeignException을_던지면_KmaApiException으로_wrap한다")
+    void 클라이언트가_FeignException을_던지면_KmaApiException으로_wrap한다() {
+      // given
+      kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
+          "kma-service-key");
+      KmaGridPoint grid = new KmaGridPoint(60, 127);
+      BaseTime baseTime = new BaseTime("20260727", "1700");
+      Instant now = Instant.parse("2026-07-27T09:00:00Z");
+
+      FeignException.ServiceUnavailable feignException = new FeignException.ServiceUnavailable(
+          "503 Service Unavailable", request(), null, null);
+      given(kmaWeatherClient.getVillageForecast("kma-service-key", 2000, 1, "JSON", "20260727",
+          "1700", 60, 127)).willThrow(feignException);
+
+      // when & then
+      assertThatThrownBy(() -> kmaForecastFetcher.fetch(grid, baseTime, now))
+          .isInstanceOf(KmaApiException.class)
+          .hasCause(feignException);
+      verifyNoInteractions(kmaForecastParser);
+    }
+
+    private Request request() {
+      return Request.create(Request.HttpMethod.GET, "/getVillageForecast", Map.of(),
+          Request.Body.empty(), new RequestTemplate());
     }
   }
 }
