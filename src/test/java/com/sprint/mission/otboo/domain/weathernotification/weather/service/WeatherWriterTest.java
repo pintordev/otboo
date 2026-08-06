@@ -1,8 +1,9 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
@@ -40,17 +41,15 @@ class WeatherWriterTest {
   @BeforeEach
   void setUp() {
     weatherWriter = new WeatherWriter(weatherRepository);
-    given(weatherRepository.save(any(Weather.class)))
-        .willAnswer(invocation -> invocation.getArgument(0));
   }
 
   @Nested
-  @DisplayName("Save")
-  class Save {
+  @DisplayName("Build")
+  class Build {
 
     @Test
-    @DisplayName("전날_데이터가_없으면_diff는_0으로_저장한다")
-    void 전날_데이터가_없으면_diff는_0으로_저장한다() {
+    @DisplayName("전날_데이터가_없으면_diff는_0으로_계산한다")
+    void 전날_데이터가_없으면_diff는_0으로_계산한다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
@@ -62,7 +61,7 @@ class WeatherWriterTest {
           .sample();
 
       // when
-      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
+      List<Weather> result = weatherWriter.build(weatherGrid, forecastedAt,
           List.of(todayForecast), Map.of());
 
       // then
@@ -72,8 +71,8 @@ class WeatherWriterTest {
     }
 
     @Test
-    @DisplayName("전날_데이터가_있으면_diff를_계산해서_저장한다")
-    void 전날_데이터가_있으면_diff를_계산해서_저장한다() {
+    @DisplayName("전날_데이터가_있으면_diff를_계산한다")
+    void 전날_데이터가_있으면_diff를_계산한다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
@@ -89,13 +88,40 @@ class WeatherWriterTest {
           .sample();
 
       // when
-      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
+      List<Weather> result = weatherWriter.build(weatherGrid, forecastedAt,
           List.of(todayForecast), Map.of(LocalDate.of(2026, 7, 26), yesterdayWeather));
 
       // then
       assertThat(result).hasSize(1);
       assertThat(result.get(0).getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
       assertThat(result.get(0).getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
+    }
+  }
+
+  @Nested
+  @DisplayName("Save")
+  class Save {
+
+    @Test
+    @DisplayName("build한_결과를_repository에_저장하고_반환한다")
+    void build한_결과를_repository에_저장하고_반환한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
+              DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .sample();
+      given(weatherRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+
+      // when
+      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
+          List.of(todayForecast), Map.of());
+
+      // then
+      assertThat(result).hasSize(1);
+      verify(weatherRepository).saveAll(anyList());
     }
   }
 }
