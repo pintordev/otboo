@@ -2,22 +2,19 @@
 GitHub Issue/PR 필수 필드 검증.
 
 notion_progress_sync.py와 같은 주기(같은 workflow)로 Issue/PR을 훑어 필수 필드 누락을 점검한다.
-주기적 검증이라 open만이 아니라 **closed/merged 포함 전체(state=all)** 가 대상이다(예: 이미 merge된
-PR에 마일스톤/Projects 값이 남아있는 경우도 정리 대상). Notion 카드는 건드리지 않는다 — GitHub 쪽
-원장 데이터 자체를 깨끗하게 유지하는 목적.
+주기적 검증이라 open만이 아니라 closed/merged 포함 전체(state=all)가 대상이다. Notion 카드는 건드리지
+않는다 — GitHub 쪽 원장 데이터 자체를 깨끗하게 유지하는 목적.
 
 필수 필드:
   Issue: Assignees, Labels(타입 라벨 1개 + 도메인 라벨 1개), Type(네이티브 Issue Type),
          Milestone, Projects(Priority, Start date, Category)
   PR:    Reviewers(요청 중이거나 리뷰 이력 있음), Assignees, Labels
 
-- 미설정 → **작성자**(이슈/PR 둘 다 author — assignee가 누락 항목일 수도 있어서 assignee한테 보내면
-  보낼 대상이 없는 경우가 생김)에게 DM, 매핑 없으면 웹훅 — **한 실행에서 이슈+PR findings를 합쳐
-  수신자 1명당 메시지 1건**(웹훅도 전체 통틀어 1건)만 발송
-- **라벨 과다설정(타입/도메인 2개 이상)은 이슈든 PR이든 건드리지 않음**(허용) — 삭제 안 함
-- PR에 **Milestone**이나 **Projects 아이템**이 붙어있으면(이슈 전용 개념이라 PR엔 있으면 안 됨)
-  완전히 제거 — Milestone은 REST PATCH로 null 처리, Projects는 아이템 자체를
-  `deleteProjectV2Item`으로 삭제(필드 값만 지우는 게 아니라 보드에서 아예 뺌)
+- 미설정 → 작성자(이슈/PR 둘 다 author)에게 DM, 매핑 없으면 웹훅 — 한 실행에서 이슈+PR findings를 합쳐
+  수신자 1명당 메시지 1건(웹훅도 전체 통틀어 1건)만 발송
+- 라벨 과다설정(타입/도메인 2개 이상)은 이슈든 PR이든 건드리지 않음(허용) — 삭제 안 함
+- PR에 Milestone이나 Projects 아이템이 붙어있으면 완전히 제거 — Milestone은 REST PATCH로 null 처리,
+  Projects는 아이템 자체를 `deleteProjectV2Item`으로 삭제
 
 필요 시크릿: notion_progress_sync.py와 동일(PROJECTS_PAT, DISCORD_BOT_TOKEN, DISCORD_USER_MAP,
 DISCORD_WEBHOOK_URL) + PR 마일스톤 제거를 위한 GH_TOKEN에 issues:write 권한 필요.
@@ -37,83 +34,122 @@ import notion_progress_sync as s
 ORG = "sb11-code-rangers"
 PROJECT_NUMBER = 1
 PROJECTS_PAT = os.environ.get("PROJECTS_PAT")
-
 PROJECT_ID = "PVT_kwDOEk0vfc4BeYM2"
+REQUEST_TIMEOUT = 30
+
+
+def run_gh(args):
+    try:
+        return subprocess.run(
+            ["gh", *args], capture_output=True, text=True, check=True, timeout=REQUEST_TIMEOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"gh 호출 실패({args}): {exc.stderr.strip()}") from exc
 
 
 def fetch_issues():
-    """주기적 검증이라 open만이 아니라 전체(state=all)를 대상으로 함."""
-    proc = subprocess.run(
+    proc = run_gh(
         [
-            "gh", "api", f"repos/{bf.REPO}/issues?state=all&per_page=100", "--paginate",
+            "api", f"repos/{bf.REPO}/issues?state=all&per_page=100", "--paginate",
             "--jq", ".[] | select(.pull_request == null)",
         ],
-        capture_output=True, text=True, check=True,
     )
     return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
 
 
 def fetch_prs():
-    """주기적 검증이라 open만이 아니라 전체(state=all)를 대상으로 함."""
-    proc = subprocess.run(
-        [
-            "gh", "api", f"repos/{bf.REPO}/pulls?state=all&per_page=100", "--paginate",
-            "--jq", ".[]",
-        ],
-        capture_output=True, text=True, check=True,
+    proc = run_gh(
+        ["api", f"repos/{bf.REPO}/pulls?state=all&per_page=100", "--paginate", "--jq", ".[]"],
     )
     return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
 
 
 def fetch_pr_has_reviews(number):
-    proc = subprocess.run(
-        ["gh", "api", f"repos/{bf.REPO}/pulls/{number}/reviews", "--jq", "length"],
-        capture_output=True, text=True, check=True,
-    )
+    proc = run_gh(["api", f"repos/{bf.REPO}/pulls/{number}/reviews", "--jq", "length"])
     return int(proc.stdout.strip() or "0") > 0
 
 
-def fetch_issue_project_fields():
-    """이슈 번호 -> {priority, start_date, category}. PROJECTS_PAT 없으면 빈 dict.
-
-    `Target date`는 필수 필드 목록(Priority/Start date/Category)에 의도적으로 포함하지 않는다 —
-    이 값은 착수 시점이 아니라 진행하면서 나중에 채워 넣는 필드라, 없다고 "누락"으로 잡거나
-    자동으로 지우는 대상이 아님.
-    """
-    if not PROJECTS_PAT:
-        return {}
+def graphql(query, variables):
     headers = {"Authorization": f"Bearer {PROJECTS_PAT}", "Content-Type": "application/json"}
-    query = """
-    query($org: String!, $number: Int!, $cursor: String) {
-      organization(login: $org) {
-        projectV2(number: $number) {
-          items(first: 100, after: $cursor) {
-            pageInfo { hasNextPage endCursor }
-            nodes {
-              content { __typename ... on Issue { number } }
-              fieldValues(first: 20) {
-                nodes {
-                  __typename
-                  ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
-                  ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { name } } }
-                  ... on ProjectV2ItemFieldMultiSelectValue { value field { ... on ProjectV2FieldCommon { name } } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    resp = requests.post(
+        "https://api.github.com/graphql", headers=headers,
+        json={"query": query, "variables": variables}, timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if "errors" in data:
+        raise RuntimeError(f"GraphQL 오류: {data['errors']}")
+    return data["data"]
+
+
+FIELD_VALUE_FRAGMENT = """
+... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
+... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { name } } }
+... on ProjectV2ItemFieldMultiSelectValue { value field { ... on ProjectV2FieldCommon { name } } }
+"""
+
+MORE_FIELD_VALUES_QUERY = f"""
+query($item: ID!, $cursor: String) {{
+  node(id: $item) {{
+    ... on ProjectV2Item {{
+      fieldValues(first: 20, after: $cursor) {{
+        pageInfo {{ hasNextPage endCursor }}
+        nodes {{ __typename {FIELD_VALUE_FRAGMENT} }}
+      }}
+    }}
+  }}
+}}
+"""
+
+
+def collect_field_values(item_id, field_values):
+    nodes = list(field_values["nodes"])
+    page_info = field_values["pageInfo"]
+    while page_info["hasNextPage"]:
+        data = graphql(MORE_FIELD_VALUES_QUERY, {"item": item_id, "cursor": page_info["endCursor"]})
+        more = data["node"]["fieldValues"]
+        nodes.extend(more["nodes"])
+        page_info = more["pageInfo"]
+    return nodes
+
+
+def extract_priority_start_category(field_value_nodes):
+    priority, start_date, category = None, None, None
+    for fv in field_value_nodes:
+        field_name = (fv.get("field") or {}).get("name")
+        if field_name == "Priority":
+            priority = fv.get("name")
+        elif field_name == "Start date":
+            start_date = fv.get("date")
+        elif field_name == "Category":
+            category = fv.get("value")
+    return {"priority": priority, "start_date": start_date, "category": category}
+
+
+def fetch_issue_project_fields():
+    query = f"""
+    query($org: String!, $number: Int!, $cursor: String) {{
+      organization(login: $org) {{
+        projectV2(number: $number) {{
+          items(first: 100, after: $cursor) {{
+            pageInfo {{ hasNextPage endCursor }}
+            nodes {{
+              id
+              content {{ __typename ... on Issue {{ number }} }}
+              fieldValues(first: 20) {{
+                pageInfo {{ hasNextPage endCursor }}
+                nodes {{ __typename {FIELD_VALUE_FRAGMENT} }}
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}
     """
     fields, cursor = {}, None
     while True:
-        resp = requests.post(
-            "https://api.github.com/graphql",
-            headers=headers,
-            json={"query": query, "variables": {"org": ORG, "number": PROJECT_NUMBER, "cursor": cursor}},
-        )
-        resp.raise_for_status()
-        page = resp.json()["data"]["organization"]["projectV2"]["items"]
+        data = graphql(query, {"org": ORG, "number": PROJECT_NUMBER, "cursor": cursor})
+        page = data["organization"]["projectV2"]["items"]
         for node in page["nodes"]:
             content = node.get("content") or {}
             if content.get("__typename") != "Issue":
@@ -121,16 +157,8 @@ def fetch_issue_project_fields():
             number = content.get("number")
             if number is None:
                 continue
-            priority, start_date, category = None, None, None
-            for fv in node["fieldValues"]["nodes"]:
-                field_name = (fv.get("field") or {}).get("name")
-                if field_name == "Priority":
-                    priority = fv.get("name")
-                elif field_name == "Start date":
-                    start_date = fv.get("date")
-                elif field_name == "Category":
-                    category = fv.get("value")
-            fields[number] = {"priority": priority, "start_date": start_date, "category": category}
+            field_value_nodes = collect_field_values(node["id"], node["fieldValues"])
+            fields[number] = extract_priority_start_category(field_value_nodes)
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]
@@ -138,10 +166,6 @@ def fetch_issue_project_fields():
 
 
 def fetch_pr_project_item_ids():
-    """PR 번호 -> project item id. PR은 애초에 프로젝트 보드 아이템으로 안 남아있어야 함(완전 제거 대상)."""
-    if not PROJECTS_PAT:
-        return {}
-    headers = {"Authorization": f"Bearer {PROJECTS_PAT}", "Content-Type": "application/json"}
     query = """
     query($org: String!, $number: Int!, $cursor: String) {
       organization(login: $org) {
@@ -159,13 +183,8 @@ def fetch_pr_project_item_ids():
     """
     items, cursor = {}, None
     while True:
-        resp = requests.post(
-            "https://api.github.com/graphql",
-            headers=headers,
-            json={"query": query, "variables": {"org": ORG, "number": PROJECT_NUMBER, "cursor": cursor}},
-        )
-        resp.raise_for_status()
-        page = resp.json()["data"]["organization"]["projectV2"]["items"]
+        data = graphql(query, {"org": ORG, "number": PROJECT_NUMBER, "cursor": cursor})
+        page = data["organization"]["projectV2"]["items"]
         for node in page["nodes"]:
             content = node.get("content") or {}
             if content.get("__typename") != "PullRequest":
@@ -180,9 +199,6 @@ def fetch_pr_project_item_ids():
 
 
 def delete_project_item(item_id):
-    if not PROJECTS_PAT:
-        return
-    headers = {"Authorization": f"Bearer {PROJECTS_PAT}", "Content-Type": "application/json"}
     mutation = """
     mutation($project: ID!, $item: ID!) {
       deleteProjectV2Item(input: {projectId: $project, itemId: $item}) {
@@ -190,23 +206,16 @@ def delete_project_item(item_id):
       }
     }
     """
-    resp = requests.post(
-        "https://api.github.com/graphql",
-        headers=headers,
-        json={"query": mutation, "variables": {"project": PROJECT_ID, "item": item_id}},
-    )
-    resp.raise_for_status()
-    if "errors" in resp.json():
-        print(f"FAIL delete project item {item_id}: {resp.json()['errors']}")
+    graphql(mutation, {"project": PROJECT_ID, "item": item_id})
 
 
 def clear_pr_milestone(pr_number):
     proc = subprocess.run(
         ["gh", "api", "-X", "PATCH", f"repos/{bf.REPO}/issues/{pr_number}", "--input", "-"],
-        input='{"milestone": null}', capture_output=True, text=True,
+        input='{"milestone": null}', capture_output=True, text=True, timeout=REQUEST_TIMEOUT,
     )
     if proc.returncode != 0:
-        print(f"FAIL clear milestone on PR #{pr_number}: {proc.stderr}")
+        raise RuntimeError(f"PR #{pr_number} 마일스톤 제거 실패: {proc.stderr.strip()}")
 
 
 def clean_pr_issue_only_fields(pr, pr_project_item_ids):
@@ -258,8 +267,6 @@ def check_pr(pr, has_reviews):
 
 
 def add_finding(recipients, login, section, line):
-    """recipients: {키: {섹션: [줄]}} — 키가 None이면 웹훅 버킷. 이슈/PR findings를 한 곳에 모아서
-    실행 전체를 통틀어 수신자 1명당 메시지 1건(웹훅도 전체 통틀어 1건)만 나가게 한다."""
     key = login if (login and login in s.DISCORD_USER_MAP) else None
     recipients.setdefault(key, {}).setdefault(section, []).append(line)
 
@@ -284,6 +291,9 @@ def send_all(recipients):
 
 
 def main():
+    if not PROJECTS_PAT:
+        raise RuntimeError("PROJECTS_PAT이 필요합니다(Projects Priority/Start date/Category 조회·정리에 사용)")
+
     recipients = {}
 
     issues = fetch_issues()

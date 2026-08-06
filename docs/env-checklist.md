@@ -1,6 +1,6 @@
 # 환경변수 체크리스트
 
-> 그라운드룰 보안 섹션(`환경변수는 Notion 비공개 페이지 또는 Secret 저장소로 공유`)의 실제 목록. 값 자체는 이 저장소에 커밋하지 않고 Notion/Secret 저장소에만 둡니다. `application-{profile}.yml`은 이 이름들을 참조만 하고, 실제 값은 `.env`(로컬)/GitHub Actions Secrets·AWS Secrets Manager(배포)에서 주입합니다.
+> 그라운드룰 보안 섹션(`환경변수는 Notion 비공개 페이지 또는 Secret 저장소로 공유`)의 실제 목록. 값 자체는 이 저장소에 커밋하지 않고 Notion/Secret 저장소에만 둡니다. `application-{profile}.yml`은 이 이름들을 참조만 하고, 실제 값은 `.env`(로컬)/GitHub Actions Secrets·AWS Secrets Manager(배포)에서 주입합니다. 예외: `NOTION_DB_ID`는 인증 정보 없이는 접근 권한이 없는 단순 식별자라 비밀로 취급하지 않고 이 표에 값 그대로 기재합니다.
 
 | 변수명 | 용도 | 담당 | 비고 |
 | --- | --- | --- | --- |
