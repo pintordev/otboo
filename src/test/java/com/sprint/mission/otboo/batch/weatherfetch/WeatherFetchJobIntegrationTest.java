@@ -248,7 +248,7 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
 
       given(weatherRepository.findLatestRevisions(any(), any())).willReturn(List.of());
-      given(weatherRepository.save(any()))
+      given(weatherRepository.saveAll(any()))
           .willThrow(new TransientDataAccessResourceException("DB 커넥션 풀 고갈 시뮬레이션"));
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
 
@@ -256,10 +256,10 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then - 저장(DB) 실패는 skip 대상이 아니라 재시도만 하고 소진되면 즉시 FAILED.
-      // retryLimit(3)은 최초 시도 포함 4회 시도를 의미
+      // then - 저장(WeatherFetchWriter.saveAll)은 skip 대상이 아니라 재시도만 하고 소진되면 즉시
+      // FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
-      verify(weatherRepository, times(4)).save(any());
+      verify(weatherRepository, times(4)).saveAll(any());
     }
   }
 }
