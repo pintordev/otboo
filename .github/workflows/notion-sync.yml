@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   sync:
@@ -33,3 +34,14 @@ jobs:
           DISCORD_USER_MAP: ${{ secrets.DISCORD_USER_MAP }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python scripts/notion_progress_sync.py
+
+      - name: Run issue/PR required field check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          PROJECTS_PAT: ${{ secrets.PROJECTS_PAT }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_USER_MAP: ${{ secrets.DISCORD_USER_MAP }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python scripts/issue_field_check.py

@@ -14,14 +14,13 @@ PR에 마일스톤/Projects 값이 남아있는 경우도 정리 대상). Notion
 - 미설정 → **작성자**(이슈/PR 둘 다 author — assignee가 누락 항목일 수도 있어서 assignee한테 보내면
   보낼 대상이 없는 경우가 생김)에게 DM, 매핑 없으면 웹훅 — **한 실행에서 이슈+PR findings를 합쳐
   수신자 1명당 메시지 1건**(웹훅도 전체 통틀어 1건)만 발송
-- 이슈 타입 라벨 2개 이상 또는 도메인 라벨 2개 이상(과다설정) → 조용히 초과분 라벨 제거(REST DELETE)
-  — **PR 라벨은 과다설정이어도 그냥 둠**(허용)
+- **라벨 과다설정(타입/도메인 2개 이상)은 이슈든 PR이든 건드리지 않음**(허용) — 삭제 안 함
 - PR에 **Milestone**이나 **Projects 아이템**이 붙어있으면(이슈 전용 개념이라 PR엔 있으면 안 됨)
   완전히 제거 — Milestone은 REST PATCH로 null 처리, Projects는 아이템 자체를
   `deleteProjectV2Item`으로 삭제(필드 값만 지우는 게 아니라 보드에서 아예 뺌)
 
 필요 시크릿: notion_progress_sync.py와 동일(PROJECTS_PAT, DISCORD_BOT_TOKEN, DISCORD_USER_MAP,
-DISCORD_WEBHOOK_URL) + 라벨 삭제·마일스톤 제거를 위한 GH_TOKEN에 issues:write 권한 필요.
+DISCORD_WEBHOOK_URL) + PR 마일스톤 제거를 위한 GH_TOKEN에 issues:write 권한 필요.
 """
 
 import json
@@ -220,20 +219,6 @@ def clean_pr_issue_only_fields(pr, pr_project_item_ids):
         print(f"removed PR #{pr['number']} from project board")
 
 
-def remove_excess_labels(issue):
-    labels = issue["labels"]
-    for label_set, pool in ((bf.TYPE_LABELS, "타입"), (bf.DOMAIN_LABELS, "도메인")):
-        matching = [l["name"] for l in labels if l["name"].lower() in label_set]
-        if len(matching) <= 1:
-            continue
-        for extra in matching[1:]:
-            subprocess.run(
-                ["gh", "api", "-X", "DELETE", f"repos/{bf.REPO}/issues/{issue['number']}/labels/{extra}"],
-                capture_output=True, text=True,
-            )
-            print(f"removed excess {pool} label '{extra}' from #{issue['number']}")
-
-
 def check_issue(issue, project_fields):
     missing = []
     if not issue.get("assignees"):
@@ -305,7 +290,6 @@ def main():
     project_fields = fetch_issue_project_fields()
     issue_flagged = 0
     for issue in issues:
-        remove_excess_labels(issue)
         missing = check_issue(issue, project_fields)
         if not missing:
             continue
