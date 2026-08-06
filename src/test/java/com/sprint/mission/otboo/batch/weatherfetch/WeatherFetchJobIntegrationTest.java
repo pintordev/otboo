@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
@@ -30,6 +32,7 @@ import org.springframework.batch.test.JobOperatorTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -96,7 +99,9 @@ class WeatherFetchJobIntegrationTest {
 
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
 
-      // when - 서로 다른 JobParameters로 두 번 실행해 매 실행마다 새 행이 insert되는지(update 아님) 확인
+      // when - 서로 다른 JobParameters로 두 번 실행. 같은 baseTime 안에서는 Reader의 baseTime
+      // 필터(작업 순서 A 4번)가 이미 저장된 격자를 재조회 대상에서 제외하므로, 두 번째 실행은
+      // 신규 insert 없이 그대로 COMPLETED된다(중복 KMA 호출·중복 저장 방지가 의도된 동작)
       JobExecution firstExecution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
       JobExecution secondExecution = jobOperatorTestUtils.startJob(
@@ -105,7 +110,7 @@ class WeatherFetchJobIntegrationTest {
       // then
       assertThat(firstExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(secondExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
-      assertThat(weatherRepository.count()).isEqualTo(4);
+      assertThat(weatherRepository.count()).isEqualTo(2);
     }
 
     @Test
@@ -123,14 +128,16 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then
+      // then - retryLimit(3)은 최초 시도 포함 4회 시도를 의미. weatherFetchStep에서 4회 시도 후
+      // skip되고, weatherFetchRetryStep이 같은 격자를 다시 읽어 또 4회 시도 후 skip(총 8회)
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(weatherRepository.count()).isEqualTo(1);
+      verify(kmaForecastFetcher, times(8)).fetch(eq(new KmaGridPoint(61, 128)), any(), any());
     }
 
     @Test
-    @DisplayName("skipLimit을_초과하면_Job이_FAILED로_끝난다")
-    void skipLimit을_초과하면_Job이_FAILED로_끝난다() throws Exception {
+    @DisplayName("skipLimit을_초과하면_Job이_FAILED로_끝나고_weatherFetchRetryStep은_실행되지_않는다")
+    void skipLimit을_초과하면_Job이_FAILED로_끝나고_weatherFetchRetryStep은_실행되지_않는다() throws Exception {
       // given
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
@@ -145,6 +152,8 @@ class WeatherFetchJobIntegrationTest {
       // then
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
       assertThat(weatherRepository.count()).isEqualTo(0);
+      assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
+          .containsExactly("weatherFetchStep");
     }
 
     @Test
@@ -164,6 +173,93 @@ class WeatherFetchJobIntegrationTest {
 
       // then
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
+      assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
+          .containsExactly("weatherFetchStep");
+    }
+  }
+
+  @Nested
+  @DisplayName("재시도")
+  class Retry {
+
+    @Test
+    @DisplayName("retryLimit_이내에_복구되면_skip되지_않고_정상_저장된다")
+    void retryLimit_이내에_복구되면_skip되지_않고_정상_저장된다() throws Exception {
+      // given
+      weatherGridRepository.save(WeatherGrid.create(60, 127));
+      KmaGridPoint grid = new KmaGridPoint(60, 127);
+
+      given(kmaForecastFetcher.fetch(eq(grid), any(), any()))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willReturn(List.of(forecast()));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      assertThat(weatherRepository.count()).isEqualTo(1);
+      verify(kmaForecastFetcher, times(3)).fetch(eq(grid), any(), any());
+    }
+
+    @Test
+    @DisplayName("Step1에서_skip된_격자는_weatherFetchRetryStep이_다시_시도해_최종_저장된다")
+    void Step1에서_skip된_격자는_weatherFetchRetryStep이_다시_시도해_최종_저장된다() throws Exception {
+      // given
+      weatherGridRepository.save(WeatherGrid.create(60, 127));
+      KmaGridPoint grid = new KmaGridPoint(60, 127);
+
+      // retryLimit(3)은 최초 시도 포함 4회 시도를 의미 - Step1에서 4회 모두 실패해 skip되고,
+      // Step2(재시도)의 첫 시도(5번째 호출)에서 성공
+      given(kmaForecastFetcher.fetch(eq(grid), any(), any()))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willThrow(KmaApiException.of("03", "NO_DATA"))
+          .willReturn(List.of(forecast()));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
+          .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
+      assertThat(weatherRepository.count()).isEqualTo(1);
+      verify(kmaForecastFetcher, times(5)).fetch(eq(grid), any(), any());
+    }
+  }
+
+  @Nested
+  @DisplayName("DB 저장 실패")
+  class DbFailure {
+
+    @MockitoBean
+    private WeatherRepository weatherRepository;
+
+    @Test
+    @DisplayName("TransientDataAccessException이_retryLimit만큼_재시도되고도_회복되지_않으면_skip되지_않고_Job이_FAILED로_끝난다")
+    void TransientDataAccessException이_retryLimit만큼_재시도되고도_회복되지_않으면_skip되지_않고_Job이_FAILED로_끝난다()
+        throws Exception {
+      // given
+      weatherGridRepository.save(WeatherGrid.create(60, 127));
+
+      given(weatherRepository.findLatestRevisions(any(), any())).willReturn(List.of());
+      given(weatherRepository.save(any()))
+          .willThrow(new TransientDataAccessResourceException("DB 커넥션 풀 고갈 시뮬레이션"));
+      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then - 저장(DB) 실패는 skip 대상이 아니라 재시도만 하고 소진되면 즉시 FAILED.
+      // retryLimit(3)은 최초 시도 포함 4회 시도를 의미
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
+      verify(weatherRepository, times(4)).save(any());
     }
   }
 }
