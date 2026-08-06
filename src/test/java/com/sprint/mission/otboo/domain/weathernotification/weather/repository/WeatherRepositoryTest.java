@@ -13,6 +13,7 @@ import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -134,6 +135,69 @@ class WeatherRepositoryTest {
       assertThat(latestRevisions).extracting(Weather::getId)
           .containsExactlyInAnyOrder(day1NewRevision.getId(), day2Revision.getId())
           .doesNotContain(day1OldRevision.getId());
+    }
+  }
+
+  @Nested
+  @DisplayName("InsertIfAbsent")
+  class InsertIfAbsent {
+
+    @Test
+    @DisplayName("신규_조합이면_1행_insert되고_findByWeatherGridAndForecastAtAndForecastedAt으로_조회된다")
+    void 신규_조합이면_1행_insert되고_findByWeatherGridAndForecastAtAndForecastedAt으로_조회된다() {
+      // given
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Instant forecastAt = Instant.parse("2026-07-27T00:00:00Z");
+      UUID id = UUID.randomUUID();
+
+      // when
+      int inserted = insertIfAbsent(id, weatherGrid, forecastedAt, forecastAt, 28.0);
+      testEntityManager.clear();
+
+      // then
+      assertThat(inserted).isEqualTo(1);
+      Optional<Weather> found = weatherRepository
+          .findByWeatherGridAndForecastAtAndForecastedAt(weatherGrid, forecastAt, forecastedAt);
+      assertThat(found).isPresent();
+      assertThat(found.get().getId()).isEqualTo(id);
+      assertThat(found.get().getTemperatureCurrent()).isEqualTo(28.0);
+    }
+
+    @Test
+    @DisplayName("이미_존재하는_조합이면_0을_반환하고_기존_행이_그대로_유지된다")
+    void 이미_존재하는_조합이면_0을_반환하고_기존_행이_그대로_유지된다() {
+      // given
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Instant forecastAt = Instant.parse("2026-07-27T00:00:00Z");
+      UUID firstId = UUID.randomUUID();
+      insertIfAbsent(firstId, weatherGrid, forecastedAt, forecastAt, 28.0);
+      testEntityManager.clear();
+
+      // when - 같은 조합, 다른 id/값으로 재시도
+      int inserted = insertIfAbsent(UUID.randomUUID(), weatherGrid, forecastedAt, forecastAt,
+          99.0);
+      testEntityManager.clear();
+
+      // then
+      assertThat(inserted).isEqualTo(0);
+      Optional<Weather> found = weatherRepository
+          .findByWeatherGridAndForecastAtAndForecastedAt(weatherGrid, forecastAt, forecastedAt);
+      assertThat(found).isPresent();
+      assertThat(found.get().getId()).isEqualTo(firstId);
+      assertThat(found.get().getTemperatureCurrent()).isEqualTo(28.0);
+    }
+
+    private int insertIfAbsent(UUID id, WeatherGrid weatherGrid, Instant forecastedAt,
+        Instant forecastAt, double temperatureCurrent) {
+      return weatherRepository.insertIfAbsent(id, weatherGrid.getId(), forecastedAt, forecastAt,
+          SkyStatus.CLEAR.name(), PrecipitationType.NONE.name(), 0.0, 0.0, 65.0, 0.0,
+          temperatureCurrent, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK.name());
     }
   }
 }
