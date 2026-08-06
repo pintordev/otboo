@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
 import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
+import feign.FeignException;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -32,9 +33,14 @@ public class KmaForecastFetcher {
   }
 
   public List<DailyWeatherForecastDto> fetch(KmaGridPoint grid, BaseTime baseTime, Instant now) {
-    KmaWeatherResponse response = kmaWeatherClient.getVillageForecast(kmaServiceKey,
-        FORECAST_NUM_OF_ROWS, FORECAST_PAGE_NO, "JSON", baseTime.baseDate(), baseTime.baseTime(),
-        grid.nx(), grid.ny());
+    KmaWeatherResponse response;
+    try {
+      response = kmaWeatherClient.getVillageForecast(kmaServiceKey, FORECAST_NUM_OF_ROWS,
+          FORECAST_PAGE_NO, "JSON", baseTime.baseDate(), baseTime.baseTime(), grid.nx(),
+          grid.ny());
+    } catch (FeignException e) {
+      throw KmaApiException.wrap(e);
+    }
     validateResultCode(response);
     return kmaForecastParser.parseDailyForecast(response, now).stream()
         .sorted(Comparator.comparing(DailyWeatherForecastDto::date))
