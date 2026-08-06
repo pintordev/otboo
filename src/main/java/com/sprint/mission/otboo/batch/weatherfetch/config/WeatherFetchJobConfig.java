@@ -50,12 +50,22 @@ public class WeatherFetchJobConfig {
     return new JobBuilder("weatherFetchJob", jobRepository)
         .listener(weatherFetchJobListener)
         .start(weatherFetchStep())
+        .next(weatherFetchRetryStep())
         .build();
   }
 
   @Bean
   public Step weatherFetchStep() {
-    return new StepBuilder("weatherFetchStep", jobRepository)
+    return buildStep("weatherFetchStep");
+  }
+
+  @Bean
+  public Step weatherFetchRetryStep() {
+    return buildStep("weatherFetchRetryStep");
+  }
+
+  private Step buildStep(String stepName) {
+    return new StepBuilder(stepName, jobRepository)
         .<WeatherGrid, List<Weather>>chunk(chunkSize)
         .transactionManager(transactionManager)
         .reader(weatherFetchReader)
