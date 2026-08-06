@@ -19,6 +19,7 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
@@ -41,6 +42,9 @@ public class WeatherFetchJobConfig {
   @Value("${batch.weather-fetch.skip-limit}")
   private int skipLimit;
 
+  @Value("${batch.weather-fetch.retry-limit}")
+  private int retryLimit;
+
   @Bean(name = "weatherFetchJob")
   public Job weatherFetchJob() {
     return new JobBuilder("weatherFetchJob", jobRepository)
@@ -58,6 +62,9 @@ public class WeatherFetchJobConfig {
         .processor(weatherFetchProcessor)
         .writer(weatherFetchWriter)
         .faultTolerant()
+        .retryLimit(retryLimit)
+        .retry(KmaApiException.class)
+        .retry(TransientDataAccessException.class)
         .skip(KmaApiException.class)
         .skipLimit(skipLimit)
         .skipListener(skipLoggingListener)
