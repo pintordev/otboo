@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-@Transactional(readOnly = true)
+// 클래스 레벨 @Transactional(readOnly = true)를 의도적으로 두지 않는다 - WeatherRefresher와
+// 동일한 이유로, 배치(WeatherFetchWriter) 청크 트랜잭션 안에서도 build()가 호출된다. save()는
+// 이미 REQUIRES_NEW로 API 전용 쓰기 경계를 명시하고, build()는 순수 변환이라 트랜잭션이 필요 없다.
 @RequiredArgsConstructor
 @Component
 public class WeatherWriter {

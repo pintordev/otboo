@@ -17,10 +17,14 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
+// 클래스 레벨 @Transactional(readOnly = true)를 의도적으로 두지 않는다 - API 경로뿐 아니라
+// 배치(WeatherFetchProcessor) 청크 트랜잭션 안에서도 호출되는데, 그 안에서 readOnly로
+// 참여하면 배치가 관리하는 flush/커밋 타이밍과 충돌해 정상 처리된 항목이 유실된다(실측 확인).
+// 쓰기가 필요한 지점(WeatherWriter.save())은 이미 자체 REQUIRES_NEW를 갖고 있고, 읽기 쿼리는
+// Spring Data JPA repository 메서드 자체가 개별적으로 트랜잭션을 처리하므로 감싸는 애너테이션이
+// 없어도 정상 동작한다.
 @Slf4j
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Component
 public class WeatherRefresher {
