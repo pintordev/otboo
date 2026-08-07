@@ -3,7 +3,11 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.time.Instant;
@@ -19,7 +23,6 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -104,12 +107,12 @@ class WeatherGridRepositoryTest {
       testEntityManager.clear();
 
       List<WeatherGrid> firstPage = weatherGridRepository.findPageByCursor(
-          Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 1));
+          Instant.EPOCH, new UUID(0L, 0L), 1);
 
       assertThat(firstPage).extracting(WeatherGrid::getId).containsExactly(grid1.getId());
 
       List<WeatherGrid> secondPage = weatherGridRepository.findPageByCursor(
-          firstPage.get(0).getCreatedAt(), firstPage.get(0).getId(), PageRequest.of(0, 1));
+          firstPage.get(0).getCreatedAt(), firstPage.get(0).getId(), 1);
 
       assertThat(secondPage).extracting(WeatherGrid::getId).containsExactly(grid2.getId());
     }
@@ -122,9 +125,52 @@ class WeatherGridRepositoryTest {
       testEntityManager.clear();
 
       List<WeatherGrid> page = weatherGridRepository.findPageByCursor(
-          grid.getCreatedAt(), grid.getId(), PageRequest.of(0, 10));
+          grid.getCreatedAt(), grid.getId(), 10);
 
       assertThat(page).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("FindPageByCursorExcludingForecasted")
+  class FindPageByCursorExcludingForecasted {
+
+    @Test
+    @DisplayName("이번_forecastedAt에_이미_저장된_격자는_제외하고_반환한다")
+    void 이번_forecastedAt에_이미_저장된_격자는_제외하고_반환한다() {
+      WeatherGrid forecastedGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid pendingGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      testEntityManager.flush();
+
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      testEntityManager.persist(Weather.create(forecastedGrid, forecastedAt,
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherGrid> page = weatherGridRepository.findPageByCursorExcludingForecasted(
+          Instant.EPOCH, new UUID(0L, 0L), forecastedAt, 10);
+
+      assertThat(page).extracting(WeatherGrid::getId).containsExactly(pendingGrid.getId());
+    }
+
+    @Test
+    @DisplayName("다른_forecastedAt이면_이미_저장된_격자도_다시_반환한다")
+    void 다른_forecastedAt이면_이미_저장된_격자도_다시_반환한다() {
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      testEntityManager.persist(Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherGrid> page = weatherGridRepository.findPageByCursorExcludingForecasted(
+          Instant.EPOCH, new UUID(0L, 0L), Instant.parse("2026-07-27T11:00:00Z"), 10);
+
+      assertThat(page).extracting(WeatherGrid::getId).containsExactly(grid.getId());
     }
   }
 }

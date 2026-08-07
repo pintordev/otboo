@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.batch.weatherfetch.reader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -56,7 +57,7 @@ class WeatherFetchReaderTest {
       // given
       WeatherGrid grid1 = WeatherGrid.create(60, 127);
       WeatherGrid grid2 = WeatherGrid.create(61, 127);
-      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), anyInt()))
           .willReturn(List.of(grid1, grid2), List.of());
 
       // when
@@ -88,7 +89,7 @@ class WeatherFetchReaderTest {
 
       WeatherGrid grid3 = WeatherGrid.create(62, 127);
 
-      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), anyInt()))
           .willReturn(List.of(grid1, grid2), List.of(grid3), List.of());
 
       // when
@@ -101,7 +102,7 @@ class WeatherFetchReaderTest {
       ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
       verify(weatherGridRepository, times(2))
           .findPageByCursorExcludingForecasted(createdAtCaptor.capture(), idCaptor.capture(),
-              any(), any());
+              any(), anyInt());
 
       List<Instant> capturedCreatedAt = createdAtCaptor.getAllValues();
       List<UUID> capturedIds = idCaptor.getAllValues();
@@ -118,7 +119,7 @@ class WeatherFetchReaderTest {
     void clock으로_계산한_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다() {
       // given
       BaseTime expectedBaseTime = KmaBaseTimeCalculator.calculate(NOW);
-      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), any()))
+      given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), anyInt()))
           .willReturn(List.of());
 
       // when
@@ -126,7 +127,7 @@ class WeatherFetchReaderTest {
 
       // then
       verify(weatherGridRepository).findPageByCursorExcludingForecasted(any(), any(),
-          eq(expectedBaseTime.toInstant()), any());
+          eq(expectedBaseTime.toInstant()), anyInt());
     }
   }
 }
