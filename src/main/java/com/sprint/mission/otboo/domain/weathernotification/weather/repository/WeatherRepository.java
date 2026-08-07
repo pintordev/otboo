@@ -25,7 +25,7 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID> {
   Optional<Weather> findByWeatherGridAndForecastAtAndForecastedAt(WeatherGrid weatherGrid,
       Instant forecastAt, Instant forecastedAt);
 
-  @Modifying
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(value = """
       INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
           precipitation_type, precipitation_amount, precipitation_probability,
