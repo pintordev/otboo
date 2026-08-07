@@ -165,28 +165,37 @@ class WeatherRepositoryTest {
     }
 
     @Test
-    @DisplayName("커서_이후_행만_forecastAt_id_순으로_다음_페이지에_반환한다")
-    void 커서_이후_행만_forecastAt_id_순으로_다음_페이지에_반환한다() {
+    @DisplayName("같은_forecastAt이면_id를_tie_breaker로_다음_페이지를_반환한다")
+    void 같은_forecastAt이면_id를_tie_breaker로_다음_페이지를_반환한다() {
       WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
       testEntityManager.flush();
 
       Instant cutoff = Instant.parse("2026-08-01T00:00:00Z");
-      Weather first = weatherRepository.save(weatherOf(weatherGrid,
-          Instant.parse("2026-07-15T08:00:00Z"), Instant.parse("2026-07-15T00:00:00Z"), 20.0));
-      Weather second = weatherRepository.save(weatherOf(weatherGrid,
-          Instant.parse("2026-07-16T08:00:00Z"), Instant.parse("2026-07-16T00:00:00Z"), 21.0));
+      Instant sameForecastAt = Instant.parse("2026-07-15T00:00:00Z");
+      weatherRepository.save(
+          weatherOf(weatherGrid, Instant.parse("2026-07-15T02:00:00Z"), sameForecastAt, 20.0));
+      weatherRepository.save(
+          weatherOf(weatherGrid, Instant.parse("2026-07-15T05:00:00Z"), sameForecastAt, 21.0));
       testEntityManager.flush();
       testEntityManager.clear();
+
+      List<WeatherRetentionItem> both = weatherRepository.findForRetention(
+          cutoff, Instant.EPOCH, new UUID(0L, 0L), 2);
+      assertThat(both).hasSize(2);
+      UUID expectedFirstId = both.get(0).id();
+      UUID expectedSecondId = both.get(1).id();
 
       List<WeatherRetentionItem> firstPage = weatherRepository.findForRetention(
           cutoff, Instant.EPOCH, new UUID(0L, 0L), 1);
 
-      assertThat(firstPage).extracting(WeatherRetentionItem::id).containsExactly(first.getId());
+      assertThat(firstPage).extracting(WeatherRetentionItem::id)
+          .containsExactly(expectedFirstId);
 
       List<WeatherRetentionItem> secondPage = weatherRepository.findForRetention(
-          cutoff, firstPage.get(0).forecastAt(), first.getId(), 1);
+          cutoff, firstPage.get(0).forecastAt(), firstPage.get(0).id(), 1);
 
-      assertThat(secondPage).extracting(WeatherRetentionItem::id).containsExactly(second.getId());
+      assertThat(secondPage).extracting(WeatherRetentionItem::id)
+          .containsExactly(expectedSecondId);
     }
 
     @Test
