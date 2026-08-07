@@ -20,7 +20,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.repository.We
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WeatherWriterTest {
 
+  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
       .build();
@@ -120,16 +121,17 @@ class WeatherWriterTest {
           .set("skyStatus", SkyStatus.CLEAR)
           .set("precipitationType", PrecipitationType.NONE)
           .sample();
-      Weather persisted = Weather.create(weatherGrid, forecastedAt,
-          todayForecast.date().atStartOfDay().toInstant(ZoneOffset.UTC),
+      Instant expectedForecastAt = todayForecast.date().atStartOfDay(KST).toInstant();
+      Weather persisted = Weather.create(weatherGrid, forecastedAt, expectedForecastAt,
           todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
           0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
       given(weatherRepository.insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
-          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString()))
+          eq(expectedForecastAt), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyString()))
           .willReturn(1);
       given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
-          any(), eq(forecastedAt))).willReturn(Optional.of(persisted));
+          eq(expectedForecastAt), eq(forecastedAt))).willReturn(Optional.of(persisted));
 
       // when
       List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
@@ -138,8 +140,9 @@ class WeatherWriterTest {
       // then
       assertThat(result).containsExactly(persisted);
       verify(weatherRepository).insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
-          any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+          eq(expectedForecastAt), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyString());
     }
 
     @Test
@@ -154,16 +157,16 @@ class WeatherWriterTest {
           .set("skyStatus", SkyStatus.CLEAR)
           .set("precipitationType", PrecipitationType.NONE)
           .sample();
-      Weather existing = Weather.create(weatherGrid, forecastedAt,
-          todayForecast.date().atStartOfDay().toInstant(ZoneOffset.UTC),
+      Instant expectedForecastAt = todayForecast.date().atStartOfDay(KST).toInstant();
+      Weather existing = Weather.create(weatherGrid, forecastedAt, expectedForecastAt,
           todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
           0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
-      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyString()))
+      given(weatherRepository.insertIfAbsent(any(), any(), any(), eq(expectedForecastAt),
+          anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString()))
           .willReturn(0);
       given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
-          any(), eq(forecastedAt))).willReturn(Optional.of(existing));
+          eq(expectedForecastAt), eq(forecastedAt))).willReturn(Optional.of(existing));
 
       // when & then
       assertThatCode(() -> weatherWriter.save(weatherGrid, forecastedAt, List.of(todayForecast),
