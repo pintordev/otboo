@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.querydsl.WeatherCustomRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +12,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface WeatherRepository extends JpaRepository<Weather, UUID> {
+public interface WeatherRepository extends JpaRepository<Weather, UUID>, WeatherCustomRepository {
 
   @Query(value = """
       SELECT DISTINCT ON (forecast_at) *
