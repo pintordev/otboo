@@ -23,6 +23,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -131,11 +132,14 @@ class WeatherGridRepositoryTest {
     }
 
     @Test
-    @DisplayName("limit이_0_이하이면_IllegalArgumentException을_던진다")
-    void limit이_0_이하이면_IllegalArgumentException을_던진다() {
+    @DisplayName("limit이_0_이하이면_예외가_발생한다")
+    void limit이_0_이하이면_예외가_발생한다() {
+      // Spring Data 리포지토리 프록시가 IllegalArgumentException을
+      // InvalidDataAccessApiUsageException으로 변환해서 던진다
       assertThatThrownBy(
           () -> weatherGridRepository.findPageByCursor(Instant.EPOCH, new UUID(0L, 0L), 0))
-          .isInstanceOf(IllegalArgumentException.class);
+          .isInstanceOf(InvalidDataAccessApiUsageException.class)
+          .hasCauseInstanceOf(IllegalArgumentException.class);
     }
   }
 
@@ -182,11 +186,12 @@ class WeatherGridRepositoryTest {
     }
 
     @Test
-    @DisplayName("limit이_0_이하이면_IllegalArgumentException을_던진다")
-    void limit이_0_이하이면_IllegalArgumentException을_던진다() {
+    @DisplayName("limit이_0_이하이면_예외가_발생한다")
+    void limit이_0_이하이면_예외가_발생한다() {
       assertThatThrownBy(() -> weatherGridRepository.findPageByCursorExcludingForecasted(
           Instant.EPOCH, new UUID(0L, 0L), Instant.EPOCH, -1))
-          .isInstanceOf(IllegalArgumentException.class);
+          .isInstanceOf(InvalidDataAccessApiUsageException.class)
+          .hasCauseInstanceOf(IllegalArgumentException.class);
     }
   }
 }

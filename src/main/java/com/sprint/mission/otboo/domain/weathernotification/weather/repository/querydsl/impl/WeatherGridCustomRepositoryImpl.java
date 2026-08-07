@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class WeatherGridCustomRepositoryImpl implements WeatherGridCustomRepository {
 
+  // limit이 지나치게 크게 들어와도 한 번의 조회로 대량 데이터를 끌어오지 않도록 방어적으로 상한을 둔다
+  private static final int MAX_LIMIT = 1000;
+
   private final JPAQueryFactory queryFactory;
 
   @Override
@@ -24,7 +27,7 @@ public class WeatherGridCustomRepositoryImpl implements WeatherGridCustomReposit
         .selectFrom(weatherGrid)
         .where(cursorCondition(lastCreatedAt, lastId))
         .orderBy(weatherGrid.createdAt.asc(), weatherGrid.id.asc())
-        .limit(limit)
+        .limit(clampLimit(limit))
         .fetch();
   }
 
@@ -35,8 +38,15 @@ public class WeatherGridCustomRepositoryImpl implements WeatherGridCustomReposit
         .selectFrom(weatherGrid)
         .where(cursorCondition(lastCreatedAt, lastId), notForecasted(forecastedAt))
         .orderBy(weatherGrid.createdAt.asc(), weatherGrid.id.asc())
-        .limit(limit)
+        .limit(clampLimit(limit))
         .fetch();
+  }
+
+  private int clampLimit(int limit) {
+    if (limit <= 0) {
+      throw new IllegalArgumentException("limit은 1 이상이어야 합니다: " + limit);
+    }
+    return Math.min(limit, MAX_LIMIT);
   }
 
   private BooleanExpression cursorCondition(Instant lastCreatedAt, UUID lastId) {
