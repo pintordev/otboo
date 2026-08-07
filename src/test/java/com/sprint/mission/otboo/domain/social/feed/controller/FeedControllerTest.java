@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -23,6 +24,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedCreateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
+import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.service.CommentService;
@@ -441,6 +443,146 @@ class FeedControllerTest {
       mockMvc.perform(get("/api/feeds/{feedId}/comments", UUID.randomUUID())
               .param("limit", "0"))
           .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 수정 - PATCH /api/feeds/{feedId}")
+  class UpdateFeed {
+
+    @Test
+    @DisplayName("정상 요청이면 200과 FeedDto를 반환한다")
+    void 정상_요청이면_200과_FeedDto를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      FeedDto response = new FeedDto(
+          feedId, Instant.now(), Instant.now(),
+          new UserSummary(currentUserId, "경신", null), null, List.of(),
+          "수정된 내용", 0L, 0, false);
+      when(feedService.update(eq(feedId), any(FeedUpdateRequest.class), eq(currentUserId)))
+          .thenReturn(response);
+
+      // when & then
+      mockMvc.perform(patch("/api/feeds/{feedId}", feedId)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.content").value("수정된 내용"))
+          .andExpect(jsonPath("$.author.name").value("경신"));
+
+      verify(feedService).update(eq(feedId), any(FeedUpdateRequest.class), eq(currentUserId));
+    }
+
+    @Test
+    @DisplayName("content가 비어 있으면 400을 반환한다")
+    void content가_비어있으면_400을_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("");
+
+      // when & then
+      mockMvc.perform(patch("/api/feeds/{feedId}", feedId)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 403을 반환한다")
+    void 작성자가_아니면_403을_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+      willThrow(FeedForbiddenException.authorMismatch(currentUserId, UUID.randomUUID()))
+          .given(feedService)
+          .update(eq(feedId), any(FeedUpdateRequest.class), eq(currentUserId));
+
+      // when & then
+      mockMvc.perform(patch("/api/feeds/{feedId}", feedId)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 404를 반환한다")
+    void 피드가_존재하지_않으면_404를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+      willThrow(FeedNotFoundException.withId(feedId))
+          .given(feedService)
+          .update(eq(feedId), any(FeedUpdateRequest.class), eq(currentUserId));
+
+      // when & then
+      mockMvc.perform(patch("/api/feeds/{feedId}", feedId)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isNotFound());
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 삭제 - DELETE /api/feeds/{feedId}")
+  class DeleteFeed {
+
+    @Test
+    @DisplayName("정상 요청이면 204를 반환하고 인증 사용자로 삭제를 위임한다")
+    void 정상_요청이면_204를_반환하고_인증_사용자로_삭제를_위임한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+
+      // when & then
+      mockMvc.perform(delete("/api/feeds/{feedId}", feedId))
+          .andExpect(status().isNoContent());
+
+      verify(feedService).delete(feedId, currentUserId);
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 403을 반환한다")
+    void 작성자가_아니면_403을_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      willThrow(FeedForbiddenException.authorMismatch(currentUserId, UUID.randomUUID()))
+          .given(feedService).delete(feedId, currentUserId);
+
+      // when & then
+      mockMvc.perform(delete("/api/feeds/{feedId}", feedId))
+          .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 404를 반환한다")
+    void 피드가_존재하지_않으면_404를_반환한다() throws Exception {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID feedId = UUID.randomUUID();
+      SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
+      willThrow(FeedNotFoundException.withId(feedId))
+          .given(feedService).delete(feedId, currentUserId);
+
+      // when & then
+      mockMvc.perform(delete("/api/feeds/{feedId}", feedId))
+          .andExpect(status().isNotFound());
     }
   }
 }

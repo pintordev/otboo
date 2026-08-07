@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedCommentParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedCreateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
+import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.service.CommentService;
 import com.sprint.mission.otboo.domain.social.feed.service.FeedService;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
@@ -21,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -91,5 +93,24 @@ public class FeedController implements FeedApi {
       @Valid @ModelAttribute FeedCommentParams params) {
     CursorPageResponse<CommentDto> response = commentService.getComments(feedId, params);
     return ResponseEntity.ok(response);
+  }
+
+  @PatchMapping("/{feedId}")
+  @Override
+  public ResponseEntity<FeedDto> updateFeed(
+      @PathVariable UUID feedId,
+      @Valid @RequestBody FeedUpdateRequest request,
+      @CurrentUser UserPrincipal principal) {
+    FeedDto response = feedService.update(feedId, request, principal.userId());
+    return ResponseEntity.ok(response);
+  }
+
+  @DeleteMapping("/{feedId}")
+  @Override
+  public ResponseEntity<Void> deleteFeed(
+      @PathVariable UUID feedId,
+      @CurrentUser UserPrincipal principal) {
+    feedService.delete(feedId, principal.userId());
+    return ResponseEntity.noContent().build();
   }
 }

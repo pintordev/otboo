@@ -365,6 +365,31 @@ class FeedCustomRepositoryTest {
       assertThat(List.of(firstId, secondId))
           .containsExactlyInAnyOrder(a.getId(), b.getId());
     }
+
+    @Test
+    @DisplayName("소프트 삭제된 피드는 목록에서 제외한다")
+    void 소프트_삭제된_피드는_목록에서_제외한다() {
+      // given
+      Feed active = createAndSaveFeed("살아있는 피드");
+      Feed deleted = createAndSaveFeed("삭제된 피드");
+      deleted.delete();
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      FeedListParams params = new FeedListParams(
+          null, null, 10,
+          FeedSortBy.CREATED_AT, SortDirection.DESCENDING,
+          null, null);
+
+      // when
+      CursorPageResponse<Feed> result = feedRepository.findFeeds(params);
+
+      // then
+      assertThat(result.data())
+          .extracting(Feed::getContent)
+          .containsExactly(active.getContent());
+      assertThat(result.totalCount()).isEqualTo(1L);
+    }
   }
 
   @Nested

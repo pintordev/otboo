@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -21,6 +22,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedCreateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
+import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
@@ -40,6 +42,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -694,6 +697,196 @@ class FeedServiceTest {
       // when & then
       assertThatThrownBy(() -> feedService.unlike(feedId, userId))
           .isInstanceOf(FeedNotFoundException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 수정")
+  class UpdateFeed {
+
+    @Test
+    @DisplayName("내용을 수정하고 FeedDto를 반환한다")
+    void 내용을_수정하고_FeedDto를_반환한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID authorId = UUID.randomUUID();
+      Feed feed = Feed.create(authorId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      FeedDto expected = new FeedDto(
+          feedId, Instant.now(), Instant.now(), null, null, List.of(),
+          "수정된 내용", 0L, 0, false);
+      given(feedMapper.toDto(eq(feed), any(), anyBoolean())).willReturn(expected);
+
+      // when
+      FeedDto result = feedService.update(feedId, request, authorId);
+
+      // then
+      assertThat(feed.getContent()).isEqualTo("수정된 내용");
+      assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("반환하는 FeedDto에 작성자 정보를 채운다")
+    void 반환하는_FeedDto에_작성자_정보를_채운다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID authorId = UUID.randomUUID();
+      Feed feed = Feed.create(authorId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      UserSummary author = new UserSummary(authorId, "경신", null);
+      given(userSummaryQueryRepository.findByUserId(authorId)).willReturn(author);
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      FeedDto expected = new FeedDto(
+          feedId, Instant.now(), Instant.now(), author, null, List.of(),
+          "수정된 내용", 0L, 0, false);
+      given(feedMapper.toDto(eq(feed), eq(author), anyBoolean())).willReturn(expected);
+
+      // when
+      FeedDto result = feedService.update(feedId, request, authorId);
+
+      // then
+      assertThat(result).isEqualTo(expected);
+      assertThat(result.author()).isEqualTo(author);
+    }
+
+    @Test
+    @DisplayName("반환하는 FeedDto에 현재 사용자의 좋아요 여부를 채운다")
+    void 반환하는_FeedDto에_현재_사용자의_좋아요_여부를_채운다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      UserSummary author = new UserSummary(currentUserId, "경신", null);
+      given(userSummaryQueryRepository.findByUserId(currentUserId)).willReturn(author);
+      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, currentUserId)).willReturn(true);
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      FeedDto expected = new FeedDto(
+          feedId, Instant.now(), Instant.now(), author, null, List.of(),
+          "수정된 내용", 0L, 0, true);
+      given(feedMapper.toDto(feed, author, true)).willReturn(expected);
+
+      // when
+      FeedDto result = feedService.update(feedId, request, currentUserId);
+
+      // then
+      assertThat(result).isEqualTo(expected);
+      assertThat(result.likedByMe()).isTrue();
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 FeedForbiddenException을 던진다")
+    void 작성자가_아니면_FeedForbiddenException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID authorId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(authorId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      // when & then
+      assertThatThrownBy(() -> feedService.update(feedId, request, currentUserId))
+          .isInstanceOf(FeedForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("이미 삭제된 피드면 FeedNotFoundException을 던진다")
+    void 이미_삭제된_피드면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      feed.delete();
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      // when & then
+      assertThatThrownBy(() -> feedService.update(feedId, request, currentUserId))
+          .isInstanceOf(FeedNotFoundException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("피드 삭제")
+  class DeleteFeed {
+
+    @Test
+    @DisplayName("피드를 소프트 삭제한다")
+    void 피드를_소프트_삭제한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when
+      feedService.delete(feedId, currentUserId);
+
+      // then
+      assertThat(feed.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 삭제된 피드면 FeedNotFoundException을 던진다")
+    void 이미_삭제된_피드면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of());
+      feed.delete();
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when & then
+      assertThatThrownBy(() -> feedService.delete(feedId, currentUserId))
+          .isInstanceOf(FeedNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 FeedNotFoundException을 던진다")
+    void 피드가_존재하지_않으면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      given(feedRepository.findById(feedId)).willReturn(Optional.empty());
+
+      // when & then
+      assertThatThrownBy(() -> feedService.delete(feedId, currentUserId))
+          .isInstanceOf(FeedNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 FeedForbiddenException을 던진다")
+    void 작성자가_아니면_FeedForbiddenException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID authorId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(authorId, UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of());
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when & then
+      assertThatThrownBy(() -> feedService.delete(feedId, currentUserId))
+          .isInstanceOf(FeedForbiddenException.class);
     }
   }
 }

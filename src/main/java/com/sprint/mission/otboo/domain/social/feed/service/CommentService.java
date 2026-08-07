@@ -45,7 +45,7 @@ public class CommentService {
     Comment comment = commentRepository.save(
         Comment.create(feedId, request.authorId(), request.content()));
     increaseCommentCount(feedId);
-    
+
     log.info("피드 댓글 등록 완료: feedId={}, commentId={}", feedId, comment.getId());
 
     UserSummary author = userSummaryQueryRepository.findByUserId(comment.getAuthorId());
@@ -55,6 +55,7 @@ public class CommentService {
   }
 
   public CursorPageResponse<CommentDto> getComments(UUID feedId, FeedCommentParams params) {
+    validateFeedExists(feedId);
     return toDtoPage(commentRepository.findComments(feedId, params));
   }
 

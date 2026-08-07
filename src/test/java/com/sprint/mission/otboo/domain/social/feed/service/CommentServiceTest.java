@@ -268,6 +268,7 @@ class CommentServiceTest {
 
       CommentDto dto = new CommentDto(comment.getId(), null, feedId, author, "댓글 내용");
       given(commentMapper.toDto(comment, author)).willReturn(dto);
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
 
       // when
       CursorPageResponse<CommentDto> result = commentService.getComments(feedId, params);
@@ -288,6 +289,7 @@ class CommentServiceTest {
       CursorPageResponse<Comment> emptyPage = new CursorPageResponse<>(
           List.of(), null, null, false, 0L, "createdAt", SortDirection.DESCENDING);
       given(commentRepository.findComments(feedId, params)).willReturn(emptyPage);
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
 
       // when
       CursorPageResponse<CommentDto> result = commentService.getComments(feedId, params);
@@ -296,6 +298,19 @@ class CommentServiceTest {
       assertThat(result.data()).isEmpty();
       assertThat(result.totalCount()).isZero();
       verify(userSummaryQueryRepository, never()).findByUserIds(any());
+    }
+
+    @Test
+    @DisplayName("피드가 존재하지 않으면 FeedNotFoundException을 던진다")
+    void 피드가_존재하지_않으면_FeedNotFoundException을_던진다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      FeedCommentParams params = new FeedCommentParams(null, null, 10);
+      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(false);
+
+      // when & then
+      assertThatThrownBy(() -> commentService.getComments(feedId, params))
+          .isInstanceOf(FeedNotFoundException.class);
     }
   }
 }

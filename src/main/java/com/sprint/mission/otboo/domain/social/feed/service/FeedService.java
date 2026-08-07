@@ -5,6 +5,7 @@ import com.sprint.mission.otboo.domain.social.common.repository.querydsl.UserSum
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedCreateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
+import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
@@ -141,6 +142,39 @@ public class FeedService {
     }
   }
 
+  @Transactional
+  public FeedDto update(UUID feedId, FeedUpdateRequest request, UUID currentUserId) {
+    Feed feed = findActiveFeedOwnedBy(feedId, currentUserId);
+
+    feed.updateContent(request.content());
+    log.info("피드 수정 완료: feedId={}", feedId);
+
+    UserSummary author = userSummaryQueryRepository.findByUserId(feed.getAuthorId());
+    boolean likedByMe = feedLikeRepository.existsByFeedIdAndUserId(feedId, currentUserId);
+    return feedMapper.toDto(feed, author, likedByMe);
+  }
+
+  @Transactional
+  public void delete(UUID feedId, UUID currentUserId) {
+    Feed feed = findActiveFeedOwnedBy(feedId, currentUserId);
+
+    feed.delete();
+    log.info("피드 삭제 완료: feedId={}", feedId);
+  }
+
+  private Feed findActiveFeedOwnedBy(UUID feedId, UUID currentUserId) {
+    Feed feed = feedRepository.findById(feedId)
+        .filter(f -> !f.isDeleted())
+        .orElseThrow(() -> FeedNotFoundException.withId(feedId));
+    validateAuthor(feed, currentUserId);
+    return feed;
+  }
+
+  private void validateAuthor(Feed feed, UUID currentUserId) {
+    if (!feed.getAuthorId().equals(currentUserId)) {
+      throw FeedForbiddenException.authorMismatch(currentUserId, feed.getAuthorId());
+    }
+  }
 
   private boolean isUniqueViolation(DataIntegrityViolationException e) {
     return e.getCause() instanceof ConstraintViolationException cve
