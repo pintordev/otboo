@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.batch.weatherfetch.reader;
 
+import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherFetchProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
@@ -13,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.infrastructure.item.ItemReader;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -25,9 +25,7 @@ public class WeatherFetchReader implements ItemReader<WeatherGrid> {
 
   private final WeatherGridRepository weatherGridRepository;
   private final Clock clock;
-
-  @Value("${batch.weather-fetch.chunk-size}")
-  private int chunkSize;
+  private final WeatherFetchProperties weatherFetchProperties;
 
   private BaseTime baseTime;
   private Instant lastCreatedAt;
@@ -45,12 +43,13 @@ public class WeatherFetchReader implements ItemReader<WeatherGrid> {
     if (lastCreatedAt == null) {
       lastCreatedAt = Instant.EPOCH;
       lastId = new UUID(0L, 0L);
-      log.info("WeatherFetchReader 시작: chunkSize={}", chunkSize);
+      log.info("WeatherFetchReader 시작: chunkSize={}", weatherFetchProperties.chunkSize());
     }
 
     while (iterator == null || !iterator.hasNext()) {
       List<WeatherGrid> items = weatherGridRepository.findPageByCursorExcludingForecasted(
-          lastCreatedAt, lastId, baseTime.toInstant(), PageRequest.of(0, chunkSize));
+          lastCreatedAt, lastId, baseTime.toInstant(),
+          PageRequest.of(0, weatherFetchProperties.chunkSize()));
 
       if (items.isEmpty()) {
         return null;

@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherFetchProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -31,7 +31,6 @@ class WeatherFetchReaderTest {
 
   private static final Instant NOW = Instant.parse("2026-07-27T09:00:00Z");
 
-  @InjectMocks
   private WeatherFetchReader reader;
 
   @Mock
@@ -43,7 +42,8 @@ class WeatherFetchReaderTest {
   @BeforeEach
   void setUp() {
     given(clock.instant()).willReturn(NOW);
-    ReflectionTestUtils.setField(reader, "chunkSize", 2);
+    reader = new WeatherFetchReader(weatherGridRepository, clock,
+        new WeatherFetchProperties(2, 10, 3));
   }
 
   @Nested
