@@ -13,4 +13,10 @@ public record NotificationRequestedEvent(
   public NotificationRequestedEvent {
     receiverIds = Set.copyOf(receiverIds);
   }
+
+  @Override
+  public String toString() {
+    return "NotificationRequestedEvent[receiverCount=%d, level=%s]"
+        .formatted(receiverIds.size(), level);
+  }
 }

@@ -27,6 +27,18 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
+  @Bean(name = "notificationExecutor")
+  public Executor notificationExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(2);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(50);
+    executor.setThreadNamePrefix("notification-async-");
+    executor.initialize();
+    return executor;
+  }
+
   @Override
   public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
     return (throwable, method, params) -> {
