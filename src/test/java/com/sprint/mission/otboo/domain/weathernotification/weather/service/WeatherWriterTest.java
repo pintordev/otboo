@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -139,6 +140,37 @@ class WeatherWriterTest {
       verify(weatherRepository).insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
           any(), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
           anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+    }
+
+    @Test
+    @DisplayName("이미_존재하는_조합이면_insertIfAbsent가_0을_반환해도_예외_없이_기존_행을_반환한다")
+    void 이미_존재하는_조합이면_insertIfAbsent가_0을_반환해도_예외_없이_기존_행을_반환한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
+              DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .sample();
+      Weather existing = Weather.create(weatherGrid, forecastedAt,
+          todayForecast.date().atStartOfDay().toInstant(ZoneOffset.UTC),
+          todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
+      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyString()))
+          .willReturn(0);
+      given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
+          any(), eq(forecastedAt))).willReturn(Optional.of(existing));
+
+      // when & then
+      assertThatCode(() -> weatherWriter.save(weatherGrid, forecastedAt, List.of(todayForecast),
+          Map.of())).doesNotThrowAnyException();
+      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
+          List.of(todayForecast), Map.of());
+      assertThat(result).containsExactly(existing);
     }
   }
 }

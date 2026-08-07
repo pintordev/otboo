@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.batch.weatherfetch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -248,7 +250,9 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
 
       given(weatherRepository.findLatestRevisions(any(), any())).willReturn(List.of());
-      given(weatherRepository.saveAll(any()))
+      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyString()))
           .willThrow(new TransientDataAccessResourceException("DB 커넥션 풀 고갈 시뮬레이션"));
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
 
@@ -256,10 +260,12 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then - 저장(WeatherFetchWriter.saveAll)은 skip 대상이 아니라 재시도만 하고 소진되면 즉시
-      // FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미
+      // then - 저장(WeatherFetchWriter.insertIfAbsent)은 skip 대상이 아니라 재시도만 하고
+      // 소진되면 즉시 FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
-      verify(weatherRepository, times(4)).saveAll(any());
+      verify(weatherRepository, times(4)).insertIfAbsent(any(), any(), any(), any(), anyString(),
+          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }
   }
 }

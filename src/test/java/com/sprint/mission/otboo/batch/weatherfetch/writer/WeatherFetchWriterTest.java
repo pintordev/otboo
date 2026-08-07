@@ -1,9 +1,11 @@
 package com.sprint.mission.otboo.batch.weatherfetch.writer;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -72,6 +74,25 @@ class WeatherFetchWriterTest {
 
       // then
       verify(weatherRepository, never()).insertIfAbsent(any(), any(), any(), any(), anyString(),
+          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+    }
+
+    @Test
+    @DisplayName("청크_안에_중복_항목이_섞여도_insertIfAbsent가_0을_반환할_뿐_예외_없이_끝난다")
+    void 청크_안에_중복_항목이_섞여도_insertIfAbsent가_0을_반환할_뿐_예외_없이_끝난다() {
+      // given - 방어적 시나리오(정상 흐름에선 발생하지 않음): 같은 항목이 청크에 두 번 들어온 경우
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Weather duplicated = weather(grid);
+      Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(duplicated, duplicated)));
+      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
+          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+          anyDouble(), anyDouble(), anyDouble(), anyString()))
+          .willReturn(1, 0);
+
+      // when & then
+      assertThatCode(() -> writer.write(chunk)).doesNotThrowAnyException();
+      verify(weatherRepository, times(2)).insertIfAbsent(any(), any(), any(), any(), anyString(),
           anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
           anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }
