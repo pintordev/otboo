@@ -32,8 +32,8 @@ class KmaApiExceptionTest {
   class Wrap {
 
     @Test
-    @DisplayName("원인_예외를_감싸_BAD_GATEWAY_상태의_KmaApiException을_생성한다")
-    void 원인_예외를_감싸_BAD_GATEWAY_상태의_KmaApiException을_생성한다() {
+    @DisplayName("원인_예외를_감싸_BAD_GATEWAY_상태의_KmaApiException을_생성하되_공개_details에는_원인_정보를_남기지_않는다")
+    void 원인_예외를_감싸_BAD_GATEWAY_상태의_KmaApiException을_생성하되_공개_details에는_원인_정보를_남기지_않는다() {
       // given
       IllegalStateException cause = new IllegalStateException("커넥션 리셋");
 
@@ -42,23 +42,11 @@ class KmaApiExceptionTest {
 
       // then
       assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
-      assertThat(exception.getDetails())
-          .containsEntry("causeType", "IllegalStateException")
-          .containsEntry("causeMessage", "커넥션 리셋");
+      // details는 GlobalExceptionHandler를 거쳐 공개 ErrorResponse로 그대로 직렬화되므로,
+      // 원인 예외의 타입/메시지 같은 내부 정보를 담지 않는다 - 원인은 initCause()로만 보관되어
+      // 서버 로그(log.error 등)에서만 확인 가능
+      assertThat(exception.getDetails()).isEmpty();
       assertThat(exception.getCause()).isSameAs(cause);
-    }
-
-    @Test
-    @DisplayName("원인_예외의_메시지가_null이면_UNKNOWN으로_기록된다")
-    void 원인_예외의_메시지가_null이면_UNKNOWN으로_기록된다() {
-      // given
-      IllegalStateException cause = new IllegalStateException();
-
-      // when
-      KmaApiException exception = KmaApiException.wrap(cause);
-
-      // then
-      assertThat(exception.getDetails()).containsEntry("causeMessage", "UNKNOWN");
     }
   }
 }
