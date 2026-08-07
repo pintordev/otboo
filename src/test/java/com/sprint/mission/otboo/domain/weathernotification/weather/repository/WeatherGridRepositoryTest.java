@@ -129,6 +129,14 @@ class WeatherGridRepositoryTest {
 
       assertThat(page).isEmpty();
     }
+
+    @Test
+    @DisplayName("limit이_0_이하이면_IllegalArgumentException을_던진다")
+    void limit이_0_이하이면_IllegalArgumentException을_던진다() {
+      assertThatThrownBy(
+          () -> weatherGridRepository.findPageByCursor(Instant.EPOCH, new UUID(0L, 0L), 0))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
   }
 
   @Nested
@@ -171,6 +179,14 @@ class WeatherGridRepositoryTest {
           Instant.EPOCH, new UUID(0L, 0L), Instant.parse("2026-07-27T11:00:00Z"), 10);
 
       assertThat(page).extracting(WeatherGrid::getId).containsExactly(grid.getId());
+    }
+
+    @Test
+    @DisplayName("limit이_0_이하이면_IllegalArgumentException을_던진다")
+    void limit이_0_이하이면_IllegalArgumentException을_던진다() {
+      assertThatThrownBy(() -> weatherGridRepository.findPageByCursorExcludingForecasted(
+          Instant.EPOCH, new UUID(0L, 0L), Instant.EPOCH, -1))
+          .isInstanceOf(IllegalArgumentException.class);
     }
   }
 }
