@@ -54,8 +54,14 @@ class KmaForecastFetcherTest {
       // given
       kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
           "kma-service-key");
-      KmaGridPoint grid = new KmaGridPoint(60, 127);
-      BaseTime baseTime = new BaseTime("20260727", "1700");
+      KmaGridPoint grid = FIXTURE_MONKEY.giveMeBuilder(KmaGridPoint.class)
+          .set("nx", 60)
+          .set("ny", 127)
+          .sample();
+      BaseTime baseTime = FIXTURE_MONKEY.giveMeBuilder(BaseTime.class)
+          .set("baseDate", "20260727")
+          .set("baseTime", "1700")
+          .sample();
       Instant now = Instant.parse("2026-07-27T09:00:00Z");
 
       KmaWeatherResponse response = new KmaWeatherResponse(
@@ -85,8 +91,14 @@ class KmaForecastFetcherTest {
       // given
       kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
           "kma-service-key");
-      KmaGridPoint grid = new KmaGridPoint(60, 127);
-      BaseTime baseTime = new BaseTime("20260727", "1700");
+      KmaGridPoint grid = FIXTURE_MONKEY.giveMeBuilder(KmaGridPoint.class)
+          .set("nx", 60)
+          .set("ny", 127)
+          .sample();
+      BaseTime baseTime = FIXTURE_MONKEY.giveMeBuilder(BaseTime.class)
+          .set("baseDate", "20260727")
+          .set("baseTime", "1700")
+          .sample();
       Instant now = Instant.parse("2026-07-27T09:00:00Z");
 
       KmaWeatherResponse response = new KmaWeatherResponse(
@@ -106,8 +118,14 @@ class KmaForecastFetcherTest {
       // given
       kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
           "kma-service-key");
-      KmaGridPoint grid = new KmaGridPoint(60, 127);
-      BaseTime baseTime = new BaseTime("20260727", "1700");
+      KmaGridPoint grid = FIXTURE_MONKEY.giveMeBuilder(KmaGridPoint.class)
+          .set("nx", 60)
+          .set("ny", 127)
+          .sample();
+      BaseTime baseTime = FIXTURE_MONKEY.giveMeBuilder(BaseTime.class)
+          .set("baseDate", "20260727")
+          .set("baseTime", "1700")
+          .sample();
       Instant now = Instant.parse("2026-07-27T09:00:00Z");
 
       FeignException.ServiceUnavailable feignException = new FeignException.ServiceUnavailable(
