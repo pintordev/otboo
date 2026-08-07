@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sprint.mission.otboo.batch.weatherretention.dto.WeatherRetentionItem;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -23,6 +24,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -135,6 +137,65 @@ class WeatherRepositoryTest {
       assertThat(latestRevisions).extracting(Weather::getId)
           .containsExactlyInAnyOrder(day1NewRevision.getId(), day2Revision.getId())
           .doesNotContain(day1OldRevision.getId());
+    }
+  }
+
+  @Nested
+  @DisplayName("FindForRetention")
+  class FindForRetention {
+
+    @Test
+    @DisplayName("cutoff보다_forecastAt이_이전인_행만_반환하고_이후_행은_제외한다")
+    void cutoff보다_forecastAt이_이전인_행만_반환하고_이후_행은_제외한다() {
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant cutoff = Instant.parse("2026-07-20T00:00:00Z");
+      Weather old = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-15T08:00:00Z"), Instant.parse("2026-07-15T00:00:00Z"), 20.0));
+      weatherRepository.save(weatherOf(weatherGrid, Instant.parse("2026-07-21T08:00:00Z"),
+          Instant.parse("2026-07-21T00:00:00Z"), 25.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherRetentionItem> result = weatherRepository.findForRetention(
+          cutoff, Instant.EPOCH, new UUID(0L, 0L), 10);
+
+      assertThat(result).extracting(WeatherRetentionItem::id).containsExactly(old.getId());
+    }
+
+    @Test
+    @DisplayName("커서_이후_행만_forecastAt_id_순으로_다음_페이지에_반환한다")
+    void 커서_이후_행만_forecastAt_id_순으로_다음_페이지에_반환한다() {
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant cutoff = Instant.parse("2026-08-01T00:00:00Z");
+      Weather first = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-15T08:00:00Z"), Instant.parse("2026-07-15T00:00:00Z"), 20.0));
+      Weather second = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-16T08:00:00Z"), Instant.parse("2026-07-16T00:00:00Z"), 21.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherRetentionItem> firstPage = weatherRepository.findForRetention(
+          cutoff, Instant.EPOCH, new UUID(0L, 0L), 1);
+
+      assertThat(firstPage).extracting(WeatherRetentionItem::id).containsExactly(first.getId());
+
+      List<WeatherRetentionItem> secondPage = weatherRepository.findForRetention(
+          cutoff, firstPage.get(0).forecastAt(), first.getId(), 1);
+
+      assertThat(secondPage).extracting(WeatherRetentionItem::id).containsExactly(second.getId());
+    }
+
+    @Test
+    @DisplayName("limit이_0_이하이면_예외가_발생한다")
+    void limit이_0_이하이면_예외가_발생한다() {
+      assertThatThrownBy(() -> weatherRepository.findForRetention(
+          Instant.EPOCH, Instant.EPOCH, new UUID(0L, 0L), 0))
+          .isInstanceOf(InvalidDataAccessApiUsageException.class)
+          .hasCauseInstanceOf(IllegalArgumentException.class);
     }
   }
 
