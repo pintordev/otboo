@@ -20,9 +20,10 @@ public class KmaApiException extends KmaException {
   }
 
   public static KmaApiException wrap(Throwable cause) {
-    KmaApiException exception = new KmaApiException(Map.of(
-        "causeType", cause.getClass().getSimpleName(),
-        "causeMessage", Objects.toString(cause.getMessage(), UNKNOWN)));
+    // 원인 예외 정보(causeType/causeMessage)는 details에 담지 않는다 - details는
+    // GlobalExceptionHandler를 거쳐 공개 ErrorResponse로 그대로 직렬화되므로, 내부 장애/외부
+    // 요청 정보가 노출될 수 있다. 원인은 initCause()로만 보관해 서버 로그에서만 확인한다.
+    KmaApiException exception = new KmaApiException(Map.of());
     exception.initCause(cause);
     return exception;
   }
