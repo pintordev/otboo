@@ -26,6 +26,7 @@ public class UserCustomRepositoryImpl implements UserCustomRepository {
 
   @Override
   public CursorPageResponse<UserDto> search(UserListParams condition) {
+
     List<UserDto> content = queryFactory
         .select(
             Projections.constructor(UserDto.class,
@@ -59,8 +60,7 @@ public class UserCustomRepositoryImpl implements UserCustomRepository {
       nextIdAfter = last.id();
     }
 
-    // TODO: 매 페이지 요청 카운트 쿼리 최적화 (성능 측정 Phase에서 진행)
-    Long totalCount = Optional.ofNullable(
+    long totalCount = Optional.ofNullable(
         queryFactory
             .select(user.count())
             .from(user)
@@ -102,7 +102,7 @@ public class UserCustomRepositoryImpl implements UserCustomRepository {
   private BooleanExpression cursorCondition(UserListParams condition) {
 
     if (condition.cursor() == null) {
-      return null;
+      return null; // 첫 페이지 요청
     }
 
     boolean ascending = condition.sortDirection() == SortDirection.ASCENDING;

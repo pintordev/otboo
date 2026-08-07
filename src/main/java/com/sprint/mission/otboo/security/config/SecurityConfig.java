@@ -1,9 +1,10 @@
 package com.sprint.mission.otboo.security.config;
 
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
+import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.security.exception.ErrorResponseWriter;
-import com.sprint.mission.otboo.domain.authuser.auth.details.CustomUserDetailsService;
+import com.sprint.mission.otboo.security.details.CustomUserDetailsService;
 import com.sprint.mission.otboo.security.filter.TokenAuthenticationFilter;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
@@ -30,7 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity(proxyTargetClass = true)   // 변경: 인터페이스(JDK) 프록시 대신 CGLIB로 고정
 public class SecurityConfig {
 
   @Bean
@@ -38,6 +39,7 @@ public class SecurityConfig {
       CustomUserDetailsService userDetailsService,
       PasswordEncoder passwordEncoder,
       UserRepository userRepository,
+      UserMapper userMapper,
       TempPasswordRegistry tempPasswordRegistry
   ) {
 
@@ -45,7 +47,7 @@ public class SecurityConfig {
     daoProvider.setPasswordEncoder(passwordEncoder);
 
     TempPasswordAuthenticationProvider tempPasswordAuthenticationProvider = new TempPasswordAuthenticationProvider(
-        userRepository, tempPasswordRegistry);
+        userRepository, userMapper, tempPasswordRegistry);
 
     return new ProviderManager(daoProvider, tempPasswordAuthenticationProvider);
   }
@@ -60,6 +62,7 @@ public class SecurityConfig {
 
     http.formLogin(AbstractHttpConfigurer::disable);
     http.httpBasic(AbstractHttpConfigurer::disable);
+    http.logout(AbstractHttpConfigurer::disable);
 
     http.csrf(csrf -> csrf
         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -89,12 +92,14 @@ public class SecurityConfig {
             "/assets/**", "/logo_symbol.svg", "/vite.svg").permitAll()
         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/auth/sign-out").permitAll()
         .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
-        .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
         .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
+        .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
         .requestMatchers(HttpMethod.GET, "/api/auth/csrf-token").permitAll()
-        .requestMatchers(HttpMethod.GET, "/api/users").permitAll()
+
+        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+
         .requestMatchers(HttpMethod.PATCH, "/api/users/{userId}/role")
         .hasAuthority(Role.ADMIN.name())
         .requestMatchers(HttpMethod.PATCH, "/api/users/{userId}/lock")

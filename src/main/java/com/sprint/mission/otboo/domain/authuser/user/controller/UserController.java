@@ -4,13 +4,9 @@ import com.sprint.mission.otboo.domain.authuser.user.controller.api.UserApi;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.ChangePasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.ProfileUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserCreateRequest;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserListParams;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserLockUpdateRequest;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserRoleUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.ProfileDto;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.service.UserService;
-import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.security.details.CurrentUser;
 import com.sprint.mission.otboo.security.details.UserPrincipal;
 import jakarta.validation.Valid;
@@ -18,9 +14,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,31 +32,12 @@ public class UserController implements UserApi {
   private final UserService userService;
 
   @Override
-  @GetMapping("")
-  public ResponseEntity<CursorPageResponse<UserDto>> getUsers(
-      @Valid @ModelAttribute UserListParams condition) {
-    return ResponseEntity
-        .status(HttpStatus.OK)
-        .body(userService.getUsers(condition));
-  }
-
-  @Override
   @PostMapping("")
   public ResponseEntity<UserDto> signUp(@Valid @RequestBody UserCreateRequest request) {
+    UserDto result = userService.signUp(request);
     return ResponseEntity
         .status(HttpStatus.CREATED)
-        .body(userService.signUp(request));
-  }
-
-  @Override
-  @PreAuthorize("hasAuthority('ADMIN')")
-  @PatchMapping("/{userId}/role")
-  public ResponseEntity<UserDto> changeRole(
-      @PathVariable UUID userId,
-      @Valid @RequestBody UserRoleUpdateRequest request) {
-    return ResponseEntity
-        .status(HttpStatus.OK)
-        .body(userService.changeRole(userId, request));
+        .body(result);
   }
 
   @Override
@@ -84,7 +59,7 @@ public class UserController implements UserApi {
       @CurrentUser UserPrincipal principal) {
     return ResponseEntity
         .status(HttpStatus.OK)
-        .body(userService.changeProfile(userId, principal.userId(), request, image));
+        .body(userService.changeProfile(userId, request, image, principal.userId()));
   }
 
   @Override
@@ -93,19 +68,9 @@ public class UserController implements UserApi {
       @PathVariable UUID userId,
       @Valid @RequestBody ChangePasswordRequest request,
       @CurrentUser UserPrincipal principal) {
+    userService.changePassword(userId, request, principal.userId());
     return ResponseEntity
         .status(HttpStatus.OK)
-        .body(userService.changePassword(userId, principal.userId(), request));
-  }
-
-  @Override
-  @PreAuthorize("hasAuthority('ADMIN')")
-  @PatchMapping("/{userId}/lock")
-  public ResponseEntity<UserDto> changeLocked(
-      @PathVariable UUID userId,
-      @Valid @RequestBody UserLockUpdateRequest request) {
-    return ResponseEntity
-        .status(HttpStatus.OK)
-        .body(userService.changeLocked(userId, request));
+        .build();
   }
 }

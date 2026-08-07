@@ -1,45 +1,49 @@
 package com.sprint.mission.otboo.domain.authuser.auth.service;
 
-import com.navercorp.fixturemonkey.FixtureMonkey;
-import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
-import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
-import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.ResetPasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.SignInRequest;
+import com.sprint.mission.otboo.domain.authuser.auth.dto.response.JwtDto;
+import com.sprint.mission.otboo.domain.authuser.auth.dto.response.RefreshDto;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
 import com.sprint.mission.otboo.domain.authuser.auth.event.TempPasswordRequestedEvent;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.AccountLockedException;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.InvalidCredentialsException;
 import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
+import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
-import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.temppassword.generator.TempPasswordGenerator;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
-import com.sprint.mission.otboo.security.token.exception.InvalidRefreshTokenException;
+import com.sprint.mission.otboo.security.token.exception.business.InvalidRefreshTokenException;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.security.usersession.dto.UserSession;
-import com.sprint.mission.otboo.security.usersession.exception.RefreshTokenReusedException;
-import com.sprint.mission.otboo.security.usersession.exception.UserSessionExpiredException;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -47,578 +51,291 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.*;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AuthService")
 class AuthServiceTest {
 
-  private static final Instant FIXED_NOW = Instant.parse("2026-08-03T00:00:00Z");
+  private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
-  private static final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
-      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
-      .plugin(new JakartaValidationPlugin())
-      .build();
+  @InjectMocks
+  private AuthService authService;
 
-  private static final FixtureMonkey entityFixtureMonkey = FixtureMonkey.builder()
-      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
-      .plugin(new JakartaValidationPlugin())
-      .build();
+  @Mock
+  private UserSessionRegistry userSessionRegistry;
 
-  AuthService authService;
   @Mock
-  UserSessionRegistry mockUserSessionRegistry;
-  @Mock
-  TokenProvider mockTokenProvider;
-  @Mock
-  AuthenticationManager mockAuthenticationManager;
-  @Mock
-  UserRepository mockUserRepository;
-  @Mock
-  SseService mockSseService;
-  @Spy
-  AuthMapper authMapper = new AuthMapper(new UserMapper());
-  @Mock
-  TempPasswordGenerator mockTempPasswordGenerator;
-  @Mock
-  TempPasswordRegistry mockTempPasswordRegistry;
-  @Mock
-  ApplicationEventPublisher mockEventPublisher;
-  @Mock
-  Clock mockClock;
+  private TokenProvider tokenProvider;
 
-  @BeforeEach
-  void setUp() {
-    authService = new AuthService(
-        mockUserSessionRegistry,
-        mockTokenProvider,
-        mockAuthenticationManager,
-        authMapper,
-        mockUserRepository,
-        mockSseService,
-        mockTempPasswordGenerator,
-        mockTempPasswordRegistry,
-        mockEventPublisher,
-        mockClock
-    );
+  @Mock
+  private AuthenticationManager authenticationManager;
+
+  @Mock
+  private AuthMapper authMapper;
+
+  @Mock
+  private UserRepository userRepository;
+
+  @Mock
+  private SseService sseService;
+
+  @Mock
+  private TempPasswordGenerator tempPasswordGenerator;
+
+  @Mock
+  private TempPasswordRegistry tempPasswordRegistry;
+
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
+
+  @Mock
+  private Clock clock;
+
+  private UserDto userDtoOf(UUID userId, Role role) {
+    return new UserDto(userId, NOW, "hong@test.com", "홍길동", role, false);
   }
 
-  private User fixtureUnlockedUser() {
-    User user = entityFixtureMonkey.giveMeBuilder(User.class)
-        .set("id", UUID.randomUUID())
-        .set("role", Role.USER)
-        .sample();
-    user.unlock();
-    return user;
-  }
-
-  private RefreshTokenClaims refreshClaims(UUID userId, UUID sid, UUID jti) {
-    return new RefreshTokenClaims(userId, sid, jti);
-  }
-
-  /**
-   * 로그인 성공 시나리오에서 공통으로 필요한 스텁을 모은 헬퍼. 세션/토큰의 구체적인 값 자체를 검증하는 테스트(signIn_success_returnsSignInDto)는
-   * 정확한 인자 매칭이 필요해 이 헬퍼를 쓰지 않고 개별적으로 스텁한다.
-   */
-  private void stubSuccessfulSignIn(CustomUserDetails principal) {
-    Authentication authentication = mock(Authentication.class);
-    given(authentication.getPrincipal()).willReturn(principal);
-    given(mockAuthenticationManager.authenticate(any())).willReturn(authentication);
-    given(mockClock.instant()).willReturn(FIXED_NOW);
-
-    given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-    given(mockUserSessionRegistry.issue(any(), any(), any()))
-        .willReturn(new UserSession(UUID.randomUUID(), UUID.randomUUID(), FIXED_NOW));
-    given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
-        "access-token");
-    given(mockTokenProvider.getRefreshTokenExpiresAt(any())).willReturn(
-        FIXED_NOW.plus(14, ChronoUnit.DAYS));
-    given(mockTokenProvider.createRefreshToken(any(), any(), any(), any(), any())).willReturn(
-        "refresh-token");
+  private Authentication authenticationOf(UserDto userDto) {
+    CustomUserDetails principal = new CustomUserDetails(userDto, null);
+    return new UsernamePasswordAuthenticationToken(
+        principal, null, List.of(new SimpleGrantedAuthority(userDto.role().name())));
   }
 
   @Nested
-  @DisplayName("로그인 성공")
-  class SignInSuccess {
+  @DisplayName("로그아웃 (signOut)")
+  class SignOut {
 
     @Test
-    @DisplayName("AuthenticationManager 인증에 성공하면 세션을 발급하고 토큰을 생성해 SignInDto를 반환한다")
-    void signIn_success_returnsSignInDto() {
+    @DisplayName("refreshToken이 비어있으면 아무 것도 하지 않는다")
+    void refreshToken이_비어있으면_아무_것도_하지_않는다() {
       // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      User user = User.create("홍길동", request.username(), "encoded-password");
-      CustomUserDetails principal = new CustomUserDetails(user);
+      String blankRefreshToken = "";
 
-      Authentication authentication = mock(Authentication.class);
-      given(authentication.getPrincipal()).willReturn(principal);
-      given(mockAuthenticationManager.authenticate(any())).willReturn(authentication);
-      given(mockClock.instant()).willReturn(FIXED_NOW);
+      // when
+      authService.signOut(blankRefreshToken);
 
-      UserSession issuedSession = new UserSession(UUID.randomUUID(), UUID.randomUUID(), FIXED_NOW);
-      Instant refreshExpiresAt = FIXED_NOW.plus(14, ChronoUnit.DAYS);
+      // then
+      verify(userSessionRegistry, never()).revoke(any(), any());
+    }
 
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockUserSessionRegistry.issue(eq(principal.getUserId()), eq(FIXED_NOW),
-          any(Duration.class)))
-          .willReturn(issuedSession);
-      given(mockTokenProvider.createAccessToken(
-          principal.getUserId(), principal.getRole().name(), issuedSession.sessionId(),
-          issuedSession.issuedAt()))
+    @Test
+    @DisplayName("refreshToken이 유효하지 않으면 조용히 종료한다")
+    void refreshToken이_유효하지_않으면_조용히_종료한다() {
+      // given
+      given(tokenProvider.parseRefreshToken("invalid-token"))
+          .willThrow(InvalidRefreshTokenException.withNone());
+
+      // when
+      authService.signOut("invalid-token");
+
+      // then
+      verify(userSessionRegistry, never()).revoke(any(), any());
+    }
+
+    @Test
+    @DisplayName("유효한 refreshToken이면 해당 세션을 회수한다")
+    void 유효한_refreshToken이면_해당_세션을_회수한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      UUID sessionId = UUID.randomUUID();
+      RefreshTokenClaims claims = new RefreshTokenClaims(userId, sessionId, UUID.randomUUID());
+      given(tokenProvider.parseRefreshToken("valid-token")).willReturn(claims);
+
+      // when
+      authService.signOut("valid-token");
+
+      // then
+      verify(userSessionRegistry).revoke(userId, sessionId);
+    }
+  }
+
+  @Nested
+  @DisplayName("로그인 (signIn)")
+  class SignIn {
+
+    @Test
+    @DisplayName("인증에 성공하면 세션을 발급하고 토큰을 생성해 SignInDto를 반환한다")
+    void 인증에_성공하면_세션을_발급하고_토큰을_생성해_SignInDto를_반환한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      UserDto userDto = userDtoOf(userId, Role.USER);
+      SignInRequest request = new SignInRequest("hong@test.com", "password1");
+      given(authenticationManager.authenticate(any())).willReturn(authenticationOf(userDto));
+      given(clock.instant()).willReturn(NOW);
+
+      UUID sessionId = UUID.randomUUID();
+      UUID jti = UUID.randomUUID();
+      UserSession issued = new UserSession(userId, sessionId, jti, NOW);
+      given(userSessionRegistry.issue(userId, NOW)).willReturn(issued);
+      given(tokenProvider.createAccessToken(userId, sessionId, "USER", NOW))
           .willReturn("access-token");
-      given(mockTokenProvider.getRefreshTokenExpiresAt(issuedSession.issuedAt())).willReturn(
-          refreshExpiresAt);
-      given(mockTokenProvider.createRefreshToken(
-          principal.getUserId(), issuedSession.currentRefreshJti(), issuedSession.sessionId(),
-          issuedSession.issuedAt(), refreshExpiresAt))
+      given(tokenProvider.createRefreshToken(userId, sessionId, jti, NOW))
           .willReturn("refresh-token");
+
+      SignInDto expected =
+          new SignInDto(new JwtDto(userDto, "access-token"), "refresh-token");
+      given(authMapper.signInDtoFrom(userDto, "access-token", "refresh-token")).willReturn(expected);
 
       // when
       SignInDto result = authService.signIn(request);
 
       // then
-      assertThat(result.jwtDto().accessToken()).isEqualTo("access-token");
-      assertThat(result.refreshToken()).isEqualTo("refresh-token");
-      assertThat(result.jwtDto().userDto().email()).isEqualTo(user.getEmail());
+      assertThat(result).isEqualTo(expected);
     }
 
     @Test
-    @DisplayName("AuthenticationManager에는 폼에 입력된 username/password 그대로 인증되지 않은 토큰을 전달한다")
-    void signIn_success_authenticatesWithRawCredentials() {
+    @DisplayName("로그인에 성공하면 기존 SSE 연결을 강제 종료한다")
+    void 로그인에_성공하면_기존_SSE_연결을_강제_종료한다() {
       // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      User user = User.create("홍길동", request.username(), "encoded-password");
-      CustomUserDetails principal = new CustomUserDetails(user);
-      stubSuccessfulSignIn(principal);
+      UUID userId = UUID.randomUUID();
+      UserDto userDto = userDtoOf(userId, Role.USER);
+      SignInRequest request = new SignInRequest("hong@test.com", "password1");
+      given(authenticationManager.authenticate(any())).willReturn(authenticationOf(userDto));
+      given(clock.instant()).willReturn(NOW);
+
+      UserSession issued = new UserSession(userId, UUID.randomUUID(), UUID.randomUUID(), NOW);
+      given(userSessionRegistry.issue(eq(userId), any())).willReturn(issued);
 
       // when
       authService.signIn(request);
 
       // then
-      ArgumentCaptor<Authentication> tokenCaptor = ArgumentCaptor.forClass(Authentication.class);
-      verify(mockAuthenticationManager).authenticate(tokenCaptor.capture());
-      UsernamePasswordAuthenticationToken captured = (UsernamePasswordAuthenticationToken) tokenCaptor.getValue();
-      assertThat(captured.getPrincipal()).isEqualTo(request.username());
-      assertThat(captured.getCredentials()).isEqualTo(request.password());
-      assertThat(captured.isAuthenticated()).isFalse();
+      verify(sseService).disconnectAll(userId);
     }
 
     @Test
-    @DisplayName("세션 발급(issue)이 토큰 생성보다 먼저 호출된다 (토큰이 세션 정보를 참조하므로)")
-    void signIn_success_issuesSessionBeforeCreatingTokens() {
+    @DisplayName("계정이 잠겨있으면 AccountLockedException을 던진다")
+    void 계정이_잠겨있으면_AccountLockedException을_던진다() {
       // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      User user = User.create("홍길동", request.username(), "encoded-password");
-      CustomUserDetails principal = new CustomUserDetails(user);
-      stubSuccessfulSignIn(principal);
+      SignInRequest request = new SignInRequest("hong@test.com", "password1");
+      willThrow(new LockedException("계정 잠김"))
+          .given(authenticationManager).authenticate(any());
 
-      // when
-      authService.signIn(request);
-
-      // then
-      InOrder inOrder = inOrder(mockUserSessionRegistry, mockTokenProvider);
-      inOrder.verify(mockUserSessionRegistry).issue(any(), any(), any());
-      inOrder.verify(mockTokenProvider).createAccessToken(any(), any(), any(), any());
-      inOrder.verify(mockTokenProvider).createRefreshToken(any(), any(), any(), any(), any());
+      // when & then
+      assertThatThrownBy(() -> authService.signIn(request))
+          .isInstanceOf(AccountLockedException.class);
     }
 
     @Test
-    @DisplayName("로그인_성공_시_같은_계정의_기존_SSE_연결을_강제_종료한다")
-    void 로그인_성공_시_같은_계정의_기존_SSE_연결을_강제_종료한다() {
+    @DisplayName("아이디 또는 비밀번호가 틀리면 InvalidCredentialsException을 던진다")
+    void 아이디_또는_비밀번호가_틀리면_InvalidCredentialsException을_던진다() {
       // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      User user = User.create("홍길동", request.username(), "encoded-password");
-      CustomUserDetails principal = new CustomUserDetails(user);
-      stubSuccessfulSignIn(principal);
-
-      // when
-      authService.signIn(request);
-
-      // then
-      verify(mockSseService).disconnectAll(principal.getUserId());
-    }
-  }
-
-  @Nested
-  @DisplayName("자격증명 실패")
-  class InvalidCredentials {
-
-    @Test
-    @DisplayName("AuthenticationManager가 BadCredentialsException을 던지면 InvalidCredentialsException으로 변환하고 세션을 발급하지 않는다")
-    void signIn_badCredentials_throwsInvalidCredentialsExceptionAndDoesNotIssueSession() {
-      // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      given(mockAuthenticationManager.authenticate(any()))
-          .willThrow(new BadCredentialsException("Bad credentials"));
+      SignInRequest request = new SignInRequest("hong@test.com", "wrong-password");
+      willThrow(new BadCredentialsException("자격 증명 실패"))
+          .given(authenticationManager).authenticate(any());
 
       // when & then
       assertThatThrownBy(() -> authService.signIn(request))
           .isInstanceOf(InvalidCredentialsException.class);
-
-      verify(mockUserSessionRegistry, never()).issue(any(), any(), any());
-      verify(mockTokenProvider, never()).createAccessToken(any(), any(), any(), any());
     }
   }
 
   @Nested
-  @DisplayName("계정 잠김")
-  class AccountLocked {
-
-    @Test
-    @DisplayName("AuthenticationManager가 LockedException을 던지면 AccountLockedException으로 변환하고 세션을 발급하지 않는다")
-    void signIn_locked_throwsAccountLockedExceptionAndDoesNotIssueSession() {
-      // given
-      SignInRequest request = fixtureMonkey.giveMeBuilder(SignInRequest.class).sample();
-      given(mockAuthenticationManager.authenticate(any()))
-          .willThrow(new LockedException("Account is locked"));
-
-      // when & then
-      assertThatThrownBy(() -> authService.signIn(request))
-          .isInstanceOf(AccountLockedException.class);
-
-      verify(mockUserSessionRegistry, never()).issue(any(), any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("로그아웃")
-  class SignOut {
-
-    @Test
-    @DisplayName("주어진 userId로 세션을 폐기(revoke)한다")
-    void signOut_revokesSessionForGivenUserId() {
-      // given
-      UUID userId = UUID.randomUUID();
-
-      // when
-      authService.signOut(userId);
-
-      // then
-      verify(mockUserSessionRegistry).revoke(userId);
-    }
-  }
-
-  @Nested
-  @DisplayName("토큰 재발급 성공")
-  class RefreshSuccess {
-
-    @Test
-    @DisplayName("유효한 refresh token이면 세션을 회전하고 새 토큰을 발급해 SignInDto를 반환한다")
-    void refresh_success_returnsSignInDto() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken("refresh-token"))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockClock.instant()).willReturn(FIXED_NOW);
-
-      UUID newJti = UUID.randomUUID();
-      Instant originalIssuedAt = FIXED_NOW.minus(3, ChronoUnit.DAYS);
-      UserSession rotated = new UserSession(newJti, sid, originalIssuedAt);
-      given(mockUserSessionRegistry.rotate(eq(user.getId()), eq(sid), eq(jti), any(Duration.class)))
-          .willReturn(rotated);
-
-      given(
-          mockTokenProvider.createAccessToken(eq(user.getId()), eq(user.getRole().name()), eq(sid),
-              eq(FIXED_NOW)))
-          .willReturn("new-access-token");
-      Instant refreshExpiresAt = originalIssuedAt.plus(14, ChronoUnit.DAYS);
-      given(mockTokenProvider.getRefreshTokenExpiresAt(originalIssuedAt)).willReturn(
-          refreshExpiresAt);
-      given(mockTokenProvider.createRefreshToken(user.getId(), newJti, sid, originalIssuedAt,
-          refreshExpiresAt))
-          .willReturn("new-refresh-token");
-
-      // when
-      SignInDto result = authService.refresh("refresh-token");
-
-      // then
-      assertThat(result.jwtDto().accessToken()).isEqualTo("new-access-token");
-      assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
-      assertThat(result.jwtDto().userDto().email()).isEqualTo(user.getEmail());
-    }
-
-    @Test
-    @DisplayName("access token은 절대 만료 기준(rotated.issuedAt())이 아니라 현재 시각(Clock)을 기준으로 새로 발급된다")
-    void refresh_success_createsAccessTokenWithCurrentInstant() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockClock.instant()).willReturn(FIXED_NOW);
-
-      // 절대 만료 정책: 원래 로그인이 오래 전이라 issuedAt(staleIssuedAt)이 FIXED_NOW와 다름 — access token은 이 과거 값이 아니라 FIXED_NOW로 발급돼야 한다
-      Instant staleIssuedAt = FIXED_NOW.minus(10, ChronoUnit.DAYS);
-      UserSession rotated = new UserSession(UUID.randomUUID(), sid, staleIssuedAt);
-      given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
-      given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
-          "new-access-token");
-      given(mockTokenProvider.getRefreshTokenExpiresAt(any())).willReturn(
-          FIXED_NOW.plus(14, ChronoUnit.DAYS));
-      given(mockTokenProvider.createRefreshToken(any(), any(), any(), any(), any())).willReturn(
-          "new-refresh-token");
-
-      // when
-      authService.refresh("refresh-token");
-
-      // then — Clock을 주입받으므로 근사 비교(isCloseTo) 없이 정확히 검증 가능
-      verify(mockTokenProvider).createAccessToken(any(), any(), any(), eq(FIXED_NOW));
-    }
-
-    @Test
-    @DisplayName("refresh token은 절대 만료 기준(rotated.issuedAt())을 그대로 사용해 발급된다")
-    void refresh_success_createsRefreshTokenWithOriginalIssuedAt() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockClock.instant()).willReturn(FIXED_NOW);
-
-      Instant originalIssuedAt = FIXED_NOW.minus(5, ChronoUnit.DAYS);
-      UUID newJti = UUID.randomUUID();
-      UserSession rotated = new UserSession(newJti, sid, originalIssuedAt);
-      given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
-      given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
-          "new-access-token");
-      given(mockTokenProvider.getRefreshTokenExpiresAt(any())).willReturn(
-          FIXED_NOW.plus(14, ChronoUnit.DAYS));
-      given(mockTokenProvider.createRefreshToken(any(), any(), any(), any(), any())).willReturn(
-          "new-refresh-token");
-
-      // when
-      authService.refresh("refresh-token");
-
-      // then
-      verify(mockTokenProvider).createRefreshToken(
-          eq(user.getId()), eq(newJti), eq(sid), eq(originalIssuedAt), any(Instant.class));
-    }
-
-    @Test
-    @DisplayName("세션 회전(rotate)이 토큰 재생성보다 먼저 호출된다")
-    void refresh_success_rotatesSessionBeforeCreatingTokens() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockClock.instant()).willReturn(FIXED_NOW);
-
-      UserSession rotated = new UserSession(UUID.randomUUID(), sid, FIXED_NOW);
-      given(mockUserSessionRegistry.rotate(any(), any(), any(), any())).willReturn(rotated);
-      given(mockTokenProvider.createAccessToken(any(), any(), any(), any())).willReturn(
-          "new-access-token");
-      given(mockTokenProvider.getRefreshTokenExpiresAt(any())).willReturn(
-          FIXED_NOW.plus(14, ChronoUnit.DAYS));
-      given(mockTokenProvider.createRefreshToken(any(), any(), any(), any(), any())).willReturn(
-          "new-refresh-token");
-
-      // when
-      authService.refresh("refresh-token");
-
-      // then
-      InOrder inOrder = inOrder(mockUserSessionRegistry, mockTokenProvider);
-      inOrder.verify(mockUserSessionRegistry).rotate(any(), any(), any(), any());
-      inOrder.verify(mockTokenProvider).createAccessToken(any(), any(), any(), any());
-      inOrder.verify(mockTokenProvider).createRefreshToken(any(), any(), any(), any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("토큰 재발급 - 사용자를 찾을 수 없음")
-  class RefreshUserNotFound {
-
-    @Test
-    @DisplayName("토큰의 사용자 ID로 사용자를 찾을 수 없으면 UserNotFoundException을 던지고 세션 회전을 시도하지 않는다")
-    void refresh_userNotFound_throwsUserNotFoundExceptionAndDoesNotRotate() {
-      // given
-      UUID userId = UUID.randomUUID();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(userId, sid, jti));
-      given(mockUserRepository.findById(userId)).willReturn(Optional.empty());
-
-      // when & then
-      assertThatThrownBy(() -> authService.refresh("refresh-token"))
-          .isInstanceOf(UserNotFoundException.class);
-
-      verify(mockUserSessionRegistry, never()).rotate(any(), any(), any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("토큰 재발급 - 계정 잠김")
-  class RefreshAccountLocked {
-
-    @Test
-    @DisplayName("계정이 잠겨 있으면 세션을 폐기하고 AccountLockedException을 던지며, 세션 회전은 시도하지 않는다")
-    void refresh_lockedAccount_revokesSessionAndThrowsAccountLockedException() {
-      // given
-      User lockedUser = entityFixtureMonkey.giveMeBuilder(User.class)
-          .set("id", UUID.randomUUID())
-          .set("email", "hong@test.com")
-          .sample();
-      lockedUser.lock(LockReason.ADMIN_ACTION);
-
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(lockedUser.getId(), sid, jti));
-      given(mockUserRepository.findById(lockedUser.getId())).willReturn(Optional.of(lockedUser));
-
-      // when & then
-      assertThatThrownBy(() -> authService.refresh("refresh-token"))
-          .isInstanceOf(AccountLockedException.class);
-
-      verify(mockUserSessionRegistry).revoke(lockedUser.getId());
-      verify(mockUserSessionRegistry, never()).rotate(any(), any(), any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("토큰 재발급 - 리프레시 토큰 자체가 유효하지 않음")
-  class InvalidRefreshToken {
-
-    @Test
-    @DisplayName("TokenProvider가 파싱 단계에서 예외를 던지면 그대로 전파되고 사용자 조회조차 하지 않는다")
-    void refresh_invalidToken_propagatesExceptionAndDoesNotLookUpUser() {
-      // given
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willThrow(InvalidRefreshTokenException.withNone());
-
-      // when & then
-      assertThatThrownBy(() -> authService.refresh("bad-token"))
-          .isInstanceOf(InvalidRefreshTokenException.class);
-
-      verify(mockUserRepository, never()).findById(any());
-    }
-  }
-
-  @Nested
-  @DisplayName("토큰 재발급 - 세션 회전 실패")
-  class RotateFailure {
-
-    @Test
-    @DisplayName("세션이 이미 만료/무효화됐으면 UserSessionExpiredException이 그대로 전파되고 토큰을 새로 발급하지 않는다")
-    void refresh_sessionExpired_propagatesExceptionAndDoesNotIssueNewTokens() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockUserSessionRegistry.rotate(eq(user.getId()), eq(sid), eq(jti), any(Duration.class)))
-          .willThrow(UserSessionExpiredException.withNone());
-
-      // when & then
-      assertThatThrownBy(() -> authService.refresh("refresh-token"))
-          .isInstanceOf(UserSessionExpiredException.class);
-
-      verify(mockTokenProvider, never()).createAccessToken(any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("이미 사용된(탈취 의심) refresh token이면 RefreshTokenReusedException이 그대로 전파된다")
-    void refresh_reusedToken_propagatesRefreshTokenReusedException() {
-      // given
-      User user = fixtureUnlockedUser();
-      UUID sid = UUID.randomUUID();
-      UUID jti = UUID.randomUUID();
-      given(mockTokenProvider.parseRefreshToken(anyString()))
-          .willReturn(refreshClaims(user.getId(), sid, jti));
-      given(mockUserRepository.findById(user.getId())).willReturn(Optional.of(user));
-      given(mockTokenProvider.getRefreshTokenTtl()).willReturn(Duration.ofDays(14));
-      given(mockUserSessionRegistry.rotate(eq(user.getId()), eq(sid), eq(jti), any(Duration.class)))
-          .willThrow(RefreshTokenReusedException.withNone());
-
-      // when & then
-      assertThatThrownBy(() -> authService.refresh("refresh-token"))
-          .isInstanceOf(RefreshTokenReusedException.class);
-
-      verify(mockTokenProvider, never()).createAccessToken(any(), any(), any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("임시 비밀번호 발급")
+  @DisplayName("임시 비밀번호 발급 (resetPassword)")
   class ResetPassword {
 
     @Test
-    @DisplayName("가입된 이메일이면 임시 비밀번호를 생성해 저장하고 발급 이벤트를 발행한다")
-    void resetPassword_existingEmail_savesTempPasswordAndPublishesEvent() {
+    @DisplayName("가입된 이메일이면 임시 비밀번호를 생성해 저장하고 이벤트를 발행한다")
+    void 가입된_이메일이면_임시_비밀번호를_생성해_저장하고_이벤트를_발행한다() {
       // given
-      User user = fixtureUnlockedUser();
-      ResetPasswordRequest request = new ResetPasswordRequest(user.getEmail());
-      given(mockUserRepository.findByEmail(user.getEmail())).willReturn(Optional.of(user));
-      given(mockTempPasswordGenerator.generate()).willReturn("Temp123!@#$");
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      given(userRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
+      given(tempPasswordGenerator.generate()).willReturn("temp-password!");
+
+      ResetPasswordRequest request = new ResetPasswordRequest("hong@test.com");
 
       // when
       authService.resetPassword(request);
 
       // then
-      verify(mockTempPasswordRegistry).save(user.getId(), "Temp123!@#$");
-
-      ArgumentCaptor<TempPasswordRequestedEvent> eventCaptor =
-          ArgumentCaptor.forClass(TempPasswordRequestedEvent.class);
-      verify(mockEventPublisher).publishEvent(eventCaptor.capture());
-      assertThat(eventCaptor.getValue().email()).isEqualTo(user.getEmail());
-      assertThat(eventCaptor.getValue().rawTempPassword()).isEqualTo("Temp123!@#$");
+      verify(tempPasswordRegistry).save(user.getId(), "temp-password!");
+      verify(eventPublisher).publishEvent(
+          new TempPasswordRequestedEvent("hong@test.com", "temp-password!"));
     }
 
     @Test
-    @DisplayName("가입되지 않은 이메일이면 아무 것도 하지 않고 예외 없이 종료한다 (이메일 존재 여부 노출 방지)")
-    void resetPassword_unknownEmail_doesNothingAndDoesNotThrow() {
+    @DisplayName("가입되지 않은 이메일이면 아무 것도 하지 않는다")
+    void 가입되지_않은_이메일이면_아무_것도_하지_않는다() {
       // given
+      given(userRepository.findByEmail("unknown@test.com")).willReturn(Optional.empty());
       ResetPasswordRequest request = new ResetPasswordRequest("unknown@test.com");
-      given(mockUserRepository.findByEmail(request.email())).willReturn(Optional.empty());
+
+      // when
+      authService.resetPassword(request);
+
+      // then
+      verify(tempPasswordRegistry, never()).save(any(), any());
+      verify(eventPublisher, never()).publishEvent(any());
+    }
+  }
+
+  @Nested
+  @DisplayName("액세스 토큰 재발급 (refresh)")
+  class Refresh {
+
+    @Test
+    @DisplayName("유효한 refreshToken이면 세션을 회전하고 새 토큰들을 반환한다")
+    void 유효한_refreshToken이면_세션을_회전하고_새_토큰들을_반환한다() {
+      // given
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      UUID sessionId = UUID.randomUUID();
+      UUID jti = UUID.randomUUID();
+      RefreshTokenClaims claims = new RefreshTokenClaims(user.getId(), sessionId, jti);
+      given(tokenProvider.parseRefreshToken("valid-refresh-token")).willReturn(claims);
+      given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
+      given(clock.instant()).willReturn(NOW);
+
+      UUID newJti = UUID.randomUUID();
+      UserSession rotated = new UserSession(user.getId(), sessionId, newJti, NOW);
+      given(userSessionRegistry.rotate(user.getId(), sessionId, jti, NOW)).willReturn(rotated);
+      given(tokenProvider.createAccessToken(user.getId(), sessionId, "USER", NOW))
+          .willReturn("new-access-token");
+      given(tokenProvider.createRefreshToken(user.getId(), sessionId, newJti, NOW))
+          .willReturn("new-refresh-token");
+
+      RefreshDto expected = new RefreshDto(
+          new JwtDto(userDtoOf(user.getId(), Role.USER), "new-access-token"), "new-refresh-token");
+      given(authMapper.refreshDtoFrom(user, "new-access-token", "new-refresh-token"))
+          .willReturn(expected);
+
+      // when
+      RefreshDto result = authService.refresh("valid-refresh-token");
+
+      // then
+      assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("토큰의 사용자를 찾을 수 없으면 UserNotFoundException을 던진다")
+    void 토큰의_사용자를_찾을_수_없으면_UserNotFoundException을_던진다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      RefreshTokenClaims claims = new RefreshTokenClaims(userId, UUID.randomUUID(), UUID.randomUUID());
+      given(tokenProvider.parseRefreshToken("valid-refresh-token")).willReturn(claims);
+      given(userRepository.findById(userId)).willReturn(Optional.empty());
 
       // when & then
-      assertThatCode(() -> authService.resetPassword(request)).doesNotThrowAnyException();
-
-      verify(mockTempPasswordGenerator, never()).generate();
-      verify(mockTempPasswordRegistry, never()).save(any(), any());
-      verify(mockEventPublisher, never()).publishEvent(any());
+      assertThatThrownBy(() -> authService.refresh("valid-refresh-token"))
+          .isInstanceOf(UserNotFoundException.class);
     }
 
     @Test
-    @DisplayName("호출할 때마다 새로운 임시 비밀번호를 생성기로부터 새로 발급받는다")
-    void resetPassword_calledTwice_generatesTempPasswordEachTime() {
+    @DisplayName("계정이 잠겨있으면 모든 세션을 회수하고 AccountLockedException을 던진다")
+    void 계정이_잠겨있으면_모든_세션을_회수하고_AccountLockedException을_던진다() {
       // given
-      User user = fixtureUnlockedUser();
-      ResetPasswordRequest request = new ResetPasswordRequest(user.getEmail());
-      given(mockUserRepository.findByEmail(user.getEmail())).willReturn(Optional.of(user));
-      given(mockTempPasswordGenerator.generate()).willReturn("first-pw", "second-pw");
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      user.lock(LockReason.ADMIN_ACTION);
+      RefreshTokenClaims claims =
+          new RefreshTokenClaims(user.getId(), UUID.randomUUID(), UUID.randomUUID());
+      given(tokenProvider.parseRefreshToken("valid-refresh-token")).willReturn(claims);
+      given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
 
-      // when
-      authService.resetPassword(request);
-      authService.resetPassword(request);
-
-      // then
-      verify(mockTempPasswordGenerator, times(2)).generate();
-      verify(mockTempPasswordRegistry).save(user.getId(), "first-pw");
-      verify(mockTempPasswordRegistry).save(user.getId(), "second-pw");
+      // when & then
+      assertThatThrownBy(() -> authService.refresh("valid-refresh-token"))
+          .isInstanceOf(AccountLockedException.class);
+      verify(userSessionRegistry).revokeAll(user.getId());
+      verify(userSessionRegistry, never()).rotate(any(), any(), any(), any());
     }
   }
 }

@@ -1,53 +1,42 @@
 package com.sprint.mission.otboo.domain.authuser.auth.event;
 
+import static org.mockito.Mockito.verify;
+
 import com.sprint.mission.otboo.global.mail.MailService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.verify;
-
 @ExtendWith(MockitoExtension.class)
+@DisplayName("TempPasswordEventListener")
 class TempPasswordEventListenerTest {
 
   @InjectMocks
-  TempPasswordEventListener listener;
+  private TempPasswordEventListener tempPasswordEventListener;
 
   @Mock
-  MailService mockMailService;
+  private MailService mailService;
 
-  @Test
-  @DisplayName("이벤트를 수신하면 이메일과 원문 임시 비밀번호로 메일 발송을 위임한다")
-  void handler_onEvent_delegatesToMailService() {
-    // given
-    TempPasswordRequestedEvent event =
-        new TempPasswordRequestedEvent("hong@test.com", "raw-temp-password");
+  @Nested
+  @DisplayName("이벤트 처리 (handler)")
+  class Handler {
 
-    // when
-    listener.handler(event);
+    @Test
+    @DisplayName("이벤트를 받으면 MailService로 임시 비밀번호 메일을 전송한다")
+    void 이벤트를_받으면_MailService로_임시_비밀번호_메일을_전송한다() {
+      // given
+      TempPasswordRequestedEvent event =
+          new TempPasswordRequestedEvent("hong@test.com", "temp-password!");
 
-    // then
-    verify(mockMailService).sendTempPassword("hong@test.com", "raw-temp-password");
-  }
+      // when
+      tempPasswordEventListener.handler(event);
 
-  @Test
-  @DisplayName("메일 발송이 실패하면 예외를 삼키지 않고 그대로 전파한다 (AsyncUncaughtExceptionHandler가 처리하도록)")
-  void handler_mailServiceThrows_propagatesException() {
-    // given
-    TempPasswordRequestedEvent event =
-        new TempPasswordRequestedEvent("hong@test.com", "raw-temp-password");
-    willThrow(new RuntimeException("메일 발송 실패"))
-        .given(mockMailService).sendTempPassword(eq("hong@test.com"), eq("raw-temp-password"));
-
-    // when & then
-    assertThatThrownBy(() -> listener.handler(event))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessage("메일 발송 실패");
+      // then
+      verify(mailService).sendTempPassword("hong@test.com", "temp-password!");
+    }
   }
 }

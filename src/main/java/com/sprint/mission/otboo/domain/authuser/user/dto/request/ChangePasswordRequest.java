@@ -1,6 +1,5 @@
 package com.sprint.mission.otboo.domain.authuser.user.dto.request;
 
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 

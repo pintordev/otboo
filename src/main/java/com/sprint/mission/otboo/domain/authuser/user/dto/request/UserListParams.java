@@ -7,13 +7,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import org.springframework.util.StringUtils;
-
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.UUID;
+import org.springframework.util.StringUtils;
 
 public record UserListParams(
+
     String cursor,
 
     UUID idAfter,
@@ -40,7 +40,7 @@ public record UserListParams(
   private static final SortDirection DEFAULT_SORT_DIRECTION = SortDirection.ASCENDING;
 
   public UserListParams {
-    if (limit == null || limit <= 0) {
+    if (limit == null) {
       limit = DEFAULT_LIMIT;
     }
     if (!StringUtils.hasText(sortBy)) {

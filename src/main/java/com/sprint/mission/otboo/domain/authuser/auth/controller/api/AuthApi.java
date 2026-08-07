@@ -21,7 +21,7 @@ public interface AuthApi {
       @ApiResponse(responseCode = "204", description = "로그아웃 성공"),
       @ApiResponse(responseCode = "500", description = "Redis 장애")
   })
-  ResponseEntity<Void> signOut(UserPrincipal principal, HttpServletResponse response);
+  ResponseEntity<Void> signOut(String refreshToken, HttpServletResponse response);
 
   @Operation(summary = "로그인", description = "이메일/비밀번호 기반 로그인 API")
   @ApiResponses({

@@ -13,13 +13,13 @@ import org.springframework.context.annotation.Configuration;
 public class TokenProviderConfig {
 
   @Bean
-  @ConditionalOnProperty(name = "otboo.auth.token.impl", havingValue = "nimbus", matchIfMissing = true)
+  @ConditionalOnProperty(name = "otboo.security.token.impl", havingValue = "nimbus", matchIfMissing = true)
   public TokenProvider nimbusTokenProvider(TokenProperties tokenProperties, Clock clock) {
     return new NimbusTokenProvider(tokenProperties, clock);
   }
 
   @Bean
-  @ConditionalOnProperty(name = "otboo.auth.token.impl", havingValue = "jjwt")
+  @ConditionalOnProperty(name = "otboo.security.token.impl", havingValue = "jjwt")
   public TokenProvider jjwtTokenProvider(TokenProperties tokenProperties, Clock clock) {
     return new JjwtTokenProvider(tokenProperties, clock);
   }

@@ -21,13 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "프로필 관리", description = "프로필 관련 API")
 public interface UserApi {
 
-  @Operation(summary = "계정 목록 조회", description = "커서 기반 페이지네이션으로 계정 목록을 조회합니다. 이메일/권한/잠금 여부로 필터링할 수 있습니다.")
-  @ApiResponses({
-      @ApiResponse(responseCode = "200", description = "계정 목록 조회 성공"),
-      @ApiResponse(responseCode = "400", description = "요청 값 유효성 검증 실패 또는 잘못된 cursor 값")
-  })
-  ResponseEntity<CursorPageResponse<UserDto>> getUsers(UserListParams condition);
-
   @Operation(summary = "사용자 등록(회원가입)", description = "사용자 등록(회원가입) API")
   @ApiResponses({
       @ApiResponse(responseCode = "201", description = "사용자 등록(회원가입) 성공"),
@@ -36,15 +29,34 @@ public interface UserApi {
   })
   ResponseEntity<UserDto> signUp(UserCreateRequest request);
 
-  ResponseEntity<UserDto> changeRole(UUID userId, UserRoleUpdateRequest request);
-
+  @Operation(summary = "프로필 조회", description = "본인 프로필을 조회합니다.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "프로필 조회 성공"),
+      @ApiResponse(responseCode = "401", description = "인증되지 않음"),
+      @ApiResponse(responseCode = "403", description = "본인 프로필만 조회 가능"),
+      @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+  })
   ResponseEntity<ProfileDto> getProfile(UUID userId, UserPrincipal principal);
 
+  @Operation(summary = "프로필 수정", description = "본인 프로필(이름, 성별, 생년월일, 위치, 체감온도 민감도)을 수정합니다.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "프로필 수정 성공"),
+      @ApiResponse(responseCode = "400", description = "요청 값 유효성 검증 실패"),
+      @ApiResponse(responseCode = "401", description = "인증되지 않음"),
+      @ApiResponse(responseCode = "403", description = "본인 프로필만 수정 가능"),
+      @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+  })
   ResponseEntity<ProfileDto> changeProfile(UUID userId, ProfileUpdateRequest request,
       MultipartFile image, UserPrincipal principal);
 
+  @Operation(summary = "비밀번호 변경", description = "본인 비밀번호를 변경합니다. 변경 즉시 모든 기기의 세션이 회수되어 재로그인이 필요합니다.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "비밀번호 변경 성공"),
+      @ApiResponse(responseCode = "400", description = "요청 값 유효성 검증 실패"),
+      @ApiResponse(responseCode = "401", description = "인증되지 않음"),
+      @ApiResponse(responseCode = "403", description = "본인 비밀번호만 변경 가능"),
+      @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+  })
   ResponseEntity<UserDto> changePassword(UUID userId, ChangePasswordRequest request,
       UserPrincipal principal);
-
-  ResponseEntity<UserDto> changeLocked(UUID userId, UserLockUpdateRequest request);
 }

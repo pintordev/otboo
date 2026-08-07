@@ -12,17 +12,16 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.sprint.mission.otboo.security.token.dto.AccessTokenClaims;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
-import com.sprint.mission.otboo.security.token.exception.ExpiredTokenException;
-import com.sprint.mission.otboo.security.token.exception.InvalidAccessTokenException;
-import com.sprint.mission.otboo.security.token.exception.InvalidRefreshTokenException;
-import com.sprint.mission.otboo.security.token.exception.TokenException;
+import com.sprint.mission.otboo.security.token.exception.business.ExpiredTokenException;
+import com.sprint.mission.otboo.security.token.exception.business.InvalidAccessTokenException;
+import com.sprint.mission.otboo.security.token.exception.business.InvalidRefreshTokenException;
+import com.sprint.mission.otboo.security.token.exception.business.TokenException;
+import com.sprint.mission.otboo.security.token.exception.system.TokenProviderException;
 import com.sprint.mission.otboo.security.token.properties.TokenProperties;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import java.text.ParseException;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
@@ -31,6 +30,7 @@ import java.util.function.Supplier;
 
 public class NimbusTokenProvider implements TokenProvider {
 
+  // 알고리즘 정책
   private static final JWSHeader JWS_HEADER = new JWSHeader.Builder(JWSAlgorithm.HS256)
       .type(JOSEObjectType.JWT)
       .build();
@@ -53,31 +53,33 @@ public class NimbusTokenProvider implements TokenProvider {
       this.refreshSigner = new MACSigner(refreshSecret);
       this.refreshVerifier = new MACVerifier(refreshSecret);
     } catch (JOSEException e) {
-      throw new IllegalStateException("토큰 키 초기화 실패", e);
+      throw TokenProviderException.withMessageAndCause("토큰 키 초기화 실패", e);
+    } catch (IllegalArgumentException e) {
+      // Base64.getDecoder().decode()가 잘못된 base64 형식일 때 던짐
+      throw TokenProviderException.withMessageAndCause("토큰 시크릿 base64 디코딩 실패", e);
     }
   }
 
   @Override
-  public String createAccessToken(UUID userId, String role, UUID sessionId, Instant now) {
+  public String createAccessToken(UUID userId, UUID sessionId, String role, Instant now) {
     JWTClaimsSet claims = new JWTClaimsSet.Builder()
         .subject(userId.toString())
-        .claim("role", role)
         .claim("sid", sessionId.toString())
+        .claim("role", role)
         .issueTime(Date.from(now))
-        .expirationTime(Date.from(getAccessTokenExpiresAt(now)))
+        .expirationTime(Date.from(now.plus(tokenProperties.accessTokenExpiration())))
         .build();
     return sign(claims, accessSigner);
   }
 
   @Override
-  public String createRefreshToken(UUID userId, UUID jti, UUID sessionId, Instant now,
-      Instant expiresAt) {
+  public String createRefreshToken(UUID userId, UUID sessionId, UUID jti, Instant now) {
     JWTClaimsSet claims = new JWTClaimsSet.Builder()
         .subject(userId.toString())
-        .jwtID(jti.toString())
         .claim("sid", sessionId.toString())
+        .jwtID(jti.toString())
         .issueTime(Date.from(now))
-        .expirationTime(Date.from(expiresAt))
+        .expirationTime(Date.from(now.plus(tokenProperties.refreshTokenExpiration())))
         .build();
     return sign(claims, refreshSigner);
   }
@@ -87,16 +89,20 @@ public class NimbusTokenProvider implements TokenProvider {
     JWTClaimsSet claims = verifyAndParse(token, Instant.now(clock), accessVerifier,
         InvalidAccessTokenException::withNone, InvalidAccessTokenException::withCause);
     try {
+      String subject = claims.getSubject();
+      String sid = claims.getStringClaim("sid");
       String role = claims.getStringClaim("role");
-      if (role == null || role.isBlank()) {
+
+      if (subject == null || sid == null || role == null || role.isBlank()) {
         throw InvalidAccessTokenException.withNone();
       }
+
       return new AccessTokenClaims(
-          UUID.fromString(claims.getSubject()),
-          role,
-          UUID.fromString(claims.getStringClaim("sid"))
+          UUID.fromString(subject),
+          UUID.fromString(sid),
+          role
       );
-    } catch (ParseException | IllegalArgumentException | NullPointerException e) {
+    } catch (ParseException | IllegalArgumentException e) {
       throw InvalidAccessTokenException.withCause(e);
     }
   }
@@ -106,24 +112,23 @@ public class NimbusTokenProvider implements TokenProvider {
     JWTClaimsSet claims = verifyAndParse(token, Instant.now(clock), refreshVerifier,
         InvalidRefreshTokenException::withNone, InvalidRefreshTokenException::withCause);
     try {
+
+      String subject = claims.getSubject();
+      String sid = claims.getStringClaim("sid");
+      String jti = claims.getJWTID();
+
+      if (subject == null || sid == null || jti == null) {
+        throw InvalidRefreshTokenException.withNone();
+      }
+
       return new RefreshTokenClaims(
-          UUID.fromString(claims.getSubject()),
-          UUID.fromString(claims.getStringClaim("sid")),
-          UUID.fromString(claims.getJWTID())
+          UUID.fromString(subject),
+          UUID.fromString(sid),
+          UUID.fromString(jti)
       );
-    } catch (ParseException | IllegalArgumentException | NullPointerException e) {
+    } catch (ParseException | IllegalArgumentException e) {
       throw InvalidRefreshTokenException.withCause(e);
     }
-  }
-
-  @Override
-  public Instant getAccessTokenExpiresAt(Instant from) {
-    return from.plus(tokenProperties.accessTokenExpirationMinutes(), ChronoUnit.MINUTES);
-  }
-
-  @Override
-  public Instant getRefreshTokenExpiresAt(Instant from) {
-    return from.plus(tokenProperties.refreshTokenExpirationDays(), ChronoUnit.DAYS);
   }
 
   private String sign(JWTClaimsSet claims, JWSSigner signer) {
@@ -132,13 +137,8 @@ public class NimbusTokenProvider implements TokenProvider {
       jwt.sign(signer);
       return jwt.serialize();
     } catch (JOSEException e) {
-      throw new IllegalStateException("토큰 서명 실패", e);
+      throw TokenProviderException.withMessageAndCause("토큰 서명 실패", e);
     }
-  }
-
-  @Override
-  public Duration getRefreshTokenTtl() {
-    return Duration.ofDays(tokenProperties.refreshTokenExpirationDays());
   }
 
   private JWTClaimsSet verifyAndParse(String token, Instant now, JWSVerifier verifier,

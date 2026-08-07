@@ -4,16 +4,17 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record UserSession(
-    UUID currentRefreshJti,
+    UUID userId,
     UUID sessionId,
+    UUID currentRefreshJti,
     Instant issuedAt
 ) {
 
-  public static UserSession issue(Instant now) {
-    return new UserSession(UUID.randomUUID(), UUID.randomUUID(), now);
+  public static UserSession issue(UUID userId, Instant now) {
+    return new UserSession(userId, UUID.randomUUID(), UUID.randomUUID(), now);
   }
 
   public UserSession rotate() {
-    return new UserSession(UUID.randomUUID(), sessionId, issuedAt);
+    return new UserSession(userId, sessionId, UUID.randomUUID(), issuedAt);
   }
 }

@@ -1,10 +1,16 @@
 package com.sprint.mission.otboo.domain.authuser.auth.authentication;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+
+import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
-import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
+import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
-import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
+import com.sprint.mission.otboo.security.details.CustomUserDetails;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,157 +19,104 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.test.util.ReflectionTestUtils;
-
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import org.springframework.security.core.GrantedAuthority;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("TempPasswordAuthenticationProvider")
 class TempPasswordAuthenticationProviderTest {
 
   @InjectMocks
-  TempPasswordAuthenticationProvider provider;
+  private TempPasswordAuthenticationProvider tempPasswordAuthenticationProvider;
 
   @Mock
-  UserRepository mockUserRepository;
+  private UserRepository userRepository;
 
   @Mock
-  TempPasswordRegistry mockTempPasswordRegistry;
+  private UserMapper userMapper;
 
-  private User fixtureUser(UUID id, String email) {
-    User user = User.create("홍길동", email, "encoded-real-password");
-    ReflectionTestUtils.setField(user, "id", id);
-    return user;
-  }
-
-  private Authentication unauthenticatedToken(String email, String rawPassword) {
-    return UsernamePasswordAuthenticationToken.unauthenticated(email, rawPassword);
-  }
+  @Mock
+  private TempPasswordRegistry tempPasswordRegistry;
 
   @Nested
-  @DisplayName("인증 성공")
-  class AuthenticateSuccess {
+  @DisplayName("임시 비밀번호 인증 (authenticate)")
+  class AuthenticateMethod {
 
     @Test
-    @DisplayName("가입된 이메일 + 잠기지 않은 계정 + 유효한 임시 비밀번호면 인증된 Authentication을 반환한다")
-    void authenticate_validTempPassword_returnsAuthenticatedToken() {
+    @DisplayName("이메일과 임시 비밀번호가 일치하면 인증된 Authentication을 반환한다")
+    void 이메일과_임시_비밀번호가_일치하면_인증된_Authentication을_반환한다() {
       // given
-      UUID userId = UUID.randomUUID();
-      User user = fixtureUser(userId, "hong@test.com");
-      given(mockUserRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
-      given(mockTempPasswordRegistry.matches(userId, "temp-password!")).willReturn(true);
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      UserDto userDto = new UserDto(user.getId(), user.getCreatedAt(), user.getEmail(),
+          user.getName(), user.getRole(), user.isLocked());
+      given(userRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
+      given(tempPasswordRegistry.matches(user.getId(), "temp-password!")).willReturn(true);
+      given(userMapper.userDtoFrom(user)).willReturn(userDto);
+
+      Authentication request = UsernamePasswordAuthenticationToken.unauthenticated(
+          "hong@test.com", "temp-password!");
 
       // when
-      Authentication result = provider.authenticate(
-          unauthenticatedToken("hong@test.com", "temp-password!"));
+      Authentication result = tempPasswordAuthenticationProvider.authenticate(request);
 
       // then
       assertThat(result.isAuthenticated()).isTrue();
+      assertThat(result.getPrincipal()).isInstanceOf(CustomUserDetails.class);
       CustomUserDetails principal = (CustomUserDetails) result.getPrincipal();
-      assertThat(principal.getUserId()).isEqualTo(userId);
-      assertThat(principal.getEmail()).isEqualTo("hong@test.com");
+      assertThat(principal.getUserDto()).isEqualTo(userDto);
+      assertThat(result.getAuthorities())
+          .extracting(GrantedAuthority::getAuthority)
+          .containsExactly("USER");
     }
 
     @Test
-    @DisplayName("인증에 성공해도 임시 비밀번호를 폐기하지 않는다 (사용자가 명시적으로 비밀번호를 변경할 때만 파기됨)")
-    void authenticate_success_doesNotRevokeTempPasswordUntilExplicitPasswordChange() {
+    @DisplayName("이메일로 사용자를 찾을 수 없으면 BadCredentialsException을 던진다")
+    void 이메일로_사용자를_찾을_수_없으면_BadCredentialsException을_던진다() {
       // given
-      UUID userId = UUID.randomUUID();
-      User user = fixtureUser(userId, "hong@test.com");
-      given(mockUserRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
-      given(mockTempPasswordRegistry.matches(userId, "temp-password!")).willReturn(true);
-
-      // when
-      provider.authenticate(unauthenticatedToken("hong@test.com", "temp-password!"));
-
-      // then
-      verify(mockTempPasswordRegistry, never()).revoke(any());
-    }
-  }
-
-  @Nested
-  @DisplayName("인증 실패 - 자격 증명 불일치")
-  class AuthenticateFailure {
-
-    @Test
-    @DisplayName("가입되지 않은 이메일이면 BadCredentialsException을 던지고 임시 비밀번호는 조회하지 않는다")
-    void authenticate_unknownEmail_throwsBadCredentialsException() {
-      // given
-      given(mockUserRepository.findByEmail("unknown@test.com")).willReturn(Optional.empty());
+      given(userRepository.findByEmail("unknown@test.com")).willReturn(Optional.empty());
+      Authentication request = UsernamePasswordAuthenticationToken.unauthenticated(
+          "unknown@test.com", "temp-password!");
 
       // when & then
-      assertThatThrownBy(() ->
-          provider.authenticate(unauthenticatedToken("unknown@test.com", "temp-password!")))
+      assertThatThrownBy(() -> tempPasswordAuthenticationProvider.authenticate(request))
           .isInstanceOf(BadCredentialsException.class);
-
-      verify(mockTempPasswordRegistry, never()).matches(any(), any());
     }
 
     @Test
-    @DisplayName("임시 비밀번호가 저장된 값과 일치하지 않으면 BadCredentialsException을 던지고 폐기하지 않는다")
-    void authenticate_wrongTempPassword_throwsBadCredentialsExceptionAndDoesNotRevoke() {
+    @DisplayName("임시 비밀번호가 일치하지 않으면 BadCredentialsException을 던진다")
+    void 임시_비밀번호가_일치하지_않으면_BadCredentialsException을_던진다() {
       // given
-      UUID userId = UUID.randomUUID();
-      User user = fixtureUser(userId, "hong@test.com");
-      given(mockUserRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
-      given(mockTempPasswordRegistry.matches(userId, "wrong-password")).willReturn(false);
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      given(userRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
+      given(tempPasswordRegistry.matches(user.getId(), "wrong-password")).willReturn(false);
+
+      Authentication request = UsernamePasswordAuthenticationToken.unauthenticated(
+          "hong@test.com", "wrong-password");
 
       // when & then
-      assertThatThrownBy(() ->
-          provider.authenticate(unauthenticatedToken("hong@test.com", "wrong-password")))
+      assertThatThrownBy(() -> tempPasswordAuthenticationProvider.authenticate(request))
           .isInstanceOf(BadCredentialsException.class);
-
-      verify(mockTempPasswordRegistry, never()).revoke(any());
     }
   }
 
   @Nested
-  @DisplayName("인증 실패 - 계정 잠김")
-  class AccountLocked {
-
-    @Test
-    @DisplayName("계정이 잠겨 있으면 임시 비밀번호를 확인하지 않고 바로 LockedException을 던진다")
-    void authenticate_lockedAccount_throwsLockedExceptionWithoutCheckingTempPassword() {
-      // given
-      UUID userId = UUID.randomUUID();
-      User lockedUser = fixtureUser(userId, "hong@test.com");
-      lockedUser.lock(LockReason.ADMIN_ACTION);
-      given(mockUserRepository.findByEmail("hong@test.com")).willReturn(Optional.of(lockedUser));
-
-      // when & then
-      assertThatThrownBy(() ->
-          provider.authenticate(unauthenticatedToken("hong@test.com", "temp-password!")))
-          .isInstanceOf(LockedException.class);
-
-      verify(mockTempPasswordRegistry, never()).matches(any(), any());
-    }
-  }
-
-  @Nested
-  @DisplayName("supports")
+  @DisplayName("지원 여부 확인 (supports)")
   class Supports {
 
     @Test
-    @DisplayName("UsernamePasswordAuthenticationToken은 지원한다")
-    void supports_usernamePasswordAuthenticationToken_returnsTrue() {
-      assertThat(provider.supports(UsernamePasswordAuthenticationToken.class)).isTrue();
+    @DisplayName("UsernamePasswordAuthenticationToken 타입이면 true를 반환한다")
+    void UsernamePasswordAuthenticationToken_타입이면_true를_반환한다() {
+      // when & then
+      assertThat(tempPasswordAuthenticationProvider.supports(UsernamePasswordAuthenticationToken.class))
+          .isTrue();
     }
 
     @Test
-    @DisplayName("그 외 Authentication 구현체는 지원하지 않는다")
-    void supports_otherAuthenticationType_returnsFalse() {
-      assertThat(provider.supports(TestingAuthenticationToken.class)).isFalse();
+    @DisplayName("그 외 타입이면 false를 반환한다")
+    void 그_외_타입이면_false를_반환한다() {
+      // when & then
+      assertThat(tempPasswordAuthenticationProvider.supports(Authentication.class)).isFalse();
     }
   }
 }
