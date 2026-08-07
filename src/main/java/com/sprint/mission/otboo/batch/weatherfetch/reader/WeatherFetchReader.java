@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.infrastructure.item.ItemReader;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -48,8 +47,7 @@ public class WeatherFetchReader implements ItemReader<WeatherGrid> {
 
     while (iterator == null || !iterator.hasNext()) {
       List<WeatherGrid> items = weatherGridRepository.findPageByCursorExcludingForecasted(
-          lastCreatedAt, lastId, baseTime.toInstant(),
-          PageRequest.of(0, weatherFetchProperties.chunkSize()));
+          lastCreatedAt, lastId, baseTime.toInstant(), weatherFetchProperties.chunkSize());
 
       if (items.isEmpty()) {
         return null;
