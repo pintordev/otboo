@@ -11,9 +11,7 @@ import static org.mockito.Mockito.verify;
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherFetchProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
-import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,21 +28,18 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchReaderTest {
 
-  private static final Instant NOW = Instant.parse("2026-07-27T09:00:00Z");
+  private static final BaseTime BASE_TIME = new BaseTime("20260727", "1700");
 
   private WeatherFetchReader reader;
 
   @Mock
   private WeatherGridRepository weatherGridRepository;
 
-  @Mock
-  private Clock clock;
-
   @BeforeEach
   void setUp() {
-    given(clock.instant()).willReturn(NOW);
-    reader = new WeatherFetchReader(weatherGridRepository, clock,
-        new WeatherFetchProperties(2, 10, 3));
+    // JobExecutionContext에서 SpEL로 주입받는 값을 생성자 인자로 직접 대신한다
+    reader = new WeatherFetchReader(weatherGridRepository, new WeatherFetchProperties(2, 10, 3),
+        BASE_TIME.baseDate(), BASE_TIME.baseTime());
   }
 
   @Nested
@@ -115,10 +110,9 @@ class WeatherFetchReaderTest {
     }
 
     @Test
-    @DisplayName("clock으로_계산한_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다")
-    void clock으로_계산한_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다() {
+    @DisplayName("JobExecutionContext에서_주입받은_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다")
+    void JobExecutionContext에서_주입받은_baseTime을_forecastedAt으로_넘겨_이미_저장된_격자를_제외한다() {
       // given
-      BaseTime expectedBaseTime = KmaBaseTimeCalculator.calculate(NOW);
       given(weatherGridRepository.findPageByCursorExcludingForecasted(any(), any(), any(), anyInt()))
           .willReturn(List.of());
 
@@ -127,7 +121,7 @@ class WeatherFetchReaderTest {
 
       // then
       verify(weatherGridRepository).findPageByCursorExcludingForecasted(any(), any(),
-          eq(expectedBaseTime.toInstant()), anyInt());
+          eq(BASE_TIME.toInstant()), anyInt());
     }
   }
 }

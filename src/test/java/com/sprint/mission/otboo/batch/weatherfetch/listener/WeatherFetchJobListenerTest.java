@@ -7,6 +7,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -21,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
+import org.springframework.batch.infrastructure.item.ExecutionContext;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchJobListenerTest {
@@ -32,9 +35,12 @@ class WeatherFetchJobListenerTest {
   @Mock
   private JobExecution jobExecution;
 
+  @Mock
+  private Clock clock;
+
   @BeforeEach
   void setUp() {
-    listener = new WeatherFetchJobListener();
+    listener = new WeatherFetchJobListener(clock);
     logger = (Logger) LoggerFactory.getLogger(WeatherFetchJobListener.class);
     appender = new ListAppender<>();
     appender.start();
@@ -57,6 +63,8 @@ class WeatherFetchJobListenerTest {
       // given
       given(jobExecution.getId()).willReturn(1L);
       given(jobExecution.getJobParameters()).willReturn(new JobParameters());
+      given(clock.instant()).willReturn(Instant.parse("2026-07-27T09:00:00Z"));
+      given(jobExecution.getExecutionContext()).willReturn(new ExecutionContext());
 
       // when
       listener.beforeJob(jobExecution);
@@ -64,6 +72,25 @@ class WeatherFetchJobListenerTest {
       // then
       assertThat(appender.list).isNotEmpty();
       assertThat(appender.list.get(0).getLevel()).isEqualTo(Level.INFO);
+    }
+
+    @Test
+    @DisplayName("baseDate_baseTime을_한_번_계산해_JobExecutionContext에_저장한다")
+    void baseDate_baseTime을_한_번_계산해_JobExecutionContext에_저장한다() {
+      // given - 2026-07-27 18:00 KST 고정, 17시 발표가 최신
+      given(jobExecution.getId()).willReturn(1L);
+      given(jobExecution.getJobParameters()).willReturn(new JobParameters());
+      given(clock.instant()).willReturn(Instant.parse("2026-07-27T09:00:00Z"));
+      ExecutionContext executionContext = new ExecutionContext();
+      given(jobExecution.getExecutionContext()).willReturn(executionContext);
+
+      // when
+      listener.beforeJob(jobExecution);
+
+      // then - Reader/Processor가 각자 Clock으로 계산하는 대신, Job 시작 시 한 번 계산된 이
+      // 값을 JobExecutionContext를 통해 공유받아 Step 경계를 넘어도 동일한 baseTime을 쓴다
+      assertThat(executionContext.getString("baseDate")).isEqualTo("20260727");
+      assertThat(executionContext.getString("baseTime")).isEqualTo("1700");
     }
   }
 

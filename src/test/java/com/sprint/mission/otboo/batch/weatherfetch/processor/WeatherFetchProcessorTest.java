@@ -12,29 +12,32 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherRefresher;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchProcessorTest {
 
-  @InjectMocks
-  private WeatherFetchProcessor processor;
+  private static final BaseTime BASE_TIME = new BaseTime("20260727", "1700");
 
   @Mock
   private WeatherRefresher weatherRefresher;
 
-  @Mock
-  private Clock clock;
+  private WeatherFetchProcessor processor;
+
+  @BeforeEach
+  void setUp() {
+    // JobExecutionContext에서 SpEL로 주입받는 값을 생성자 인자로 직접 대신한다
+    processor = new WeatherFetchProcessor(weatherRefresher, BASE_TIME.baseDate(),
+        BASE_TIME.baseTime());
+  }
 
   @Nested
   @DisplayName("Process")
@@ -44,10 +47,9 @@ class WeatherFetchProcessorTest {
     @DisplayName("WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다")
     void WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다() {
       // given
-      given(clock.instant()).willReturn(Instant.parse("2026-07-27T08:30:00Z"));
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       List<Weather> saved = List.of();
-      given(weatherRefresher.build(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), any()))
+      given(weatherRefresher.build(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), eq(BASE_TIME)))
           .willReturn(saved);
 
       // when
@@ -58,12 +60,9 @@ class WeatherFetchProcessorTest {
     }
 
     @Test
-    @DisplayName("baseTime은_Step_동안_한_번만_계산해서_재사용한다")
-    void baseTime은_Step_동안_한_번만_계산해서_재사용한다() {
+    @DisplayName("여러_격자를_처리해도_JobExecutionContext에서_주입받은_동일한_baseTime을_사용한다")
+    void 여러_격자를_처리해도_JobExecutionContext에서_주입받은_동일한_baseTime을_사용한다() {
       // given
-      given(clock.instant()).willReturn(
-          Instant.parse("2026-07-27T08:30:00Z"),
-          Instant.parse("2026-07-27T20:30:00Z"));
       WeatherGrid grid1 = WeatherGrid.create(60, 127);
       WeatherGrid grid2 = WeatherGrid.create(61, 128);
 
@@ -75,7 +74,8 @@ class WeatherFetchProcessorTest {
       ArgumentCaptor<BaseTime> baseTimeCaptor = ArgumentCaptor.forClass(BaseTime.class);
       verify(weatherRefresher, times(2)).build(any(), any(), baseTimeCaptor.capture());
       List<BaseTime> capturedBaseTimes = baseTimeCaptor.getAllValues();
-      assertThat(capturedBaseTimes.get(0)).isEqualTo(capturedBaseTimes.get(1));
+      assertThat(capturedBaseTimes.get(0)).isEqualTo(BASE_TIME);
+      assertThat(capturedBaseTimes.get(1)).isEqualTo(BASE_TIME);
     }
   }
 }
