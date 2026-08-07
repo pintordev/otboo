@@ -59,38 +59,19 @@ public class Profile {
     this.temperatureSensitivity = temperatureSensitivity;
   }
 
-  public static Profile createDefault(User user) {
+  public static Profile create(User user) {
     return new Profile(user, DEFAULT_TEMPERATURE_SENSITIVITY);
   }
 
-  public void changeFields(String newName, Gender newGender, LocalDate newBirthDate,
-      Location newLocation, int newTemperatureSensitivity) {
-    changeName(newName);
-    changeGender(newGender);
-    changeBirthDate(newBirthDate);
-    if (newLocation != null) {
-      changeLocation(newLocation);
-    }
-    changeTemperatureSensitivity(newTemperatureSensitivity);
-  }
-
-  public void changeName(String newName) {
-    this.user.changeName(newName);
-  }
-
-  public void changeGender(Gender newGender) {
+  public void changeProfile(Gender newGender, LocalDate newBirthDate, Location newLocation,
+      int newTemperatureSensitivity) {
     this.gender = newGender;
-  }
-
-  public void changeBirthDate(LocalDate newBirthDate) {
     this.birthDate = newBirthDate;
-  }
-
-  public void changeLocation(Location newLocation) {
     this.location = newLocation;
+    this.temperatureSensitivity = newTemperatureSensitivity;
   }
 
-  public void changeTemperatureSensitivity(int newTemperatureSensitivity) {
-    this.temperatureSensitivity = newTemperatureSensitivity;
+  public void changeProfileImageUrl(String newProfileImageUrl) {
+    this.profileImageUrl = newProfileImageUrl;
   }
 }

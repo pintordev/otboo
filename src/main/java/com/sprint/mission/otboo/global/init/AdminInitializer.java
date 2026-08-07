@@ -49,7 +49,7 @@ public class AdminInitializer implements ApplicationRunner {
       return;
     }
 
-    Profile adminProfile = Profile.createDefault(admin);
+    Profile adminProfile = Profile.create(admin);
     profileRepository.save(adminProfile);
 
     log.info("관리자 계정이 생성되었습니다: {}", adminProperties.email());

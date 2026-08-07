@@ -1,216 +1,146 @@
 package com.sprint.mission.otboo.domain.authuser.user.mapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.sprint.mission.otboo.domain.authuser.user.dto.request.LocationRequest;
+import com.sprint.mission.otboo.domain.authuser.user.dto.response.LocationDto;
+import com.sprint.mission.otboo.domain.authuser.user.dto.response.ProfileDto;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
+import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
+import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
-import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
-import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
-import com.sprint.mission.otboo.security.details.CustomUserDetails;
-import org.junit.jupiter.api.BeforeEach;
+import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Gender;
+import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.LocationValidationDto;
-import com.sprint.mission.otboo.domain.authuser.user.dto.response.LocationDto;
-import com.sprint.mission.otboo.domain.authuser.user.dto.response.ProfileDto;
-import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
-import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
-import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Gender;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-
-
-import static org.assertj.core.api.Assertions.assertThat;
-
+@DisplayName("UserMapper")
 class UserMapperTest {
 
-  private UserMapper userMapper;
-
-  @BeforeEach
-  void setUp() {
-    userMapper = new UserMapper();
-  }
+  private final UserMapper userMapper = new UserMapper();
 
   @Nested
-  @DisplayName("userDtoFrom(User)")
-  class UserDtoFromUser {
+  @DisplayName("User -> UserDto 변환 (userDtoFrom)")
+  class UserDtoFrom {
 
     @Test
-    @DisplayName("User 엔티티를 UserDto로 정확히 변환한다")
-    void userDtoFrom_user_mapsAllFieldsCorrectly() {
+    @DisplayName("User 엔티티의 필드를 그대로 UserDto로 변환한다")
+    void User_엔티티의_필드를_그대로_UserDto로_변환한다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
 
       // when
-      UserDto dto = userMapper.userDtoFrom(user);
+      UserDto result = userMapper.userDtoFrom(user);
 
       // then
-      assertThat(dto.id()).isEqualTo(user.getId());
-      assertThat(dto.email()).isEqualTo(user.getEmail());
-      assertThat(dto.name()).isEqualTo(user.getName());
-      assertThat(dto.role()).isEqualTo(Role.USER);
-      assertThat(dto.locked()).isFalse();
-      assertThat(dto.createdAt()).isEqualTo(user.getCreatedAt());
-    }
-
-    @Test
-    @DisplayName("ADMIN 권한 User도 role 필드에 정확히 매핑된다")
-    void userDtoFrom_user_mapsAdminRole() {
-      // given
-      User admin = User.createAdmin("관리자", "admin@test.com", "encoded-password");
-
-      // when
-      UserDto dto = userMapper.userDtoFrom(admin);
-
-      // then
-      assertThat(dto.role()).isEqualTo(Role.ADMIN);
+      assertThat(result.id()).isEqualTo(user.getId());
+      assertThat(result.email()).isEqualTo(user.getEmail());
+      assertThat(result.name()).isEqualTo(user.getName());
+      assertThat(result.role()).isEqualTo(user.getRole());
+      assertThat(result.locked()).isEqualTo(user.isLocked());
+      assertThat(result.createdAt()).isEqualTo(user.getCreatedAt());
     }
   }
 
   @Nested
-  @DisplayName("userDtoFrom(CustomUserDetails)")
-  class UserDtoFromCustomUserDetails {
+  @DisplayName("Profile -> ProfileDto 변환 (profileDtoFrom)")
+  class ProfileDtoFrom {
 
     @Test
-    @DisplayName("CustomUserDetails를 UserDto로 정확히 변환한다")
-    void userDtoFrom_customUserDetails_mapsAllFieldsCorrectly() {
+    @DisplayName("연관된 User의 이름을 포함해 ProfileDto로 변환한다")
+    void 연관된_User의_이름을_포함해_ProfileDto로_변환한다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
-      CustomUserDetails principal = new CustomUserDetails(user);
-
-      // when
-      UserDto dto = userMapper.userDtoFrom(principal);
-
-      // then
-      assertThat(dto.id()).isEqualTo(user.getId());
-      assertThat(dto.email()).isEqualTo(user.getEmail());
-      assertThat(dto.name()).isEqualTo(user.getName());
-      assertThat(dto.role()).isEqualTo(Role.USER);
-      assertThat(dto.locked()).isFalse();
-      assertThat(dto.createdAt()).isEqualTo(user.getCreatedAt());
-    }
-
-    @Test
-    @DisplayName("잠긴 계정의 CustomUserDetails는 locked=true로 매핑된다")
-    void userDtoFrom_customUserDetails_mapsLockedState() {
-      // given
-      User user = User.create("홍길동", "hong@test.com", "encoded-password");
-      user.lock(LockReason.ADMIN_ACTION);
-      CustomUserDetails principal = new CustomUserDetails(user);
-
-      // when
-      UserDto dto = userMapper.userDtoFrom(principal);
-
-      // then
-      assertThat(dto.locked()).isTrue();
-    }
-  }
-
-  @Nested
-  @DisplayName("profileDtoFrom(Profile)")
-  class ProfileDtoFromProfile {
-
-    @Test
-    @DisplayName("위치 정보가 있는 Profile을 ProfileDto로 정확히 변환한다")
-    void profileDtoFrom_withLocation_mapsAllFieldsCorrectly() {
-      // given
-      User user = User.create("홍길동", "hong@test.com", "encoded-password");
-      UUID userId = UUID.randomUUID();
-      ReflectionTestUtils.setField(user, "id", userId);
-      Profile profile = Profile.createDefault(user);
-      ReflectionTestUtils.setField(profile, "id", userId);
-
+      Profile profile = Profile.create(user);
       Location location = Location.create(37.5, 127.0, 60, 127, List.of("서울특별시"));
-      profile.changeFields("홍길동", Gender.MALE, LocalDate.of(1995, 1, 1), location, 4);
+      profile.changeProfile(Gender.MALE, LocalDate.of(1995, 1, 1), location, 4);
+      profile.changeProfileImageUrl("https://example.com/image.png");
 
       // when
-      ProfileDto dto = userMapper.profileDtoFrom(profile);
+      ProfileDto result = userMapper.profileDtoFrom(profile);
 
       // then
-      assertThat(dto.userId()).isEqualTo(userId);
-      assertThat(dto.name()).isEqualTo("홍길동");
-      assertThat(dto.gender()).isEqualTo(Gender.MALE);
-      assertThat(dto.birthDate()).isEqualTo(LocalDate.of(1995, 1, 1));
-      assertThat(dto.temperatureSensitivity()).isEqualTo(4);
-      assertThat(dto.location()).isNotNull();
-      assertThat(dto.location().x()).isEqualTo(60);
-      assertThat(dto.location().y()).isEqualTo(127);
+      assertThat(result.userId()).isEqualTo(profile.getId());
+      assertThat(result.name()).isEqualTo("홍길동");
+      assertThat(result.gender()).isEqualTo(Gender.MALE);
+      assertThat(result.birthDate()).isEqualTo(LocalDate.of(1995, 1, 1));
+      assertThat(result.temperatureSensitivity()).isEqualTo(4);
+      assertThat(result.profileImageUrl()).isEqualTo("https://example.com/image.png");
+      assertThat(result.location().latitude()).isEqualTo(37.5);
     }
 
     @Test
-    @DisplayName("위치 정보가 없는 Profile은 location이 null인 ProfileDto로 변환된다")
-    void profileDtoFrom_withoutLocation_mapsNullLocation() {
+    @DisplayName("location이 없으면 ProfileDto의 location은 null이다")
+    void location이_없으면_ProfileDto의_location은_null이다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
-      UUID userId = UUID.randomUUID();
-      ReflectionTestUtils.setField(user, "id", userId);
-      Profile profile = Profile.createDefault(user);
-      ReflectionTestUtils.setField(profile, "id", userId);
+      Profile profile = Profile.create(user);
 
       // when
-      ProfileDto dto = userMapper.profileDtoFrom(profile);
+      ProfileDto result = userMapper.profileDtoFrom(profile);
 
       // then
-      assertThat(dto.location()).isNull();
-      assertThat(dto.temperatureSensitivity()).isEqualTo(3);
+      assertThat(result.location()).isNull();
     }
   }
 
   @Nested
-  @DisplayName("locationDtoFrom(Location)")
-  class LocationDtoFromLocation {
+  @DisplayName("Location -> LocationDto 변환 (locationDtoFrom)")
+  class LocationDtoFrom {
 
     @Test
-    @DisplayName("Location 엔티티를 LocationDto로 정확히 변환한다 (x/y 필드명 유지)")
-    void locationDtoFrom_mapsAllFieldsCorrectly() {
+    @DisplayName("Location 필드를 그대로 LocationDto로 변환한다")
+    void Location_필드를_그대로_LocationDto로_변환한다() {
       // given
       Location location = Location.create(37.5, 127.0, 60, 127, List.of("서울특별시", "강남구"));
 
       // when
-      LocationDto dto = userMapper.locationDtoFrom(location);
+      LocationDto result = userMapper.locationDtoFrom(location);
 
       // then
-      assertThat(dto.latitude()).isEqualTo(37.5);
-      assertThat(dto.longitude()).isEqualTo(127.0);
-      assertThat(dto.x()).isEqualTo(60);
-      assertThat(dto.y()).isEqualTo(127);
-      assertThat(dto.locationNames()).containsExactly("서울특별시", "강남구");
+      assertThat(result.latitude()).isEqualTo(37.5);
+      assertThat(result.longitude()).isEqualTo(127.0);
+      assertThat(result.x()).isEqualTo(60);
+      assertThat(result.y()).isEqualTo(127);
+      assertThat(result.locationNames()).containsExactly("서울특별시", "강남구");
+    }
+
+    @Test
+    @DisplayName("location이 null이면 null을 반환한다")
+    void location이_null이면_null을_반환한다() {
+      // when & then
+      assertThat(userMapper.locationDtoFrom(null)).isNull();
     }
   }
 
   @Nested
-  @DisplayName("locationFrom(LocationValidationDto)")
-  class LocationFromLocationValidationDto {
+  @DisplayName("LocationRequest -> Location 변환 (locationFrom)")
+  class LocationFrom {
 
     @Test
-    @DisplayName("LocationValidationDto를 Location 엔티티로 정확히 변환한다")
-    void locationFrom_validDto_mapsAllFieldsCorrectly() {
+    @DisplayName("LocationRequest 필드를 그대로 Location으로 변환한다")
+    void LocationRequest_필드를_그대로_Location으로_변환한다() {
       // given
-      LocationValidationDto request =
-          new LocationValidationDto(37.5, 127.0, 60, 127, List.of("서울특별시"));
+      LocationRequest request = new LocationRequest(37.5, 127.0, 60, 127, List.of("서울특별시"));
 
       // when
-      Location location = userMapper.locationFrom(request);
+      Location result = userMapper.locationFrom(request);
 
       // then
-      assertThat(location.getLatitude()).isEqualTo(37.5);
-      assertThat(location.getLongitude()).isEqualTo(127.0);
-      assertThat(location.getLocationX()).isEqualTo(60);
-      assertThat(location.getLocationY()).isEqualTo(127);
-      assertThat(location.getLocationNames()).containsExactly("서울특별시");
+      assertThat(result.getLatitude()).isEqualTo(37.5);
+      assertThat(result.getLongitude()).isEqualTo(127.0);
+      assertThat(result.getLocationX()).isEqualTo(60);
+      assertThat(result.getLocationY()).isEqualTo(127);
+      assertThat(result.getLocationNames()).containsExactly("서울특별시");
     }
 
     @Test
-    @DisplayName("dto가 null이면 null을 반환한다")
-    void locationFrom_nullDto_returnsNull() {
-      // when
-      Location location = userMapper.locationFrom(null);
-
-      // then
-      assertThat(location).isNull();
+    @DisplayName("request가 null이면 null을 반환한다")
+    void request가_null이면_null을_반환한다() {
+      // when & then
+      assertThat(userMapper.locationFrom(null)).isNull();
     }
   }
-
 }

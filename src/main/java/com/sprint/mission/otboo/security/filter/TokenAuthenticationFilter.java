@@ -2,11 +2,11 @@ package com.sprint.mission.otboo.security.filter;
 
 import com.sprint.mission.otboo.security.details.UserPrincipal;
 import com.sprint.mission.otboo.security.token.dto.AccessTokenClaims;
-import com.sprint.mission.otboo.security.token.exception.ExpiredTokenException;
-import com.sprint.mission.otboo.security.token.exception.TokenException;
+import com.sprint.mission.otboo.security.token.exception.business.ExpiredTokenException;
+import com.sprint.mission.otboo.security.token.exception.business.TokenException;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
-import com.sprint.mission.otboo.security.usersession.exception.UserSessionException;
-import com.sprint.mission.otboo.security.usersession.exception.UserSessionExpiredException;
+import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionException;
+import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionExpiredException;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,7 +28,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Slf4j
-@RequiredArgsConstructor
 public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
   private static final String BEARER_PREFIX = "Bearer ";
@@ -37,6 +36,12 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
   private final TokenProvider tokenProvider;
   private final UserSessionRegistry userSessionRegistry;
+
+  public TokenAuthenticationFilter(TokenProvider tokenProvider,
+      UserSessionRegistry userSessionRegistry) {
+    this.tokenProvider = tokenProvider;
+    this.userSessionRegistry = userSessionRegistry;
+  }
 
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -75,10 +80,13 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private void authenticateAccessToken(String token) {
+    // 현재 토큰을 사용할 수 있는 기간인지 확인
     AccessTokenClaims claims = tokenProvider.parseAccessToken(token);
 
+    // 현재 사용자 세션이 살아있는지 확인
     userSessionRegistry.verifyUserSession(claims.userId(), claims.sessionId());
 
+    // 현재 로그인한 사용자의 인가 정보 추출
     UserPrincipal userPrincipal = new UserPrincipal(claims.userId(),
         claims.role());
     List<SimpleGrantedAuthority> authorities = Collections.singletonList(

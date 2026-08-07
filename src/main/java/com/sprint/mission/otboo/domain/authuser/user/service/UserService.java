@@ -1,26 +1,21 @@
 package com.sprint.mission.otboo.domain.authuser.user.service;
 
-import com.sprint.mission.otboo.domain.authuser.auth.exception.AccessDeniedException;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.ChangePasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.ProfileUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserCreateRequest;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserListParams;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserLockUpdateRequest;
-import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserRoleUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.ProfileDto;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
-import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
+import com.sprint.mission.otboo.domain.authuser.user.exception.AccessDeniedException;
 import com.sprint.mission.otboo.domain.authuser.user.exception.DuplicateEmailException;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
-import com.sprint.mission.otboo.global.dto.CursorPageResponse;
-import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
+import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -41,43 +36,26 @@ public class UserService {
   private final UserSessionRegistry userSessionRegistry;
   private final TempPasswordRegistry tempPasswordRegistry;
 
-  public CursorPageResponse<UserDto> getUsers(UserListParams condition) {
-    return userRepository.search(condition);
-  }
-
   @Transactional
   public UserDto signUp(UserCreateRequest request) {
-
     if (userRepository.existsByEmail(request.email())) {
       throw DuplicateEmailException.withEmail(request.email());
     }
 
     User newUser = User.create(request.name(), request.email(),
         passwordEncoder.encode(request.password()));
-    User savedUser;
+    User savedUser = null;
     try {
       savedUser = userRepository.saveAndFlush(newUser);
     } catch (DataIntegrityViolationException e) {
-      throw DuplicateEmailException.withEmail(request.email());
+      throw DuplicateEmailException.withEmail(
+          request.email()); // TODO: 특정 DB에 의존하게 되는데 어떻게 해야할까? 고민중
     }
 
-    Profile newDefaultProfile = Profile.createDefault(savedUser);
-    profileRepository.save(newDefaultProfile);
+    Profile newProfile = Profile.create(savedUser);
+    profileRepository.save(newProfile);
 
     return userMapper.userDtoFrom(savedUser);
-  }
-
-  @Transactional
-  public UserDto changeRole(UUID userId, UserRoleUpdateRequest request) {
-    User foundUser = userRepository.findById(userId)
-        .orElseThrow(UserNotFoundException::withNone);
-
-    foundUser.changeRole(request.role());
-
-    // 권한 변경 시 강제 로그아웃
-    userSessionRegistry.revoke(userId);
-
-    return userMapper.userDtoFrom(foundUser);
   }
 
   public ProfileDto getProfile(UUID userId, UUID requestUserId) {
@@ -88,19 +66,20 @@ public class UserService {
   }
 
   @Transactional
-  public ProfileDto changeProfile(UUID userId, UUID requestUserId, ProfileUpdateRequest request,
-      MultipartFile image) {
+  public ProfileDto changeProfile(UUID userId, ProfileUpdateRequest request,
+      MultipartFile image, UUID requestUserId) {
     checkSelf(userId, requestUserId);
 
     Profile foundProfile = profileRepository.findByIdWithUser(userId)
         .orElseThrow(UserNotFoundException::withNone);
 
-    Location newLocation = userMapper.locationFrom(request.location());
-    foundProfile.changeFields(
-        request.name(),
+    // 프로필 정보 수정
+    foundProfile.getUser().changeName(request.name());
+
+    foundProfile.changeProfile(
         request.gender(),
         request.birthDate(),
-        newLocation,
+        userMapper.locationFrom(request.location()),
         request.temperatureSensitivity()
     );
 
@@ -110,38 +89,18 @@ public class UserService {
   }
 
   @Transactional
-  public UserDto changePassword(UUID userId, UUID requestUserId, ChangePasswordRequest request) {
+  public void changePassword(UUID userId, ChangePasswordRequest request, UUID requestUserId) {
     checkSelf(userId, requestUserId);
 
     User foundUser = userRepository.findById(userId)
         .orElseThrow(UserNotFoundException::withNone);
 
-    foundUser.changePassword(passwordEncoder.encode(request.password()));
+    foundUser.changePassword(
+        passwordEncoder.encode(request.password())
+    );
 
-    // 비밀번호 변경 시 강제 로그아웃
-    userSessionRegistry.revoke(userId);
-
-    // 비밀번호 변경 시 tempPasswordRegistry 파기
+    userSessionRegistry.revokeAll(userId);
     tempPasswordRegistry.revoke(userId);
-
-    return userMapper.userDtoFrom(foundUser);
-  }
-
-  @Transactional
-  public UserDto changeLocked(UUID userId, UserLockUpdateRequest request) {
-    User foundUser = userRepository.findById(userId)
-        .orElseThrow(UserNotFoundException::withNone);
-
-    if (request.locked()) {
-      foundUser.lock(LockReason.ADMIN_ACTION);
-    } else {
-      foundUser.unlock();
-    }
-
-    // 잠금 상태 변경 시 강제 로그아웃
-    userSessionRegistry.revoke(userId);
-
-    return userMapper.userDtoFrom(foundUser);
   }
 
   private void checkSelf(UUID userId, UUID requestUserId) {

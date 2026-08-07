@@ -4,9 +4,11 @@ import com.sprint.mission.otboo.domain.authuser.auth.controller.api.AuthApi;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.ResetPasswordRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.request.SignInRequest;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.JwtDto;
+import com.sprint.mission.otboo.domain.authuser.auth.dto.response.RefreshDto;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
+import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
 import com.sprint.mission.otboo.domain.authuser.auth.service.AuthService;
-import com.sprint.mission.otboo.security.cookie.RefreshTokenCookieProvider;
+import com.sprint.mission.otboo.security.cookie.provider.RefreshTokenCookieProvider;
 import com.sprint.mission.otboo.security.details.CurrentUser;
 import com.sprint.mission.otboo.security.details.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,16 +27,17 @@ public class AuthController implements AuthApi {
   private final AuthService authService;
   private final RefreshTokenCookieProvider refreshTokenCookieProvider;
 
+
   @Override
   @PostMapping("/sign-out")
   public ResponseEntity<Void> signOut(
-      @CurrentUser UserPrincipal principal,
+      @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN, defaultValue = "") String refreshToken,
       HttpServletResponse response
   ) {
-    authService.signOut(principal.userId());
+    authService.signOut(refreshToken);
     refreshTokenCookieProvider.clear(response);
     return ResponseEntity
-        .status(HttpStatus.NO_CONTENT)
+        .status(HttpStatus.OK)
         .build();
   }
 
@@ -63,10 +66,10 @@ public class AuthController implements AuthApi {
   @Override
   @PostMapping("/refresh")
   public ResponseEntity<JwtDto> refresh(
-      @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN) String refreshToken,
+      @CookieValue(name = RefreshTokenCookieProvider.REFRESH_TOKEN, defaultValue = "") String refreshToken,
       HttpServletResponse response
   ) {
-    SignInDto result = authService.refresh(refreshToken);
+    RefreshDto result = authService.refresh(refreshToken);
     refreshTokenCookieProvider.attach(response, result.refreshToken());
     return ResponseEntity
         .status(HttpStatus.OK)

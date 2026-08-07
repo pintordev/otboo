@@ -4,8 +4,8 @@ import java.util.UUID;
 
 public record AccessTokenClaims(
     UUID userId,
-    String role,
-    UUID sessionId
+    UUID sessionId,
+    String role
 ) {
 
 }

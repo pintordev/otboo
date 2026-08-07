@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -90,6 +91,14 @@ public class GlobalExceptionHandler {
     return ResponseEntity
         .status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponse(e.getClass().getSimpleName(), "요청 값이 유효하지 않습니다.", details));
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
+    log.warn("[{}] {}", e.getClass().getSimpleName(), e.getMessage());
+    return ResponseEntity
+        .status(HttpStatus.FORBIDDEN)
+        .body(new ErrorResponse(e.getClass().getSimpleName(), "접근 권한이 없습니다.", null));
   }
 
   @ExceptionHandler(OtbooException.class)
