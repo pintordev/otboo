@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseServic
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -17,6 +18,7 @@ public class NotificationRequestedEventListener {
   private final NotificationService notificationService;
   private final SseService sseService;
 
+  @Async("notificationExecutor")
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void on(NotificationRequestedEvent event) {
     List<NotificationDto> notificationDtos = notificationService.create(event);
