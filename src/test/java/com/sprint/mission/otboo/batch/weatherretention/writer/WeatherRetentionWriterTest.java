@@ -3,11 +3,11 @@ package com.sprint.mission.otboo.batch.weatherretention.writer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.batch.weatherretention.dto.WeatherRetentionItem;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
-import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,6 +19,10 @@ import org.springframework.batch.infrastructure.item.Chunk;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherRetentionWriterTest {
+
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   @InjectMocks
   private WeatherRetentionWriter writer;
@@ -34,8 +38,8 @@ class WeatherRetentionWriterTest {
     @DisplayName("청크의_id만_추출해서_deleteAllByIdInBatch를_호출한다")
     void 청크의_id만_추출해서_deleteAllByIdInBatch를_호출한다() {
       // given
-      WeatherRetentionItem item1 = new WeatherRetentionItem(UUID.randomUUID(), Instant.now());
-      WeatherRetentionItem item2 = new WeatherRetentionItem(UUID.randomUUID(), Instant.now());
+      WeatherRetentionItem item1 = FIXTURE_MONKEY.giveMeOne(WeatherRetentionItem.class);
+      WeatherRetentionItem item2 = FIXTURE_MONKEY.giveMeOne(WeatherRetentionItem.class);
       Chunk<WeatherRetentionItem> chunk = new Chunk<>(List.of(item1, item2));
 
       // when
