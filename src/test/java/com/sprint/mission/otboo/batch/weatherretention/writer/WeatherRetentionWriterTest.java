@@ -8,6 +8,7 @@ import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitra
 import com.sprint.mission.otboo.batch.weatherretention.dto.WeatherRetentionItem;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,9 +38,14 @@ class WeatherRetentionWriterTest {
     @Test
     @DisplayName("청크의_id만_추출해서_deleteAllByIdInBatch를_호출한다")
     void 청크의_id만_추출해서_deleteAllByIdInBatch를_호출한다() {
-      // given
-      WeatherRetentionItem item1 = FIXTURE_MONKEY.giveMeOne(WeatherRetentionItem.class);
-      WeatherRetentionItem item2 = FIXTURE_MONKEY.giveMeOne(WeatherRetentionItem.class);
+      // given - WeatherRetentionItem엔 @NotNull이 없어 FixtureMonkey가 가끔 id를 null로
+      // 생성한다(List.of()가 null을 허용하지 않아 NPE로 이어짐) - 검증에 쓰는 id만 명시적으로 고정
+      WeatherRetentionItem item1 = FIXTURE_MONKEY.giveMeBuilder(WeatherRetentionItem.class)
+          .set("id", UUID.randomUUID())
+          .sample();
+      WeatherRetentionItem item2 = FIXTURE_MONKEY.giveMeBuilder(WeatherRetentionItem.class)
+          .set("id", UUID.randomUUID())
+          .sample();
       Chunk<WeatherRetentionItem> chunk = new Chunk<>(List.of(item1, item2));
 
       // when
