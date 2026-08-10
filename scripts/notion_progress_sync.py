@@ -282,13 +282,22 @@ def archive_card(page_id):
 def delete_marked_cards(cards):
     """`삭제 예정`이 체크된 카드를 archive하고, 남은 카드 목록을 반환한다.
     이후 단계(이슈 동기화 루프·잉여 카드 점검)가 이미 삭제 처리된 카드를
-    다시 건드리지 않도록 호출부에서 반환값을 그대로 이어쓴다."""
+    다시 건드리지 않도록 호출부에서 반환값을 그대로 이어쓴다.
+
+    카드 하나의 archive 요청이 실패해도(네트워크 오류, Notion API 오류 등) 나머지 카드
+    처리와 이후 단계를 막지 않는다 — main()의 이슈 처리 루프와 동일한 컨벤션(개별 실패를
+    로깅만 하고 계속 진행)을 따른다. 실패한 카드는 삭제되지 않은 것이므로 remaining에 남겨
+    다음 실행에서 다시 시도되게 한다."""
     remaining = []
     for card in cards:
-        if bf.card_marked_for_deletion(card):
+        if not bf.card_marked_for_deletion(card):
+            remaining.append(card)
+            continue
+        try:
             archive_card(card["id"])
             print(f"archived (삭제 예정): \"{bf.card_title(card)}\" ({bf.card_notion_url(card)})")
-        else:
+        except requests.RequestException as exc:
+            print(f"FAIL archive \"{bf.card_title(card)}\" ({bf.card_notion_url(card)}): {exc}")
             remaining.append(card)
     return remaining
 
