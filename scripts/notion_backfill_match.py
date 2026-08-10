@@ -111,6 +111,10 @@ def card_excluded(card):
     return card["properties"]["이슈 미대상"]["checkbox"]
 
 
+def card_marked_for_deletion(card):
+    return card["properties"]["삭제 예정"]["checkbox"]
+
+
 def card_notion_url(card):
     return f"https://www.notion.so/{card['id'].replace('-', '')}"
 

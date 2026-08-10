@@ -271,6 +271,28 @@ def send_dm_to_discord_id(discord_id, message):
     ).raise_for_status()
 
 
+def archive_card(page_id):
+    resp = requests.patch(
+        f"{bf.BASE_URL}/pages/{page_id}", headers=bf.HEADERS,
+        json={"archived": True}, timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+
+
+def delete_marked_cards(cards):
+    """`삭제 예정`이 체크된 카드를 archive하고, 남은 카드 목록을 반환한다.
+    이후 단계(이슈 동기화 루프·잉여 카드 점검)가 이미 삭제 처리된 카드를
+    다시 건드리지 않도록 호출부에서 반환값을 그대로 이어쓴다."""
+    remaining = []
+    for card in cards:
+        if bf.card_marked_for_deletion(card):
+            archive_card(card["id"])
+            print(f"archived (삭제 예정): \"{bf.card_title(card)}\" ({bf.card_notion_url(card)})")
+        else:
+            remaining.append(card)
+    return remaining
+
+
 def check_surplus_cards(cards, milestones, sprint_titles):
     dm_lines_by_discord_id = {}
     webhook_lines = []
@@ -337,6 +359,7 @@ def process_issue(issue, linked_cards_by_url, projects_items, milestones, sprint
 def main():
     issues = bf.fetch_github_issues()
     cards = bf.fetch_notion_cards()
+    cards = delete_marked_cards(cards)
     sprint_titles = bf.resolve_sprint_titles(cards)
     sprint_page_by_title = {v: k for k, v in sprint_titles.items()}
     milestones = fetch_milestones()
@@ -351,6 +374,7 @@ def main():
             print(f"FAIL #{issue['number']}: {exc}")
 
     cards = bf.fetch_notion_cards()
+    cards = delete_marked_cards(cards)
     sprint_titles = bf.resolve_sprint_titles(cards)
     check_surplus_cards(cards, milestones, sprint_titles)
 
