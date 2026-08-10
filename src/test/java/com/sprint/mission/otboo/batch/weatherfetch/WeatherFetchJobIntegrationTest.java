@@ -143,6 +143,11 @@ class WeatherFetchJobIntegrationTest {
       // 이 테스트의 관심사가 아니다.
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(weatherRepository.count()).isEqualTo(1);
+      // atLeast(8)만으로는 weatherFetchStep 혼자 retryLimit을 넘겨 8회를 채운 경우와
+      // weatherFetchRetryStep까지 실제로 실행된 경우를 구분하지 못한다 - 두 Step이 모두
+      // 실행됐다는 계약 자체를 명시적으로 검증한다
+      assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
+          .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
       verify(kmaForecastFetcher, atLeast(8)).fetch(eq(new KmaGridPoint(61, 128)), any(), any());
     }
 
