@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   sync:
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,6 +43,7 @@ jobs:
 
   field-check:
     needs: sync
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
