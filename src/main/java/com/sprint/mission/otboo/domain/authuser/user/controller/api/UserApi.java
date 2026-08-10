@@ -33,10 +33,9 @@ public interface UserApi {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "프로필 조회 성공"),
       @ApiResponse(responseCode = "401", description = "인증되지 않음"),
-      @ApiResponse(responseCode = "403", description = "본인 프로필만 조회 가능"),
       @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
   })
-  ResponseEntity<ProfileDto> getProfile(UUID userId, UserPrincipal principal);
+  ResponseEntity<ProfileDto> getProfile(UUID userId);
 
   @Operation(summary = "프로필 수정", description = "본인 프로필(이름, 성별, 생년월일, 위치, 체감온도 민감도)을 수정합니다.")
   @ApiResponses({

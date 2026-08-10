@@ -45,7 +45,7 @@ public class User {
   @Column(nullable = false)
   private Role role;
 
-  @Column(nullable = false)
+  @Column(name = "is_locked", nullable = false)
   private boolean locked;
 
   @Enumerated(EnumType.STRING)

@@ -32,7 +32,8 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
   }
 
   @Override
-  protected String craftToken(String base64Secret, String subject, String sid, String role, String jti,
+  protected String craftToken(String base64Secret, String subject, String sid, String role,
+      String jti,
       Instant issuedAt, Instant expiration) {
     try {
       JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
@@ -61,7 +62,7 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
 
   // NimbusTokenProvider는 jjwt와 달리 헤더의 alg를 명시적으로 HS256과 비교해서 걸러낸다 (verifyAndParse 참고).
   @Nested
-  class 알고리즘_검증 {
+  class VerifyAlgorithm {
 
     @Test
     void 실패_HS256이_아닌_알고리즘으로_서명된_토큰이면_InvalidAccessTokenException이_발생한다() throws JOSEException {
@@ -69,7 +70,8 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
       TokenProvider provider = createProvider(
           new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET),
           Clock.fixed(NOW, ZoneOffset.UTC));
-      String token = signWithHs384(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "ROLE_USER", null);
+      String token = signWithHs384(UUID.randomUUID().toString(), UUID.randomUUID().toString(),
+          "ROLE_USER", null);
 
       // when & then
       assertThatThrownBy(() -> provider.parseAccessToken(token))
@@ -90,7 +92,8 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
           .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
-    private String signWithHs384(String subject, String sid, String role, String jti) throws JOSEException {
+    private String signWithHs384(String subject, String sid, String role, String jti)
+        throws JOSEException {
       byte[] hs384Secret = new byte[48];
       Arrays.fill(hs384Secret, (byte) 7);
       JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()

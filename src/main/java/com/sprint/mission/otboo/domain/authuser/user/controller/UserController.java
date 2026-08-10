@@ -43,11 +43,10 @@ public class UserController implements UserApi {
   @Override
   @GetMapping("/{userId}/profiles")
   public ResponseEntity<ProfileDto> getProfile(
-      @PathVariable UUID userId,
-      @CurrentUser UserPrincipal principal) {
+      @PathVariable UUID userId) {
     return ResponseEntity
         .status(HttpStatus.OK)
-        .body(userService.getProfile(userId, principal.userId()));
+        .body(userService.getProfile(userId));
   }
 
   @Override

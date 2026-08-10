@@ -81,7 +81,8 @@ class UserServiceTest {
       UserCreateRequest request = new UserCreateRequest("hong@test.com", "password1", "홍길동");
       given(userRepository.existsByEmail("hong@test.com")).willReturn(false);
       given(passwordEncoder.encode("password1")).willReturn("encoded-password");
-      given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocation -> invocation.getArgument(0));
+      given(userRepository.saveAndFlush(any(User.class))).willAnswer(
+          invocation -> invocation.getArgument(0));
 
       UserDto expected = new UserDto(UUID.randomUUID(), null, "hong@test.com", "홍길동", null, false);
       given(userMapper.userDtoFrom(any(User.class))).willReturn(expected);
@@ -128,8 +129,8 @@ class UserServiceTest {
   class GetProfile {
 
     @Test
-    @DisplayName("본인이면 프로필을 조회해서 반환한다")
-    void 본인이면_프로필을_조회해서_반환한다() {
+    @DisplayName("프로필을 조회해서 반환한다")
+    void 프로필을_조회해서_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
@@ -140,23 +141,10 @@ class UserServiceTest {
       given(userMapper.profileDtoFrom(profile)).willReturn(expected);
 
       // when
-      ProfileDto result = userService.getProfile(userId, userId);
+      ProfileDto result = userService.getProfile(userId);
 
       // then
       assertThat(result).isEqualTo(expected);
-    }
-
-    @Test
-    @DisplayName("본인이 아니면 AccessDeniedException을 던진다")
-    void 본인이_아니면_AccessDeniedException을_던진다() {
-      // given
-      UUID userId = UUID.randomUUID();
-      UUID requestUserId = UUID.randomUUID();
-
-      // when & then
-      assertThatThrownBy(() -> userService.getProfile(userId, requestUserId))
-          .isInstanceOf(AccessDeniedException.class);
-      verify(profileRepository, never()).findByIdWithUser(any());
     }
 
     @Test
@@ -167,7 +155,7 @@ class UserServiceTest {
       given(profileRepository.findByIdWithUser(userId)).willReturn(Optional.empty());
 
       // when & then
-      assertThatThrownBy(() -> userService.getProfile(userId, userId))
+      assertThatThrownBy(() -> userService.getProfile(userId))
           .isInstanceOf(UserNotFoundException.class);
     }
   }
@@ -187,7 +175,8 @@ class UserServiceTest {
 
       LocationRequest locationRequest = new LocationRequest(37.5, 127.0, 60, 127, null);
       ProfileUpdateRequest request =
-          new ProfileUpdateRequest("김철수", Gender.MALE, LocalDate.of(1995, 1, 1), locationRequest, 4);
+          new ProfileUpdateRequest("김철수", Gender.MALE, LocalDate.of(1995, 1, 1), locationRequest,
+              4);
       Location location = Location.create(37.5, 127.0, 60, 127, null);
       given(userMapper.locationFrom(locationRequest)).willReturn(location);
 

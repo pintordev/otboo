@@ -58,8 +58,7 @@ public class UserService {
     return userMapper.userDtoFrom(savedUser);
   }
 
-  public ProfileDto getProfile(UUID userId, UUID requestUserId) {
-    checkSelf(userId, requestUserId);
+  public ProfileDto getProfile(UUID userId) {
     Profile foundProfile = profileRepository.findByIdWithUser(userId)
         .orElseThrow(UserNotFoundException::withNone);
     return userMapper.profileDtoFrom(foundProfile);
