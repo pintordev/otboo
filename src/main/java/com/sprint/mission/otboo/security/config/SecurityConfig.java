@@ -1,15 +1,15 @@
 package com.sprint.mission.otboo.security.config;
 
+import com.sprint.mission.otboo.domain.authuser.auth.authentication.TempPasswordAuthenticationProvider;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
-import com.sprint.mission.otboo.security.exception.ErrorResponseWriter;
+import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetailsService;
+import com.sprint.mission.otboo.security.exception.ErrorResponseWriter;
 import com.sprint.mission.otboo.security.filter.TokenAuthenticationFilter;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
-import com.sprint.mission.otboo.domain.authuser.auth.authentication.TempPasswordAuthenticationProvider;
-import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -67,6 +67,7 @@ public class SecurityConfig {
     http.csrf(csrf -> csrf
         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+        .ignoringRequestMatchers("/ws/**")
     );
 
     http.sessionManagement(session -> session
@@ -91,6 +92,7 @@ public class SecurityConfig {
         .requestMatchers("/", "/index.html", "/favicon.ico", "/css/**", "/js/**", "/images/**",
             "/assets/**", "/logo_symbol.svg", "/vite.svg").permitAll()
         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+        .requestMatchers("/ws/**").permitAll()
 
         .requestMatchers(HttpMethod.POST, "/api/auth/sign-out").permitAll()
         .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
