@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -131,10 +132,18 @@ class WeatherFetchJobIntegrationTest {
           jobOperatorTestUtils.getUniqueJobParameters());
 
       // then - retryLimit(3)은 최초 시도 포함 4회 시도를 의미. weatherFetchStep에서 4회 시도 후
-      // skip되고, weatherFetchRetryStep이 같은 격자를 다시 읽어 또 4회 시도 후 skip(총 8회)
+      // skip되고, weatherFetchRetryStep이 같은 격자를 다시 읽어 또 4회 시도 후 skip(최소 8회).
+      // 정확히 8회가 아니라 atLeast(8)인 이유 - 이 테스트만 유일하게 청크 안에 격자 2개
+      // (60,127 항상 성공 / 61,128 항상 실패)가 함께 들어간다. Spring Batch의 fault-tolerant
+      // 청크 처리는 retry가 소진된 뒤 실패 항목을 격리하려고 내부적으로 청크를 재처리할 수 있는데,
+      // 이 과정에서 이미 성공한 60,127까지 다시 처리 대상에 들어가면서 61,128의 재시도 횟수가
+      // 8보다 커질 수 있다(CI에서 실제로 13회 관측됨, 로컬에서는 항상 정확히 8회라 재현은 못 함 -
+      // 격자 1개짜리 청크를 쓰는 다른 재시도 테스트들은 이 모호성이 없어 안전함). 8은 하한선
+      // (retryLimit이 실제로 작동했다는 증거)으로만 검증하고, 그 이상의 내부 재처리 횟수는
+      // 이 테스트의 관심사가 아니다.
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(weatherRepository.count()).isEqualTo(1);
-      verify(kmaForecastFetcher, times(8)).fetch(eq(new KmaGridPoint(61, 128)), any(), any());
+      verify(kmaForecastFetcher, atLeast(8)).fetch(eq(new KmaGridPoint(61, 128)), any(), any());
     }
 
     @Test
