@@ -325,10 +325,11 @@ def check_surplus_cards(cards, milestones, sprint_titles):
             webhook_lines.append(line)
 
     header = "[잉여 카드 점검] 아래 카드들은 소속 스프린트가 종료됐는데 연결된 GitHub 이슈가 없습니다:\n"
+    footer = "\n\n확인 후 스프린트 일정을 이월시키거나 `이슈 미대상` 또는 `삭제 예정`을 체크해주세요."
     for discord_id, lines in dm_lines_by_discord_id.items():
-        send_dm_to_discord_id(discord_id, header + "\n".join(lines))
+        send_dm_to_discord_id(discord_id, header + "\n".join(lines) + footer)
     if webhook_lines:
-        send_webhook(header + "\n".join(webhook_lines))
+        send_webhook(header + "\n".join(webhook_lines) + footer)
 
 
 def process_issue(issue, linked_cards_by_url, projects_items, milestones, sprint_page_by_title):
