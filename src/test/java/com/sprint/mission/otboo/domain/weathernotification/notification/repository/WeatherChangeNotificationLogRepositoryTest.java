@@ -122,4 +122,30 @@ class WeatherChangeNotificationLogRepositoryTest {
       assertThat(found).isEmpty();
     }
   }
+
+  @Nested
+  @DisplayName("DeleteByForecastAtBefore")
+  class DeleteByForecastAtBefore {
+
+    @Test
+    @DisplayName("지정_시각보다_forecastAt이_이전인_로그만_삭제한다")
+    void 지정_시각보다_forecastAt이_이전인_로그만_삭제한다() {
+      WeatherGrid grid = weatherGrid();
+      testEntityManager.flush();
+
+      Instant cutoff = Instant.parse("2026-07-27T00:00:00Z");
+      logRepository.save(logOf(grid, Instant.parse("2026-07-26T00:00:00Z"),
+          Instant.parse("2026-07-26T05:00:00Z")));
+      WeatherChangeNotificationLog kept = logRepository.save(
+          logOf(grid, Instant.parse("2026-07-27T00:00:00Z"), Instant.parse("2026-07-27T05:00:00Z")));
+      testEntityManager.flush();
+
+      int deleted = logRepository.deleteByForecastAtBefore(cutoff);
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      assertThat(deleted).isEqualTo(1);
+      assertThat(logRepository.findById(kept.getId())).isPresent();
+    }
+  }
 }
