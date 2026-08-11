@@ -24,7 +24,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @RequiredArgsConstructor
-@EnableConfigurationProperties(WeatherFetchProperties.class)
+@EnableConfigurationProperties({WeatherFetchProperties.class, WeatherChangeProperties.class})
 public class WeatherFetchJobConfig {
 
   private final JobRepository jobRepository;
