@@ -82,4 +82,44 @@ class WeatherChangeNotificationLogRepositoryTest {
           .isInstanceOf(DataIntegrityViolationException.class);
     }
   }
+
+  @Nested
+  @DisplayName("FindByWeatherGridAndForecastAt")
+  class FindByWeatherGridAndForecastAt {
+
+    @Test
+    @DisplayName("weatherGrid와_forecastAt이_정확히_일치하는_로그만_반환한다")
+    void weatherGrid와_forecastAt이_정확히_일치하는_로그만_반환한다() {
+      WeatherGrid grid = weatherGrid();
+      WeatherGrid otherGrid = weatherGrid();
+      testEntityManager.flush();
+
+      Instant forecastAt = Instant.parse("2026-07-27T00:00:00Z");
+      Instant otherForecastAt = Instant.parse("2026-07-28T00:00:00Z");
+      WeatherChangeNotificationLog matching = logRepository.save(
+          logOf(grid, forecastAt, Instant.parse("2026-07-27T05:00:00Z")));
+      logRepository.save(logOf(grid, otherForecastAt, Instant.parse("2026-07-28T05:00:00Z")));
+      logRepository.save(logOf(otherGrid, forecastAt, Instant.parse("2026-07-27T05:00:00Z")));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      Optional<WeatherChangeNotificationLog> found = logRepository
+          .findByWeatherGridAndForecastAt(grid, forecastAt);
+
+      assertThat(found).isPresent();
+      assertThat(found.get().getId()).isEqualTo(matching.getId());
+    }
+
+    @Test
+    @DisplayName("일치하는_로그가_없으면_빈_Optional을_반환한다")
+    void 일치하는_로그가_없으면_빈_Optional을_반환한다() {
+      WeatherGrid grid = weatherGrid();
+      testEntityManager.flush();
+
+      Optional<WeatherChangeNotificationLog> found = logRepository
+          .findByWeatherGridAndForecastAt(grid, Instant.parse("2026-07-27T00:00:00Z"));
+
+      assertThat(found).isEmpty();
+    }
+  }
 }
