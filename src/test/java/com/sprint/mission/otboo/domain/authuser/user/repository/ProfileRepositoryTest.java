@@ -30,9 +30,12 @@ import org.springframework.test.context.ActiveProfiles;
 @DisplayName("ProfileRepository")
 class ProfileRepositoryTest {
 
+  // DB NOT NULL 컬럼(users.name 등)엔 @NotNull 애너테이션이 없어 JakartaValidationPlugin만으론
+  // null 방지가 안 된다 - defaultNotNull로 참조 타입 필드 전반의 랜덤 null 생성을 차단한다.
   private static final FixtureMonkey entityFixtureMonkey = FixtureMonkey.builder()
       .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
       .plugin(new JakartaValidationPlugin())
+      .defaultNotNull(true)
       .build();
 
   @Autowired
