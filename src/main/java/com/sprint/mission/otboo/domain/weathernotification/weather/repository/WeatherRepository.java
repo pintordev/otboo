@@ -26,6 +26,18 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   Optional<Weather> findByWeatherGridAndForecastAtAndForecastedAt(WeatherGrid weatherGrid,
       Instant forecastAt, Instant forecastedAt);
 
+  @Query(value = """
+      SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY forecast_at ORDER BY forecasted_at DESC) AS rn
+        FROM weathers
+        WHERE weather_grid_id = :#{#weatherGrid.id} AND forecast_at IN (:forecastAts)
+      ) ranked
+      WHERE rn <= 2
+      ORDER BY forecast_at, forecasted_at DESC
+      """, nativeQuery = true)
+  List<Weather> findRecentTwoRevisions(@Param("weatherGrid") WeatherGrid weatherGrid,
+      @Param("forecastAts") List<Instant> forecastAts);
+
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(value = """
       INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
