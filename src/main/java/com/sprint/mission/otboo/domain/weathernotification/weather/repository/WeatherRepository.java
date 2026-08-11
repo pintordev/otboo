@@ -38,6 +38,9 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   List<Weather> findRecentTwoRevisions(@Param("weatherGrid") WeatherGrid weatherGrid,
       @Param("forecastAts") List<Instant> forecastAts);
 
+  @Query("SELECT DISTINCT w.weatherGrid FROM Weather w WHERE w.forecastedAt = :forecastedAt")
+  List<WeatherGrid> findGridsUpdatedAt(@Param("forecastedAt") Instant forecastedAt);
+
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(value = """
       INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
