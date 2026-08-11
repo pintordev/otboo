@@ -210,6 +210,32 @@ class WeatherRepositoryTest {
   }
 
   @Nested
+  @DisplayName("FindGridsUpdatedAt")
+  class FindGridsUpdatedAt {
+
+    @Test
+    @DisplayName("해당_forecastedAt으로_저장된_격자만_반환한다")
+    void 해당_forecastedAt으로_저장된_격자만_반환한다() {
+      WeatherGrid updatedGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid staleGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      testEntityManager.flush();
+
+      Instant thisRun = Instant.parse("2026-07-27T08:00:00Z");
+      Instant previousRun = Instant.parse("2026-07-27T05:00:00Z");
+      weatherRepository.save(
+          weatherOf(updatedGrid, thisRun, Instant.parse("2026-07-27T00:00:00Z"), 25.0));
+      weatherRepository.save(
+          weatherOf(staleGrid, previousRun, Instant.parse("2026-07-27T00:00:00Z"), 21.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherGrid> result = weatherRepository.findGridsUpdatedAt(thisRun);
+
+      assertThat(result).extracting(WeatherGrid::getId).containsExactly(updatedGrid.getId());
+    }
+  }
+
+  @Nested
   @DisplayName("FindForRetention")
   class FindForRetention {
 
