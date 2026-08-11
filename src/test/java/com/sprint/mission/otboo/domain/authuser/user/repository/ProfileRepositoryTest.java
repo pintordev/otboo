@@ -2,10 +2,15 @@ package com.sprint.mission.otboo.domain.authuser.user.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
+import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
+import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +29,11 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({JpaConfig.class, QuerydslConfig.class})
 @DisplayName("ProfileRepository")
 class ProfileRepositoryTest {
+
+  private static final FixtureMonkey entityFixtureMonkey = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
 
   @Autowired
   private UserRepository userRepository;
@@ -109,6 +119,52 @@ class ProfileRepositoryTest {
 
       // then
       assertThat(found).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("격자 좌표로 조회 (findByLocation)")
+  class FindByLocation {
+
+    @Test
+    @DisplayName("location 좌표가 일치하는 프로필만 반환하고 위치 미등록 프로필은 제외한다")
+    void location_좌표가_일치하는_프로필만_반환하고_위치_미등록_프로필은_제외한다() {
+      // given
+      User matchingUser = entityFixtureMonkey.giveMeBuilder(User.class).set("id", null).sample();
+      userRepository.save(matchingUser);
+      Profile matchingProfile = entityFixtureMonkey.giveMeBuilder(Profile.class)
+          .set("id", null)
+          .set("user", matchingUser)
+          .set("location", Location.create(37.5, 127.0, 60, 127, List.of("서울특별시", "강남구")))
+          .sample();
+      profileRepository.save(matchingProfile);
+
+      User otherGridUser = entityFixtureMonkey.giveMeBuilder(User.class).set("id", null).sample();
+      userRepository.save(otherGridUser);
+      Profile otherGridProfile = entityFixtureMonkey.giveMeBuilder(Profile.class)
+          .set("id", null)
+          .set("user", otherGridUser)
+          .set("location", Location.create(35.1, 129.0, 98, 76, List.of("부산광역시")))
+          .sample();
+      profileRepository.save(otherGridProfile);
+
+      User noLocationUser = entityFixtureMonkey.giveMeBuilder(User.class).set("id", null)
+          .sample();
+      userRepository.save(noLocationUser);
+      Profile noLocationProfile = entityFixtureMonkey.giveMeBuilder(Profile.class)
+          .set("id", null)
+          .set("user", noLocationUser)
+          .set("location", null)
+          .sample();
+      profileRepository.save(noLocationProfile);
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // when
+      List<Profile> found = profileRepository.findByLocation(60, 127);
+
+      // then
+      assertThat(found).extracting(Profile::getId).containsExactly(matchingProfile.getId());
     }
   }
 }
