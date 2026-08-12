@@ -231,6 +231,12 @@ class WeatherFetchJobListenerTest {
 
       // when & then - detectAndNotify()의 예외가 Job 최종 상태를 되돌리면 안 된다
       assertThatCode(() -> listener.afterJob(jobExecution)).doesNotThrowAnyException();
+      // 빈 catch 금지 - 흡수한 예외는 반드시 error 로그로 남겨야 한다(conventions.md 14번)
+      assertThat(appender.list)
+          .anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains("날씨 급변 감지 실패");
+          });
     }
   }
 }
