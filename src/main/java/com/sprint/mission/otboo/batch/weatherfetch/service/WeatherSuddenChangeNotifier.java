@@ -93,10 +93,12 @@ public class WeatherSuddenChangeNotifier {
           .sorted(Comparator.comparing(Weather::getForecastedAt).reversed())
           .toList();
       Weather latest = sorted.get(0);
-      Weather baseline = resolveBaseline(grid, forecastAt, sorted.get(1));
+      Optional<WeatherChangeNotificationLog> notificationLog =
+          notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt);
+      Weather baseline = resolveBaseline(grid, forecastAt, sorted.get(1), notificationLog);
       Optional<WeatherChangeEvaluator.ChangeResult> result =
           weatherChangeEvaluator.evaluate(baseline, latest);
-      if (result.isPresent() && publish(result.get())) {
+      if (result.isPresent() && publish(result.get(), notificationLog)) {
         notified++;
       }
     }
@@ -105,8 +107,9 @@ public class WeatherSuddenChangeNotifier {
 
   // 이미 이 예보일로 알림을 보낸 적 있으면 "직전 리비전"이 아니라 "마지막 알림 기준 리비전"과
   // 비교한다 - 노이즈성 재발행은 막고, 그 이후 진짜 더 벌어진 변화는 여전히 잡는다.
-  private Weather resolveBaseline(WeatherGrid grid, Instant forecastAt, Weather previousRevision) {
-    return notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt)
+  private Weather resolveBaseline(WeatherGrid grid, Instant forecastAt, Weather previousRevision,
+      Optional<WeatherChangeNotificationLog> notificationLog) {
+    return notificationLog
         .map(WeatherChangeNotificationLog::getLastNotifiedForecastedAt)
         .flatMap(lastNotifiedForecastedAt -> weatherRepository
             .findByWeatherGridAndForecastAtAndForecastedAt(grid, forecastAt,
@@ -120,7 +123,8 @@ public class WeatherSuddenChangeNotifier {
         .orElse(previousRevision);
   }
 
-  private boolean publish(WeatherChangeEvaluator.ChangeResult result) {
+  private boolean publish(WeatherChangeEvaluator.ChangeResult result,
+      Optional<WeatherChangeNotificationLog> notificationLog) {
     WeatherGrid grid = result.weatherGrid();
     List<Profile> profiles = profileRepository.findByLocation(grid.getX(), grid.getY());
     if (profiles.isEmpty()) {
@@ -135,12 +139,13 @@ public class WeatherSuddenChangeNotifier {
     String content = regionName + String.join(" ", result.reasons());
     eventPublisher.publishEvent(new NotificationRequestedEvent(
         Set.copyOf(receiverIds), "날씨 급변", content, NotificationLevel.WARNING));
-    recordNotified(grid, result.forecastAt(), result.latestForecastedAt());
+    recordNotified(grid, result.forecastAt(), result.latestForecastedAt(), notificationLog);
     return true;
   }
 
-  private void recordNotified(WeatherGrid grid, Instant forecastAt, Instant latestForecastedAt) {
-    notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt)
+  private void recordNotified(WeatherGrid grid, Instant forecastAt, Instant latestForecastedAt,
+      Optional<WeatherChangeNotificationLog> notificationLog) {
+    notificationLog
         .ifPresentOrElse(
             existing -> existing.updateLastNotified(latestForecastedAt),
             () -> notificationLogRepository.save(
