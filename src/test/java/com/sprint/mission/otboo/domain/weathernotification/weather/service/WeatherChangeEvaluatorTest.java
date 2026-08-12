@@ -93,7 +93,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).containsExactly("강수 형태가 없음에서 비(으)로 바뀌었어요.");
+      assertThat(result.get().reasons()).containsExactly("강수 형태가 없음에서 비 상태로 바뀌었어요.");
     }
 
     @Test
