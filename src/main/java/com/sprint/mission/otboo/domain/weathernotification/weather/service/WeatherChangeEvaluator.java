@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -55,7 +56,7 @@ public class WeatherChangeEvaluator {
   }
 
   private String precipitationTypeMessage(PrecipitationType previous, PrecipitationType latest) {
-    return "강수 형태가 %s에서 %s(으)로 바뀌었어요.".formatted(previous, latest);
+    return "강수 형태가 %s에서 %s(으)로 바뀌었어요.".formatted(previous.getLabel(), latest.getLabel());
   }
 
   private String precipitationProbabilityMessage(double delta) {
