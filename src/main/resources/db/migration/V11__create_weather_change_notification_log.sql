@@ -12,3 +12,7 @@ CREATE TABLE weather_change_notification_logs
     CONSTRAINT FK_weather_grids_TO_weather_change_notification_logs_1
         FOREIGN KEY (weather_grid_id) REFERENCES weather_grids (id)
 );
+
+-- WeatherSuddenChangeNotifier.publish()가 격자마다 위치 기준으로 profiles를 조회한다
+-- (CodeRabbit PR #131 리뷰) - 인덱스 없이는 매 회차 격자 수만큼 전체 스캔이 반복된다
+CREATE INDEX IDX_profiles_location_x_location_y ON profiles (location_x, location_y);
