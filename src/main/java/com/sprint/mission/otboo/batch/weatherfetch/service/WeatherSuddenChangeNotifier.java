@@ -130,17 +130,29 @@ public class WeatherSuddenChangeNotifier {
     if (profiles.isEmpty()) {
       return false;
     }
-    List<UUID> receiverIds = profiles.stream().map(Profile::getId).toList();
-    // LocationRequest.locationNames엔 @NotNull이 없어(api-docs.json에도 required 아님) null로
-    // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
-    List<String> locationNames = profiles.get(0).getLocation().getLocationNames();
-    String regionName = (locationNames == null || locationNames.isEmpty()) ? ""
-        : locationNames.get(locationNames.size() - 1) + " ";
-    String content = regionName + String.join(" ", result.reasons());
-    eventPublisher.publishEvent(new NotificationRequestedEvent(
-        Set.copyOf(receiverIds), "날씨 급변", content, NotificationLevel.WARNING));
+    // 같은 격자(5km)라도 구 경계 근처면 프로필마다 locationNames가 다를 수 있다 - 대표 1건의
+    // 지역명을 전체에 뿌리지 않고, locationNames가 같은 그룹끼리 묶어 그룹별로 발행한다
+    Map<List<String>, List<UUID>> receiverIdsByRegion = profiles.stream()
+        .collect(Collectors.groupingBy(
+            profile -> normalizedLocationNames(profile.getLocation().getLocationNames()),
+            Collectors.mapping(Profile::getId, Collectors.toList())));
+
+    for (Map.Entry<List<String>, List<UUID>> entry : receiverIdsByRegion.entrySet()) {
+      List<String> locationNames = entry.getKey();
+      String regionName = locationNames.isEmpty() ? ""
+          : locationNames.get(locationNames.size() - 1) + " ";
+      String content = regionName + String.join(" ", result.reasons());
+      eventPublisher.publishEvent(new NotificationRequestedEvent(
+          Set.copyOf(entry.getValue()), "날씨 급변", content, NotificationLevel.WARNING));
+    }
     recordNotified(grid, result.forecastAt(), result.latestForecastedAt(), notificationLog);
     return true;
+  }
+
+  // LocationRequest.locationNames엔 @NotNull이 없어(api-docs.json에도 required 아님) null로
+  // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
+  private List<String> normalizedLocationNames(List<String> locationNames) {
+    return locationNames == null ? List.of() : locationNames;
   }
 
   private void recordNotified(WeatherGrid grid, Instant forecastAt, Instant latestForecastedAt,
