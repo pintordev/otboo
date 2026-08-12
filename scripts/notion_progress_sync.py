@@ -51,7 +51,7 @@ DISCORD_USER_MAP = json.loads(os.environ.get("DISCORD_USER_MAP", "{}"))
 NAME_TO_ENTRY = {v["name"]: v for v in DISCORD_USER_MAP.values() if v.get("name")}
 
 STATUS_MAP = {"Todo": "대기", "In Progress": "진행중", "In Review": "리뷰중", "Done": "완료"}
-NOTION_URL_RE = re.compile(r"https://[a-zA-Z0-9-]*\.?notion\.(?:so|com)/\S+")
+NOTION_URL_RE = re.compile(r"https://(?:[a-zA-Z0-9-]+\.)?notion\.(?:so|com)/\S+")
 
 
 def run_gh(args):
