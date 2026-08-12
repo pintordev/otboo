@@ -17,6 +17,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -43,6 +44,10 @@ public class WeatherChangeNotificationLog {
 
   @Column(name = "last_notified_forecasted_at", nullable = false)
   private Instant lastNotifiedForecastedAt;
+
+  @CreatedDate
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
 
   @LastModifiedDate
   @Column(name = "updated_at", nullable = false)

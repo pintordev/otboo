@@ -4,6 +4,7 @@ CREATE TABLE weather_change_notification_logs
     weather_grid_id              UUID                     NOT NULL,
     forecast_at                  TIMESTAMP WITH TIME ZONE NOT NULL,
     last_notified_forecasted_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at                   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at                   TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT PK_weather_change_notification_logs PRIMARY KEY (id),
     CONSTRAINT UQ_weather_change_notification_logs_grid_forecast_at
