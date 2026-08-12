@@ -186,6 +186,50 @@ class WeatherSuddenChangeNotifierTest {
     }
 
     @Test
+    @DisplayName("같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다")
+    void 같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다() {
+      // given - 같은 5km 격자 안에도 구 경계 근처면 프로필마다 등록된 locationNames가 다를 수 있다
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridOf(60, 127);
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(List.of(grid));
+
+      Weather previous = weatherOf(grid, D0, Instant.parse("2026-07-27T02:10:00Z"), 20.0);
+      Weather latest = weatherOf(grid, D0, Instant.parse("2026-07-27T08:10:00Z"), 25.0);
+      given(weatherRepository.findRecentTwoRevisions(grid, List.of(D0)))
+          .willReturn(List.of(previous, latest));
+      given(notificationLogRepository.findByWeatherGridAndForecastAt(grid, D0))
+          .willReturn(Optional.empty());
+      given(weatherChangeEvaluator.evaluate(previous, latest))
+          .willReturn(Optional.of(
+              new ChangeResult(grid, D0, latest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
+
+      Profile gangnamProfile = profileWithLocation(List.of("서울특별시", "강남구"));
+      Profile seochoProfile = profileWithLocation(List.of("서울특별시", "서초구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(gangnamProfile, seochoProfile));
+
+      // when
+      notifier.detectAndNotify(baseTime);
+
+      // then
+      ArgumentCaptor<NotificationRequestedEvent> captor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher, times(2)).publishEvent(captor.capture());
+
+      assertThat(captor.getAllValues())
+          .anySatisfy(event -> {
+            assertThat(event.receiverIds()).containsExactly(gangnamProfile.getId());
+            assertThat(event.content()).startsWith("강남구 ");
+          })
+          .anySatisfy(event -> {
+            assertThat(event.receiverIds()).containsExactly(seochoProfile.getId());
+            assertThat(event.content()).startsWith("서초구 ");
+          });
+      // 알림 로그는 그룹 수와 무관하게 (격자, forecastAt) 단위로 1건만 기록한다
+      verify(notificationLogRepository, times(1)).save(any());
+    }
+
+    @Test
     @DisplayName("수신자가_없으면_이벤트를_발행하지_않는다")
     void 수신자가_없으면_이벤트를_발행하지_않는다() {
       // given
