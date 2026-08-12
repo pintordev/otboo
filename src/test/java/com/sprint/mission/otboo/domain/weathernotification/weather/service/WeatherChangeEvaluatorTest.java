@@ -85,6 +85,18 @@ class WeatherChangeEvaluatorTest {
     }
 
     @Test
+    @DisplayName("강수_형태_전환_메시지는_enum_이름이_아니라_한글_표시명을_사용한다")
+    void 강수_형태_전환_메시지는_enum_이름이_아니라_한글_표시명을_사용한다() {
+      Weather previous = weatherOf(20.0, PrecipitationType.NONE, 0.0, 0.0);
+      Weather latest = weatherOf(20.0, PrecipitationType.RAIN, 0.0, 0.0);
+
+      Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
+
+      assertThat(result).isPresent();
+      assertThat(result.get().reasons()).containsExactly("강수 형태가 없음에서 비(으)로 바뀌었어요.");
+    }
+
+    @Test
     @DisplayName("비에서_눈으로_전환도_감지된다")
     void 비에서_눈으로_전환도_감지된다() {
       Weather previous = weatherOf(20.0, PrecipitationType.RAIN, 0.0, 0.0);
