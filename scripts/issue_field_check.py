@@ -17,7 +17,8 @@ notion_progress_sync.py와 같은 주기(같은 workflow)로 Issue/PR을 훑어 
   Projects는 아이템 자체를 `deleteProjectV2Item`으로 삭제
 
 필요 시크릿: notion_progress_sync.py와 동일(PROJECTS_PAT, DISCORD_BOT_TOKEN, DISCORD_USER_MAP,
-DISCORD_WEBHOOK_URL) + PR 마일스톤 제거를 위한 GH_TOKEN에 issues:write 권한 필요.
+DISCORD_WEBHOOK_URL) + PR 마일스톤 제거를 위한 GH_TOKEN에 pull-requests:write 권한 필요(PATCH 대상이
+PR이면 REST 경로가 /issues/{number}여도 issues 권한이 아니라 pull-requests 권한이 적용됨).
 """
 
 import json
