@@ -93,7 +93,7 @@ public class SecurityConfig {
         .defaultAuthenticationEntryPointFor((request, response, authException) ->
             ErrorResponseWriter.write(response, jsonMapper, HttpStatus.UNAUTHORIZED,
                 authException, "인증이 필요합니다."), AnyRequestMatcher.INSTANCE)
-        
+
         .accessDeniedHandler((request, response, accessDeniedException) ->
             ErrorResponseWriter.write(response, jsonMapper, HttpStatus.FORBIDDEN,
                 accessDeniedException, "접근 권한이 없습니다."))
@@ -117,6 +117,8 @@ public class SecurityConfig {
         .hasAuthority(Role.ADMIN.name())
         .requestMatchers(HttpMethod.PATCH, "/api/users/{userId}/lock")
         .hasAuthority(Role.ADMIN.name())
+
+        .requestMatchers("/uploads/**").permitAll()
 
         .anyRequest().authenticated()
     );

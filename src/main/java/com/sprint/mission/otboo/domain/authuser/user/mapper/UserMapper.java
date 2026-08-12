@@ -7,11 +7,16 @@ import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class UserMapper {
+
+  private final FileUrlResolver fileUrlResolver;
 
   public UserDto userDtoFrom(User user) {
     return new UserDto(
@@ -32,7 +37,7 @@ public class UserMapper {
         profile.getBirthDate(),
         locationDtoFrom(profile.getLocation()),
         profile.getTemperatureSensitivity(),
-        profile.getProfileImageUrl()
+        fileUrlResolver.resolve(profile.getProfileImageUrl())
     );
   }
 

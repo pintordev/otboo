@@ -10,8 +10,11 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Gender;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,7 +22,10 @@ import org.junit.jupiter.api.Test;
 @DisplayName("UserMapper")
 class UserMapperTest {
 
-  private final UserMapper userMapper = new UserMapper();
+  private final FileProperties fileProperties = new FileProperties(
+      "local", "http://localhost:8080/uploads", 5242880, Set.of("jpg"), null, null);
+
+  private final UserMapper userMapper = new UserMapper(new FileUrlResolver(fileProperties));
 
   @Nested
   @DisplayName("User -> UserDto 변환 (userDtoFrom)")
@@ -49,14 +55,14 @@ class UserMapperTest {
   class ProfileDtoFrom {
 
     @Test
-    @DisplayName("연관된 User의 이름을 포함해 ProfileDto로 변환한다")
-    void 연관된_User의_이름을_포함해_ProfileDto로_변환한다() {
+    @DisplayName("연관된 User의 이름을 포함하고 프로필 이미지 키를 URL로 변환해 ProfileDto로 변환한다")
+    void 연관된_User의_이름을_포함하고_프로필_이미지_키를_URL로_변환해_ProfileDto로_변환한다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
       Profile profile = Profile.create(user);
       Location location = Location.create(37.5, 127.0, 60, 127, List.of("서울특별시"));
       profile.changeProfile(Gender.MALE, LocalDate.of(1995, 1, 1), location, 4);
-      profile.changeProfileImageUrl("https://example.com/image.png");
+      profile.changeProfileImageUrl("profile/uuid.jpg");
 
       // when
       ProfileDto result = userMapper.profileDtoFrom(profile);
@@ -67,8 +73,22 @@ class UserMapperTest {
       assertThat(result.gender()).isEqualTo(Gender.MALE);
       assertThat(result.birthDate()).isEqualTo(LocalDate.of(1995, 1, 1));
       assertThat(result.temperatureSensitivity()).isEqualTo(4);
-      assertThat(result.profileImageUrl()).isEqualTo("https://example.com/image.png");
+      assertThat(result.profileImageUrl()).isEqualTo("http://localhost:8080/uploads/profile/uuid.jpg");
       assertThat(result.location().latitude()).isEqualTo(37.5);
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 키가 없으면 profileImageUrl은 null이다")
+    void 프로필_이미지_키가_없으면_profileImageUrl은_null이다() {
+      // given
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      Profile profile = Profile.create(user);
+
+      // when
+      ProfileDto result = userMapper.profileDtoFrom(profile);
+
+      // then
+      assertThat(result.profileImageUrl()).isNull();
     }
 
     @Test

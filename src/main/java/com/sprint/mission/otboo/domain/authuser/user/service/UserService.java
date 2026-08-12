@@ -14,6 +14,7 @@ import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundExcep
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
+import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import java.util.UUID;
@@ -35,6 +36,7 @@ public class UserService {
   private final UserMapper userMapper;
   private final UserSessionRegistry userSessionRegistry;
   private final TempPasswordRegistry tempPasswordRegistry;
+  private final FileStorageService fileStorageService;
 
   @Transactional
   public UserDto signUp(UserCreateRequest request) {
@@ -82,7 +84,14 @@ public class UserService {
         request.temperatureSensitivity()
     );
 
-    // TODO: 이미지 저장 로직 반드시 필요 (팀원 간의 논의 후 Fix)
+    String oldProfileImageUrl = foundProfile.getProfileImageUrl();
+    String newProfileImageUrl = oldProfileImageUrl;
+    if (image != null && !image.isEmpty()) {
+      newProfileImageUrl = fileStorageService.store(image, "profile");
+      fileStorageService.delete(oldProfileImageUrl);
+    }
+
+    foundProfile.changeProfileImageUrl(newProfileImageUrl);
 
     return userMapper.profileDtoFrom(foundProfile);
   }

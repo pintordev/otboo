@@ -46,6 +46,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
+    implementation platform('software.amazon.awssdk:bom:2.51.4')
+    implementation 'software.amazon.awssdk:s3'
 
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:7.5:jpa"
@@ -83,8 +85,8 @@ dependencyManagement {
 }
 
 def excludedSecurityAutoConfigurations = [
-    'org.springframework.boot.security.oauth2.client.autoconfigure.servlet.OAuth2ClientWebSecurityAutoConfiguration',
-    'org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration'
+        'org.springframework.boot.security.oauth2.client.autoconfigure.servlet.OAuth2ClientWebSecurityAutoConfiguration',
+        'org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration'
 ].join(',')
 
 tasks.named('test') {

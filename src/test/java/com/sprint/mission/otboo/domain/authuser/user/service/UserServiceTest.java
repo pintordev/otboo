@@ -23,6 +23,7 @@ import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundExcep
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
+import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import java.time.LocalDate;
@@ -37,7 +38,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UserService")
@@ -63,6 +66,9 @@ class UserServiceTest {
 
   @Mock
   private TempPasswordRegistry tempPasswordRegistry;
+
+  @Mock
+  private FileStorageService fileStorageService;
 
   private DataIntegrityViolationException uniqueViolation() {
     ConstraintViolationException cause =
@@ -219,6 +225,74 @@ class UserServiceTest {
       // when & then
       assertThatThrownBy(() -> userService.changeProfile(userId, request, null, userId))
           .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("이미지가 없으면 파일 저장소를 호출하지 않는다")
+    void 이미지가_없으면_파일_저장소를_호출하지_않는다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      Profile profile = Profile.create(user);
+      given(profileRepository.findByIdWithUser(userId)).willReturn(Optional.of(profile));
+
+      ProfileUpdateRequest request = new ProfileUpdateRequest("김철수", null, null, null, 3);
+      given(userMapper.profileDtoFrom(profile)).willReturn(
+          new ProfileDto(userId, "김철수", null, null, null, 3, null));
+
+      // when
+      userService.changeProfile(userId, request, null, userId);
+
+      // then
+      verify(fileStorageService, never()).store(any(), any());
+      verify(fileStorageService, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("새 이미지가 있으면 저장하고 반환된 key로 프로필 이미지를 변경한다")
+    void 새_이미지가_있으면_저장하고_반환된_key로_프로필_이미지를_변경한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      Profile profile = Profile.create(user);
+      given(profileRepository.findByIdWithUser(userId)).willReturn(Optional.of(profile));
+
+      ProfileUpdateRequest request = new ProfileUpdateRequest("김철수", null, null, null, 3);
+      MultipartFile image = new MockMultipartFile("image", "profile.jpg", "image/jpeg",
+          new byte[]{1, 2, 3});
+      given(fileStorageService.store(image, "profile")).willReturn("profile/new-uuid.jpg");
+      given(userMapper.profileDtoFrom(profile)).willReturn(
+          new ProfileDto(userId, "김철수", null, null, null, 3, null));
+
+      // when
+      userService.changeProfile(userId, request, image, userId);
+
+      // then
+      assertThat(profile.getProfileImageUrl()).isEqualTo("profile/new-uuid.jpg");
+    }
+
+    @Test
+    @DisplayName("기존 이미지가 있는 상태에서 새 이미지를 업로드하면 기존 이미지를 삭제한다")
+    void 기존_이미지가_있는_상태에서_새_이미지를_업로드하면_기존_이미지를_삭제한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      Profile profile = Profile.create(user);
+      profile.changeProfileImageUrl("profile/old-uuid.jpg");
+      given(profileRepository.findByIdWithUser(userId)).willReturn(Optional.of(profile));
+
+      ProfileUpdateRequest request = new ProfileUpdateRequest("김철수", null, null, null, 3);
+      MultipartFile image = new MockMultipartFile("image", "profile.jpg", "image/jpeg",
+          new byte[]{1, 2, 3});
+      given(fileStorageService.store(image, "profile")).willReturn("profile/new-uuid.jpg");
+      given(userMapper.profileDtoFrom(profile)).willReturn(
+          new ProfileDto(userId, "김철수", null, null, null, 3, null));
+
+      // when
+      userService.changeProfile(userId, request, image, userId);
+
+      // then
+      verify(fileStorageService).delete("profile/old-uuid.jpg");
     }
   }
 

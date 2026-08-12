@@ -64,3 +64,6 @@ __pycache__/
 ### Docs ###
 docs/intro
 docs/draft
+
+### File ###
+/uploads
