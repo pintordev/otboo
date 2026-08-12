@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.batch.weatherfetch.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -151,6 +152,36 @@ class WeatherSuddenChangeNotifierTest {
       assertThat(event.title()).isEqualTo("날씨 급변");
       assertThat(event.content()).startsWith("강남구 ");
       assertThat(event.level()).isEqualTo(NotificationLevel.WARNING);
+    }
+
+    @Test
+    @DisplayName("locationNames가_null이어도_예외_없이_발행한다")
+    void locationNames가_null이어도_예외_없이_발행한다() {
+      // given - LocationRequest.locationNames엔 @NotNull이 없어 null로 등록될 수 있다
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridOf(60, 127);
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(List.of(grid));
+
+      Weather previous = weatherOf(grid, D0, Instant.parse("2026-07-27T02:10:00Z"), 20.0);
+      Weather latest = weatherOf(grid, D0, Instant.parse("2026-07-27T08:10:00Z"), 25.0);
+      given(weatherRepository.findRecentTwoRevisions(grid, List.of(D0)))
+          .willReturn(List.of(previous, latest));
+      given(notificationLogRepository.findByWeatherGridAndForecastAt(grid, D0))
+          .willReturn(Optional.empty());
+      given(weatherChangeEvaluator.evaluate(previous, latest))
+          .willReturn(Optional.of(
+              new ChangeResult(grid, D0, latest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
+
+      Profile profile = profileWithLocation(null);
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      // when & then
+      assertThatCode(() -> notifier.detectAndNotify(baseTime)).doesNotThrowAnyException();
+      ArgumentCaptor<NotificationRequestedEvent> captor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(captor.capture());
+      assertThat(captor.getValue().content()).isEqualTo("기온이 5.0도 올랐어요.");
     }
 
     @Test
