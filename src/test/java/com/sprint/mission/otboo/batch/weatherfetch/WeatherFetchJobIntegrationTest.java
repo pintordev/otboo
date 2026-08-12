@@ -324,8 +324,19 @@ class WeatherFetchJobIntegrationTest {
     @Autowired
     private WeatherChangeNotificationLogRepository notificationLogRepository;
 
+    @BeforeEach
+    void setUpNotification() {
+      // 외부 클래스 setUp()은 weather/weatherGrid만 비운다 - 이전 실행이 중간에 죽으면
+      // users/profiles가 남아 356행의 고정 이메일이 유니크 제약에 걸릴 수 있어 시작 시에도 정리
+      cleanUpNotificationTables();
+    }
+
     @AfterEach
     void tearDownNotification() {
+      cleanUpNotificationTables();
+    }
+
+    private void cleanUpNotificationTables() {
       // 외부 클래스 tearDown()의 weatherGridRepository.deleteAll()보다 먼저 정리해야
       // weather_change_notification_logs의 FK 위반 없이 격자를 지울 수 있다
       notificationLogRepository.deleteAll();
