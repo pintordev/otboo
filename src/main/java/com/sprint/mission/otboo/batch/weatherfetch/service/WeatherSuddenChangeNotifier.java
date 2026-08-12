@@ -106,19 +106,18 @@ public class WeatherSuddenChangeNotifier {
   // 이미 이 예보일로 알림을 보낸 적 있으면 "직전 리비전"이 아니라 "마지막 알림 기준 리비전"과
   // 비교한다 - 노이즈성 재발행은 막고, 그 이후 진짜 더 벌어진 변화는 여전히 잡는다.
   private Weather resolveBaseline(WeatherGrid grid, Instant forecastAt, Weather previousRevision) {
-    Optional<WeatherChangeNotificationLog> notificationLog =
-        notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt);
-    if (notificationLog.isEmpty()) {
-      return previousRevision;
-    }
-    Instant lastNotifiedForecastedAt = notificationLog.get().getLastNotifiedForecastedAt();
-    return weatherRepository
-        .findByWeatherGridAndForecastAtAndForecastedAt(grid, forecastAt, lastNotifiedForecastedAt)
-        .orElseGet(() -> {
-          log.warn("알림 baseline 리비전을 찾지 못해 직전 리비전으로 대체: grid={}, forecastAt={}, "
-              + "lastNotifiedForecastedAt={}", grid.getId(), forecastAt, lastNotifiedForecastedAt);
-          return previousRevision;
-        });
+    return notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt)
+        .map(WeatherChangeNotificationLog::getLastNotifiedForecastedAt)
+        .flatMap(lastNotifiedForecastedAt -> weatherRepository
+            .findByWeatherGridAndForecastAtAndForecastedAt(grid, forecastAt,
+                lastNotifiedForecastedAt)
+            .or(() -> {
+              log.warn("알림 baseline 리비전을 찾지 못해 직전 리비전으로 대체: grid={}, forecastAt={}, "
+                  + "lastNotifiedForecastedAt={}", grid.getId(), forecastAt,
+                  lastNotifiedForecastedAt);
+              return Optional.empty();
+            }))
+        .orElse(previousRevision);
   }
 
   private boolean publish(WeatherChangeEvaluator.ChangeResult result) {
