@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.batch.weatherfetch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,16 +13,32 @@ import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
+import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
+import com.sprint.mission.otboo.domain.authuser.user.entity.User;
+import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
+import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
+import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
+import com.sprint.mission.otboo.domain.weathernotification.notification.repository.WeatherChangeNotificationLogRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
+import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -280,6 +297,89 @@ class WeatherFetchJobIntegrationTest {
       verify(weatherRepository, times(4)).insertIfAbsent(any(), any(), any(), any(), anyString(),
           anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
           anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+    }
+  }
+
+  @Nested
+  @DisplayName("날씨 급변 알림")
+  class SuddenChangeNotification {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    // 2026-08-12 09:10 KST(버퍼 20분 적용 시 08:50) - baseTime "0800"으로 고정해 D0가
+    // 평가 대상에서 빠지는 23:30 회차를 피한다. 실제 시각과 무관하게 결정적으로 재현.
+    private static final Instant FIXED_NOW = Instant.parse("2026-08-12T00:10:00Z");
+
+    @MockitoBean
+    private Clock clock;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ProfileRepository profileRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private WeatherChangeNotificationLogRepository notificationLogRepository;
+
+    @AfterEach
+    void tearDownNotification() {
+      // 외부 클래스 tearDown()의 weatherGridRepository.deleteAll()보다 먼저 정리해야
+      // weather_change_notification_logs의 FK 위반 없이 격자를 지울 수 있다
+      notificationLogRepository.deleteAll();
+      notificationRepository.deleteAll();
+      profileRepository.deleteAll();
+      userRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다")
+    void 이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다() throws Exception {
+      // given
+      given(clock.instant()).willReturn(FIXED_NOW);
+      given(clock.withZone(any())).willReturn(Clock.fixed(FIXED_NOW, KST));
+      BaseTime currentBaseTime = KmaBaseTimeCalculator.calculate(FIXED_NOW);
+      LocalDate today = LocalDate.parse(currentBaseTime.baseDate(),
+          DateTimeFormatter.ofPattern("yyyyMMdd"));
+      Instant forecastAt = today.atStartOfDay(KST).toInstant();
+      Instant previousForecastedAt = KmaBaseTimeCalculator
+          .calculate(FIXED_NOW.minus(Duration.ofHours(3))).toInstant();
+
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      weatherRepository.save(Weather.create(grid, previousForecastedAt, forecastAt,
+          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, 20.0, 0.0, 15.0, 25.0, 2.0,
+          WindStrength.WEAK));
+
+      User user = userRepository.save(
+          User.create("홍길동", "sudden-change@test.com", "encoded-password"));
+      Profile profile = Profile.create(user);
+      profile.changeProfile(null, null,
+          Location.create(37.5, 127.0, 60, 127, List.of("서울특별시", "강남구")), 3);
+      profileRepository.save(profile);
+
+      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(
+          FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
+              .set("date", today)
+              .set("skyStatus", SkyStatus.CLEAR)
+              .set("precipitationType", PrecipitationType.NONE)
+              .set("temperatureCurrent", 25.0)
+              .sample()));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then - 20.0도 -> 25.0도(임계값 3.0도 이상) 급변, afterJob()이 COMPLETED 이후 감지·발행하고
+      // NotificationRequestedEventListener가 AFTER_COMMIT + @Async로 저장을 마칠 때까지 대기한다
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+          assertThat(notificationRepository.findAll())
+              .anySatisfy(notification -> {
+                assertThat(notification.getReceiverId()).isEqualTo(user.getId());
+                assertThat(notification.getContent()).startsWith("강남구 ");
+              }));
     }
   }
 }
