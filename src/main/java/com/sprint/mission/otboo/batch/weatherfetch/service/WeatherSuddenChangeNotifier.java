@@ -128,9 +128,11 @@ public class WeatherSuddenChangeNotifier {
       return false;
     }
     List<UUID> receiverIds = profiles.stream().map(Profile::getId).toList();
+    // LocationRequest.locationNames엔 @NotNull이 없어(api-docs.json에도 required 아님) null로
+    // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
     List<String> locationNames = profiles.get(0).getLocation().getLocationNames();
-    String regionName =
-        locationNames.isEmpty() ? "" : locationNames.get(locationNames.size() - 1) + " ";
+    String regionName = (locationNames == null || locationNames.isEmpty()) ? ""
+        : locationNames.get(locationNames.size() - 1) + " ";
     String content = regionName + String.join(" ", result.reasons());
     eventPublisher.publishEvent(new NotificationRequestedEvent(
         Set.copyOf(receiverIds), "날씨 급변", content, NotificationLevel.WARNING));
