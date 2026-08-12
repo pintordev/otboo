@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.batch.weatherfetch.listener;
 
+import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherSuddenChangeNotifier;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import java.time.Clock;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 public class WeatherFetchJobListener implements JobExecutionListener {
 
   private final Clock clock;
+  private final WeatherSuddenChangeNotifier weatherSuddenChangeNotifier;
 
   @Override
   public void beforeJob(JobExecution jobExecution) {
@@ -34,7 +36,6 @@ public class WeatherFetchJobListener implements JobExecutionListener {
 
   @Override
   public void afterJob(JobExecution jobExecution) {
-    // COMPLETED 분기는 향후 [FEAT] 날씨 급변 알림 트리거 이슈가 훅을 얹을 지점
     if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
       log.info("WeatherFetch Job 성공 | jobId={}", jobExecution.getId());
     } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
@@ -50,6 +51,17 @@ public class WeatherFetchJobListener implements JobExecutionListener {
     if (!jobExecution.getAllFailureExceptions().isEmpty()) {
       jobExecution.getAllFailureExceptions()
           .forEach(e -> log.error("WeatherFetch Job 실패 원인", e));
+    }
+
+    // Job 전체가 FAILED로 끝났어도, findGridsUpdatedAt()이 실제로 새 데이터가 들어온 격자만
+    // 골라내므로 그 전에 성공 처리된 격자의 감지·알림은 그대로 유효하다 - COMPLETED/FAILED
+    // 분기와 무관하게 항상 호출한다. 이 예외가 Job의 최종 상태를 되돌리면 안 되므로 흡수한다.
+    try {
+      String baseDate = jobExecution.getExecutionContext().getString("baseDate");
+      String baseTimeValue = jobExecution.getExecutionContext().getString("baseTime");
+      weatherSuddenChangeNotifier.detectAndNotify(new BaseTime(baseDate, baseTimeValue));
+    } catch (Exception e) {
+      log.error("날씨 급변 감지 실패", e);
     }
   }
 }
