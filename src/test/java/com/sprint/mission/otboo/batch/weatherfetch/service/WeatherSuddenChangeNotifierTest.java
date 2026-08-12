@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
@@ -332,6 +333,8 @@ class WeatherSuddenChangeNotifierTest {
       // then
       verify(eventPublisher).publishEvent(any(NotificationRequestedEvent.class));
       assertThat(log.getLastNotifiedForecastedAt()).isEqualTo(latestForecastedAt);
+      // baseline 판정과 로그 갱신이 같은 로그 조회를 재사용해야 한다 - 중복 조회 금지
+      verify(notificationLogRepository, times(1)).findByWeatherGridAndForecastAt(grid, D0);
     }
 
     @Test
