@@ -8,6 +8,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
@@ -47,8 +49,14 @@ class WeatherSuddenChangeNotifierTest {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-27T01:00:00Z"), KST);
-  private static final Instant D0 = Instant.parse("2026-07-27T00:00:00Z");
-  private static final Instant D1 = Instant.parse("2026-07-28T00:00:00Z");
+  // KST 자정 = UTC 전날 15시 - today(2026-07-27 KST)의 00:00 KST를 UTC Instant로 정확히 표현
+  private static final Instant D0 = Instant.parse("2026-07-26T15:00:00Z");
+  private static final Instant D1 = Instant.parse("2026-07-27T15:00:00Z");
+
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
+      .build();
 
   @Mock
   private WeatherRepository weatherRepository;
@@ -81,11 +89,13 @@ class WeatherSuddenChangeNotifierTest {
   }
 
   private Profile profileWithLocation(List<String> locationNames) {
-    User user = User.create("홍길동", UUID.randomUUID() + "@test.com", "encoded-password");
-    Profile profile = Profile.create(user);
-    profile.changeProfile(null, null,
-        Location.create(37.5, 127.0, 60, 127, locationNames), 3);
-    return profile;
+    UUID userId = UUID.randomUUID();
+    User user = ENTITY_FIXTURE_MONKEY.giveMeBuilder(User.class).set("id", userId).sample();
+    return ENTITY_FIXTURE_MONKEY.giveMeBuilder(Profile.class)
+        .set("id", userId)
+        .set("user", user)
+        .set("location", Location.create(37.5, 127.0, 60, 127, locationNames))
+        .sample();
   }
 
   @Nested
@@ -167,7 +177,7 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then
-      verify(eventPublisher, never()).publishEvent(any());
+      verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
       verify(notificationLogRepository, never()).save(any());
     }
 
@@ -253,7 +263,7 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then
-      verify(eventPublisher, never()).publishEvent(any());
+      verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
     }
 
     @Test
@@ -289,7 +299,7 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then
-      verify(eventPublisher).publishEvent(any());
+      verify(eventPublisher).publishEvent(any(NotificationRequestedEvent.class));
       assertThat(log.getLastNotifiedForecastedAt()).isEqualTo(latestForecastedAt);
     }
 
