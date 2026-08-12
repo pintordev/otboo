@@ -56,7 +56,9 @@ public class WeatherChangeEvaluator {
   }
 
   private String precipitationTypeMessage(PrecipitationType previous, PrecipitationType latest) {
-    return "강수 형태가 %s에서 %s(으)로 바뀌었어요.".formatted(previous.getLabel(), latest.getLabel());
+    // "%s(으)로"처럼 조사 선택 표기를 그대로 노출하면 안 된다 - "상태로"에 고정해 라벨 값(받침
+    // 유무)과 무관하게 항상 자연스러운 문장이 되도록 한다(CodeRabbit PR #131 리뷰)
+    return "강수 형태가 %s에서 %s 상태로 바뀌었어요.".formatted(previous.getLabel(), latest.getLabel());
   }
 
   private String precipitationProbabilityMessage(double delta) {
