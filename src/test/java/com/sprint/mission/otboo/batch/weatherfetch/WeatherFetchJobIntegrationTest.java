@@ -54,6 +54,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
@@ -309,8 +310,14 @@ class WeatherFetchJobIntegrationTest {
     // 평가 대상에서 빠지는 23:30 회차를 피한다. 실제 시각과 무관하게 결정적으로 재현.
     private static final Instant FIXED_NOW = Instant.parse("2026-08-12T00:10:00Z");
 
-    @MockitoBean
+    @TestBean
     private Clock clock;
+
+    static Clock clock() {
+      // Mockito mock 대신 실제 고정 Clock을 반환 - millis()/getZone() 등 다른 메서드가
+      // 호출돼도 mock 기본값(null/0) 대신 정상 동작한다(CodeRabbit PR #131 리뷰)
+      return Clock.fixed(FIXED_NOW, KST);
+    }
 
     @Autowired
     private UserRepository userRepository;
@@ -349,8 +356,6 @@ class WeatherFetchJobIntegrationTest {
     @DisplayName("이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다")
     void 이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다() throws Exception {
       // given
-      given(clock.instant()).willReturn(FIXED_NOW);
-      given(clock.withZone(any())).willReturn(Clock.fixed(FIXED_NOW, KST));
       BaseTime currentBaseTime = KmaBaseTimeCalculator.calculate(FIXED_NOW);
       LocalDate today = LocalDate.parse(currentBaseTime.baseDate(),
           DateTimeFormatter.ofPattern("yyyyMMdd"));
