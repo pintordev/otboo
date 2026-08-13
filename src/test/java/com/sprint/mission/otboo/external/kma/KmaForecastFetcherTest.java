@@ -168,9 +168,10 @@ class KmaForecastFetcherTest {
 
       // then
       assertThat(thrown.getCause()).isNotNull();
-      assertThat(thrown.getCause().getMessage())
-          .doesNotContain("real-secret-key")
-          .contains("serviceKey=***");
+      assertThat(thrown.getCause().getMessage()).contains("serviceKey=***");
+      for (Throwable cause = thrown; cause != null; cause = cause.getCause()) {
+        assertThat(cause.getMessage()).doesNotContain("real-secret-key");
+      }
       verifyNoInteractions(kmaForecastParser);
     }
 
