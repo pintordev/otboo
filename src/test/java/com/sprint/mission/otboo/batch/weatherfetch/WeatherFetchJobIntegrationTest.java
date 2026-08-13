@@ -3,7 +3,6 @@ package com.sprint.mission.otboo.batch.weatherfetch;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -53,6 +52,8 @@ import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.TransientDataAccessResourceException;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -276,7 +277,7 @@ class WeatherFetchJobIntegrationTest {
   class DbFailure {
 
     @MockitoBean
-    private WeatherRepository weatherRepository;
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName("TransientDataAccessException이_retryLimit만큼_재시도되고도_회복되지_않으면_skip되지_않고_Job이_FAILED로_끝난다")
@@ -285,10 +286,7 @@ class WeatherFetchJobIntegrationTest {
       // given
       weatherGridRepository.save(WeatherGrid.create(60, 127));
 
-      given(weatherRepository.findLatestRevisions(any(), any())).willReturn(List.of());
-      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyString()))
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willThrow(new TransientDataAccessResourceException("DB 커넥션 풀 고갈 시뮬레이션"));
       given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
 
@@ -296,13 +294,12 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then - 저장(WeatherFetchWriter.insertIfAbsent)은 skip 대상이 아니라 재시도만 하고
+      // then - 저장(WeatherFetchWriter.batchUpdate)은 skip 대상이 아니라 재시도만 하고
       // 소진되면 즉시 FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미하고, weatherFetchStep이
       // FAILED여도 weatherFetchRetryStep이 같은 격자를 다시 4회 시도하므로 총 8회다
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
-      verify(weatherRepository, times(8)).insertIfAbsent(any(), any(), any(), any(), anyString(),
-          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+      verify(jdbcTemplate, times(8)).batchUpdate(anyString(),
+          any(BatchPreparedStatementSetter.class));
     }
   }
 
