@@ -56,7 +56,8 @@ public class WeatherRefresher {
     Map<LocalDate, Weather> existingByDate = weatherRepository.findLatestRevisions(weatherGrid,
             from)
         .stream()
-        .collect(Collectors.toMap(this::toForecastDate, w -> w));
+        .collect(Collectors.toMap(this::toForecastDate, w -> w,
+            (existing, replacement) -> existing));
 
     log.info("기상청 라이브 재조회: nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
         baseTime.baseDate(), baseTime.baseTime());
