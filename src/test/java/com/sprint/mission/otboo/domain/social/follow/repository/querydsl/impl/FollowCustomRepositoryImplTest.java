@@ -1,4 +1,4 @@
-package com.sprint.mission.otboo.domain.social.follow.repository.querydsl;
+package com.sprint.mission.otboo.domain.social.follow.repository.querydsl.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +28,7 @@ import org.springframework.test.context.ActiveProfiles;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, QuerydslConfig.class})
 @DisplayName("FollowCustomRepository")
-class FollowCustomRepositoryTest {
+class FollowCustomRepositoryImplTest {
 
   @Autowired
   private FollowRepository followRepository;
@@ -62,7 +62,8 @@ class FollowCustomRepositoryTest {
         User followee = persistUser("팔로위" + i);
         followRepository.save(Follow.create(follower.getId(), followee.getId()));
       }
-      followRepository.save(Follow.create(UUID.randomUUID(), UUID.randomUUID())); // 다른 follower
+      followRepository.save(Follow.create(
+          persistUser("다른팔로워").getId(), persistUser("다른팔로위").getId())); // 다른 follower
       testEntityManager.flush();
       testEntityManager.clear();
 
@@ -225,7 +226,8 @@ class FollowCustomRepositoryTest {
         User f = persistUser("팔로워" + i);
         followRepository.save(Follow.create(f.getId(), followee.getId()));
       }
-      followRepository.save(Follow.create(UUID.randomUUID(), UUID.randomUUID())); // 다른 followee
+      followRepository.save(Follow.create(
+          persistUser("다른팔로워").getId(), persistUser("다른팔로위").getId())); // 다른 followee
       testEntityManager.flush();
       testEntityManager.clear();
 

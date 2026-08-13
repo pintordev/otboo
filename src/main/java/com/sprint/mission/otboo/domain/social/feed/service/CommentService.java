@@ -99,7 +99,7 @@ public class CommentService {
 
   private void validateAuthorMatchesCurrentUser(UUID authorId, UUID currentUserId) {
     if (!authorId.equals(currentUserId)) {
-      throw FeedForbiddenException.authorMismatch(currentUserId, authorId);
+      throw FeedForbiddenException.authorMismatch();
     }
   }
 

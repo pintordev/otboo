@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +37,19 @@ class FeedMapperTest {
     @Test
     @DisplayName("Feed 엔티티를 FeedDto로 변환하고 likedByMe를 전달값으로 채운다")
     void Feed_엔티티를_FeedDto로_변환하고_likedByMe를_전달값으로_채운다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Instant createdAt = Instant.parse("2026-08-01T09:00:00Z");
+      Instant updatedAt = Instant.parse("2026-08-02T10:30:00Z");
       UserSummary author = new UserSummary(UUID.randomUUID(), "테스터", null);
 
-      // given
       Feed feed = fm.giveMeBuilder(Feed.class)
+          .set("id", feedId)
+          .set("createdAt", createdAt)
+          .set("updatedAt", updatedAt)
           .set("content", "오늘의 착장")
-          .set("likeCount", 0L)
-          .set("commentCount", 0)
+          .set("likeCount", 7L)
+          .set("commentCount", 3)
           .set("skyStatus", SkyStatus.CLEAR)
           .set("precipitationType", PrecipitationType.NONE)
           .set("precipitationAmount", 0.0)
@@ -58,9 +65,12 @@ class FeedMapperTest {
       FeedDto result = feedMapper.toDto(feed, author, false);
 
       // then
+      assertThat(result.id()).isEqualTo(feedId);
+      assertThat(result.createdAt()).isEqualTo(createdAt);
+      assertThat(result.updatedAt()).isEqualTo(updatedAt);
       assertThat(result.content()).isEqualTo("오늘의 착장");
-      assertThat(result.likeCount()).isZero();
-      assertThat(result.commentCount()).isZero();
+      assertThat(result.likeCount()).isEqualTo(7L);
+      assertThat(result.commentCount()).isEqualTo(3);
       assertThat(result.likedByMe()).isFalse();
     }
 

@@ -9,6 +9,7 @@ import com.sprint.mission.otboo.domain.social.follow.dto.FollowSummaryDto;
 import com.sprint.mission.otboo.domain.social.follow.dto.FollowerListParams;
 import com.sprint.mission.otboo.domain.social.follow.dto.FollowingListParams;
 import com.sprint.mission.otboo.domain.social.follow.entity.Follow;
+import com.sprint.mission.otboo.domain.social.follow.exception.FollowConflictException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowForbiddenException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowNotFoundException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowUserNotFoundException;
@@ -72,8 +73,9 @@ public class FollowService {
       return saved;
     } catch (DataIntegrityViolationException e) {
       if (isUniqueViolation(e)) {
-        log.warn("팔로우 생성 중 동시성 충돌 발생 (재조회 진행)");
-        return findExistingFollow(followerId, followeeId);
+        Follow existing = findExistingFollow(followerId, followeeId);
+        log.warn("팔로우 생성 중 동시성 충돌 발생: followId={}", existing.getId());
+        return existing;
       }
       throw e; // UQ 외 제약 위반은 전파
     }
@@ -170,7 +172,7 @@ public class FollowService {
 
   private Follow findExistingFollow(UUID followerId, UUID followeeId) {
     return followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId)
-        .orElseThrow();
+        .orElseThrow(FollowConflictException::withNone);
   }
 
   private boolean isUniqueViolation(DataIntegrityViolationException e) {

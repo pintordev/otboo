@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.social.feed.repository.querydsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesType;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
@@ -46,13 +47,18 @@ class FeedCustomRepositoryTest {
   @Autowired
   private TestEntityManager testEntityManager;
 
+  private User persistUser(String name) {
+    return testEntityManager.persist(
+        User.create(name, UUID.randomUUID() + "@otboo.io", "password"));
+  }
+
   private Feed createAndSaveFeed(UUID authorId, String content) {
     return feedRepository.save(
         Feed.create(authorId, UUID.randomUUID(), content, DUMMY_SNAPSHOT, List.of()));
   }
 
   private Feed createAndSaveFeed(String content) {
-    return createAndSaveFeed(UUID.randomUUID(), content);
+    return createAndSaveFeed(persistUser("작성자").getId(), content);
   }
 
   private void setLikeCount(UUID feedId, long count) {
@@ -133,8 +139,8 @@ class FeedCustomRepositoryTest {
     @DisplayName("authorIdEqual이 주어지면 해당 작성자의 피드만 조회한다")
     void authorIdEqual이_주어지면_해당_작성자의_피드만_조회한다() {
       // given
-      UUID targetAuthor = UUID.randomUUID();
-      UUID otherAuthor = UUID.randomUUID();
+      UUID targetAuthor = persistUser("대상작성자").getId();
+      UUID otherAuthor = persistUser("다른작성자").getId();
       createAndSaveFeed(targetAuthor, "대상 작성자 글");
       createAndSaveFeed(otherAuthor, "다른 작성자 글");
       testEntityManager.flush();
@@ -400,8 +406,9 @@ class FeedCustomRepositoryTest {
     @DisplayName("날씨 enum 스냅샷이 저장 후 조회 시 그대로 유지된다")
     void 날씨_enum_스냅샷이_저장_후_조회_시_그대로_유지된다() {
       // given
+      User author = persistUser("작성자");
       Feed feed = feedRepository.save(
-          Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
+          Feed.create(author.getId(), UUID.randomUUID(), "오늘의 착장",
               DUMMY_SNAPSHOT, List.of()));
       testEntityManager.flush();
       testEntityManager.clear();
@@ -433,8 +440,10 @@ class FeedCustomRepositoryTest {
           UUID.randomUUID(), "청바지", "https://img.url/jeans.jpg",
           ClothesType.BOTTOM, List.of());
 
+      User author = persistUser("작성자");
+
       Feed feed = feedRepository.save(
-          Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
+          Feed.create(author.getId(), UUID.randomUUID(), "오늘의 착장",
               DUMMY_SNAPSHOT, List.of(ootd1, ootd2)));
       testEntityManager.flush();
       testEntityManager.clear();
@@ -454,12 +463,13 @@ class FeedCustomRepositoryTest {
     @DisplayName("빈 ootds 리스트가 저장 후 빈 리스트로 반환된다")
     void 빈_ootds_리스트가_저장_후_빈_리스트로_반환된다() {
       // given
+      User author = persistUser("작성자");
       Feed feed = feedRepository.save(
-          Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
+          Feed.create(author.getId(), UUID.randomUUID(), "오늘의 착장",
               DUMMY_SNAPSHOT, List.of()));
       testEntityManager.flush();
       testEntityManager.clear();
-
+      
       // when
       Feed found = feedRepository.findById(feed.getId()).orElseThrow();
 

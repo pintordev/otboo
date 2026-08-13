@@ -390,7 +390,7 @@ class FeedControllerTest {
           .set("authorId", requestedAuthorId)
           .set("content", "댓글 내용")
           .sample();
-      willThrow(FeedForbiddenException.authorMismatch(currentUserId, requestedAuthorId))
+      willThrow(FeedForbiddenException.authorMismatch())
           .given(commentService)
           .create(eq(feedId), any(CommentCreateRequest.class), eq(currentUserId));
 
@@ -504,7 +504,7 @@ class FeedControllerTest {
       SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
 
       FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
-      willThrow(FeedForbiddenException.authorMismatch(currentUserId, UUID.randomUUID()))
+      willThrow(FeedForbiddenException.authorMismatch())
           .given(feedService)
           .update(eq(feedId), any(FeedUpdateRequest.class), eq(currentUserId));
 
@@ -562,7 +562,7 @@ class FeedControllerTest {
       UUID currentUserId = UUID.randomUUID();
       UUID feedId = UUID.randomUUID();
       SecurityContextHolder.getContext().setAuthentication(authenticationOf(currentUserId));
-      willThrow(FeedForbiddenException.authorMismatch(currentUserId, UUID.randomUUID()))
+      willThrow(FeedForbiddenException.authorMismatch())
           .given(feedService).delete(feedId, currentUserId);
 
       // when & then
