@@ -66,14 +66,14 @@ public class Weather {
   @Column(name = "humidity_current", nullable = false)
   private double humidityCurrent;
 
-  @Column(name = "humidity_compared", nullable = false)
-  private double humidityCompared;
+  @Column(name = "humidity_compared")
+  private Double humidityCompared;
 
   @Column(name = "temperature_current", nullable = false)
   private double temperatureCurrent;
 
-  @Column(name = "temperature_compared", nullable = false)
-  private double temperatureCompared;
+  @Column(name = "temperature_compared")
+  private Double temperatureCompared;
 
   @Column(name = "temperature_min", nullable = false)
   private double temperatureMin;
@@ -95,8 +95,8 @@ public class Weather {
   @Builder(access = AccessLevel.PRIVATE)
   private Weather(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
       SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
-      double precipitationProbability, double humidityCurrent, double humidityCompared,
-      double temperatureCurrent, double temperatureCompared, double temperatureMin,
+      double precipitationProbability, double humidityCurrent, Double humidityCompared,
+      double temperatureCurrent, Double temperatureCompared, double temperatureMin,
       double temperatureMax, double windSpeed, WindStrength windAsWord) {
     this.weatherGrid = weatherGrid;
     this.forecastedAt = forecastedAt;
@@ -117,8 +117,8 @@ public class Weather {
 
   public static Weather create(WeatherGrid weatherGrid, Instant forecastedAt, Instant forecastAt,
       SkyStatus skyStatus, PrecipitationType precipitationType, double precipitationAmount,
-      double precipitationProbability, double humidityCurrent, double humidityCompared,
-      double temperatureCurrent, double temperatureCompared, double temperatureMin,
+      double precipitationProbability, double humidityCurrent, Double humidityCompared,
+      double temperatureCurrent, Double temperatureCompared, double temperatureMin,
       double temperatureMax, double windSpeed, WindStrength windAsWord) {
     return Weather.builder()
         .weatherGrid(weatherGrid)

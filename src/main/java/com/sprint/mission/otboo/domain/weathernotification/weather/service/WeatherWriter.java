@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -56,10 +57,10 @@ public class WeatherWriter {
 
     List<Weather> built = new ArrayList<>();
     for (DailyWeatherForecastDto dto : dailyForecasts) {
-      double temperatureCompared =
-          previousTemp != null ? dto.temperatureCurrent() - previousTemp : 0.0;
-      double humidityCompared =
-          previousHumidity != null ? dto.humidityCurrent() - previousHumidity : 0.0;
+      Double temperatureCompared =
+          previousTemp != null ? dto.temperatureCurrent() - previousTemp : null;
+      Double humidityCompared =
+          previousHumidity != null ? dto.humidityCurrent() - previousHumidity : null;
 
       built.add(Weather.create(weatherGrid, forecastedAt,
           dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
@@ -94,9 +95,9 @@ public class WeatherWriter {
         ps.setDouble(7, weather.getPrecipitationAmount());
         ps.setDouble(8, weather.getPrecipitationProbability());
         ps.setDouble(9, weather.getHumidityCurrent());
-        ps.setDouble(10, weather.getHumidityCompared());
+        ps.setObject(10, weather.getHumidityCompared(), Types.DOUBLE);
         ps.setDouble(11, weather.getTemperatureCurrent());
-        ps.setDouble(12, weather.getTemperatureCompared());
+        ps.setObject(12, weather.getTemperatureCompared(), Types.DOUBLE);
         ps.setDouble(13, weather.getTemperatureMin());
         ps.setDouble(14, weather.getTemperatureMax());
         ps.setDouble(15, weather.getWindSpeed());
