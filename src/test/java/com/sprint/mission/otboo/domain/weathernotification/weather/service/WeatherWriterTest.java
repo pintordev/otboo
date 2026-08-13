@@ -60,8 +60,8 @@ class WeatherWriterTest {
   class Build {
 
     @Test
-    @DisplayName("전날_데이터가_없으면_diff는_0으로_계산한다")
-    void 전날_데이터가_없으면_diff는_0으로_계산한다() {
+    @DisplayName("전날_데이터가_없으면_diff는_null이다")
+    void 전날_데이터가_없으면_diff는_null이다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
@@ -78,8 +78,8 @@ class WeatherWriterTest {
 
       // then
       assertThat(result).hasSize(1);
-      assertThat(result.get(0).getTemperatureCompared()).isEqualTo(0.0);
-      assertThat(result.get(0).getHumidityCompared()).isEqualTo(0.0);
+      assertThat(result.get(0).getTemperatureCompared()).isNull();
+      assertThat(result.get(0).getHumidityCompared()).isNull();
     }
 
     @Test
