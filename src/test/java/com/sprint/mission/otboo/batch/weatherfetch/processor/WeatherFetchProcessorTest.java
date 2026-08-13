@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherRefresher;
@@ -31,6 +33,10 @@ import org.slf4j.LoggerFactory;
 class WeatherFetchProcessorTest {
 
   private static final BaseTime BASE_TIME = new BaseTime("20260727", "1700");
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
+      .build();
 
   @Mock
   private WeatherRefresher weatherRefresher;
@@ -56,6 +62,13 @@ class WeatherFetchProcessorTest {
     appender.stop();
   }
 
+  private WeatherGrid weatherGrid(int x, int y) {
+    return FIXTURE_MONKEY.giveMeBuilder(WeatherGrid.class)
+        .set("x", x)
+        .set("y", y)
+        .sample();
+  }
+
   @Nested
   @DisplayName("Process")
   class Process {
@@ -64,7 +77,7 @@ class WeatherFetchProcessorTest {
     @DisplayName("WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다")
     void WeatherGrid를_KmaGridPoint로_변환해서_WeatherRefresher에_위임한다() {
       // given
-      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      WeatherGrid weatherGrid = weatherGrid(60, 127);
       List<Weather> saved = List.of();
       given(weatherRefresher.build(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), eq(BASE_TIME)))
           .willReturn(saved);
@@ -80,8 +93,8 @@ class WeatherFetchProcessorTest {
     @DisplayName("여러_격자를_처리해도_JobExecutionContext에서_주입받은_동일한_baseTime을_사용한다")
     void 여러_격자를_처리해도_JobExecutionContext에서_주입받은_동일한_baseTime을_사용한다() {
       // given
-      WeatherGrid grid1 = WeatherGrid.create(60, 127);
-      WeatherGrid grid2 = WeatherGrid.create(61, 128);
+      WeatherGrid grid1 = weatherGrid(60, 127);
+      WeatherGrid grid2 = weatherGrid(61, 128);
 
       // when
       processor.process(grid1);
@@ -104,8 +117,8 @@ class WeatherFetchProcessorTest {
     @DisplayName("격자를_처리할_때마다_누적_KMA_호출_횟수를_로그로_남긴다")
     void 격자를_처리할_때마다_누적_KMA_호출_횟수를_로그로_남긴다() {
       // given
-      WeatherGrid grid1 = WeatherGrid.create(60, 127);
-      WeatherGrid grid2 = WeatherGrid.create(61, 128);
+      WeatherGrid grid1 = weatherGrid(60, 127);
+      WeatherGrid grid2 = weatherGrid(61, 128);
 
       // when
       processor.process(grid1);
@@ -126,7 +139,7 @@ class WeatherFetchProcessorTest {
     @DisplayName("호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다")
     void 호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다() {
       // given
-      WeatherGrid grid = WeatherGrid.create(60, 127);
+      WeatherGrid grid = weatherGrid(60, 127);
 
       // when
       processor.process(grid);
