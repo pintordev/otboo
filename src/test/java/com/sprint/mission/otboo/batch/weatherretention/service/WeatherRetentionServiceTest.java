@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.launch.JobOperator;
@@ -27,6 +29,9 @@ class WeatherRetentionServiceTest {
 
   @Mock
   private Job weatherRetentionJob;
+
+  @Mock
+  private JobExecution jobExecution;
 
   private WeatherRetentionService weatherRetentionService;
 
@@ -42,6 +47,10 @@ class WeatherRetentionServiceTest {
     @Test
     @DisplayName("weatherRetentionJob을_JobParameters와_함께_실행한다")
     void weatherRetentionJob을_JobParameters와_함께_실행한다() throws Exception {
+      // given
+      given(jobOperator.start(any(Job.class), any(JobParameters.class))).willReturn(jobExecution);
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+
       // when
       weatherRetentionService.execute();
 
@@ -60,6 +69,18 @@ class WeatherRetentionServiceTest {
       assertThatThrownBy(() -> weatherRetentionService.execute())
           .isInstanceOf(WeatherRetentionJobFailedException.class)
           .hasCauseInstanceOf(JobExecutionAlreadyRunningException.class);
+    }
+
+    @Test
+    @DisplayName("Step이_FAILED로_끝나면_WeatherRetentionJobFailedException을_던진다")
+    void Step이_FAILED로_끝나면_WeatherRetentionJobFailedException을_던진다() throws Exception {
+      // given
+      given(jobOperator.start(any(Job.class), any(JobParameters.class))).willReturn(jobExecution);
+      given(jobExecution.getStatus()).willReturn(BatchStatus.FAILED);
+
+      // when & then
+      assertThatThrownBy(() -> weatherRetentionService.execute())
+          .isInstanceOf(WeatherRetentionJobFailedException.class);
     }
   }
 }
