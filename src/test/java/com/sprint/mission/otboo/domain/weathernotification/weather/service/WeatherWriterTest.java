@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,8 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import java.sql.PreparedStatement;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -157,6 +160,35 @@ class WeatherWriterTest {
       verify(weatherRepository, times(1))
           .findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(eq(weatherGrid),
               eq(forecastedAt), eq(List.of(forecastAt1, forecastAt2)));
+    }
+
+    @Test
+    @DisplayName("전일_비교값이_null이면_JDBC에도_NULL로_바인딩한다")
+    void 전일_비교값이_null이면_JDBC에도_NULL로_바인딩한다() throws Exception {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      DailyWeatherForecastDto day1 = FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .sample();
+      Instant forecastAt1 = day1.date().atStartOfDay(KST).toInstant();
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(forecastedAt), eq(List.of(forecastAt1))))
+          .willReturn(List.of());
+
+      // when - Map.of()라 전일 데이터가 없어 build() 결과의 비교값이 null
+      weatherWriter.save(weatherGrid, forecastedAt, List.of(day1), Map.of());
+
+      // then
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate).batchUpdate(anyString(), setterCaptor.capture());
+      PreparedStatement preparedStatement = mock(PreparedStatement.class);
+      setterCaptor.getValue().setValues(preparedStatement, 0);
+      verify(preparedStatement).setObject(10, null, Types.DOUBLE);
+      verify(preparedStatement).setObject(12, null, Types.DOUBLE);
     }
 
     @Test

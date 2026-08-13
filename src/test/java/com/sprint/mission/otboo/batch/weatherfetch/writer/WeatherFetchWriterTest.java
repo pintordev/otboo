@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,7 +18,9 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -90,6 +93,31 @@ class WeatherFetchWriterTest {
       verify(jdbcTemplate, times(1)).batchUpdate(sqlCaptor.capture(), setterCaptor.capture());
       assertThat(sqlCaptor.getValue()).contains("ON CONFLICT").contains("weathers");
       assertThat(setterCaptor.getValue().getBatchSize()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("비교값이_null인_Weather는_JDBC에도_NULL로_바인딩한다")
+    void 비교값이_null인_Weather는_JDBC에도_NULL로_바인딩한다() throws Exception {
+      // given
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Weather weatherWithNullCompared = Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
+          60.0, null, 26.0, null, 24.0, 29.0, 2.0, WindStrength.WEAK);
+      Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weatherWithNullCompared)));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+
+      // when
+      writer.write(chunk);
+
+      // then
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate).batchUpdate(anyString(), setterCaptor.capture());
+      PreparedStatement preparedStatement = mock(PreparedStatement.class);
+      setterCaptor.getValue().setValues(preparedStatement, 0);
+      verify(preparedStatement).setObject(10, null, Types.DOUBLE);
+      verify(preparedStatement).setObject(12, null, Types.DOUBLE);
     }
 
     @Test
