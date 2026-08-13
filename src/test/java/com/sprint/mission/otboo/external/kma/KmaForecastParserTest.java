@@ -215,6 +215,9 @@ class KmaForecastParserTest {
       // given
       Instant now = Instant.parse("2026-07-27T08:00:00Z");
       List<Item> items = List.of(
+          item("TMP", "20260730", "0000", "24"),
+          item("TMP", "20260730", "0900", "27"),
+          item("TMP", "20260730", "1200", "30"),
           item("TMP", "20260730", "1500", "28"),
           item("SKY", "20260730", "1500", "9")
       );
@@ -239,6 +242,9 @@ class KmaForecastParserTest {
       // given
       Instant now = Instant.parse("2026-07-27T08:00:00Z");
       List<Item> items = List.of(
+          item("TMP", "20260730", "0000", "24"),
+          item("TMP", "20260730", "0900", "27"),
+          item("TMP", "20260730", "1200", "30"),
           item("TMP", "20260730", "1500", "28"),
           item("PTY", "20260730", "1500", "9")
       );
