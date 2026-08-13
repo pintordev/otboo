@@ -121,5 +121,20 @@ class WeatherFetchProcessorTest {
           .anySatisfy(message -> assertThat(message).contains("누적 호출 횟수=1"))
           .anySatisfy(message -> assertThat(message).contains("누적 호출 횟수=2"));
     }
+
+    @Test
+    @DisplayName("호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다")
+    void 호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다() {
+      // given
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+
+      // when
+      processor.process(grid);
+
+      // then - conventions.md 11번: 위치 정보(위·경도 등)는 로그에 그대로 남기지 않는다
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .noneMatch(message -> message.contains("nx=") || message.contains("ny="));
+    }
   }
 }
