@@ -123,8 +123,8 @@ class WeatherFetchWriterTest {
     }
 
     @Test
-    @DisplayName("SUCCESS_NO_INFO_결과는_실insert가_아니라_결과불명_건수로_로그에_남는다")
-    void SUCCESS_NO_INFO_결과는_실insert가_아니라_결과불명_건수로_로그에_남는다() {
+    @DisplayName("SUCCESS_NO_INFO_결과는_삽입이_아니라_결과불명_건수로_로그에_남는다")
+    void SUCCESS_NO_INFO_결과는_삽입이_아니라_결과불명_건수로_로그에_남는다() {
       // given - pgjdbc가 배치를 재작성하면 개별 영향 행 수 대신 SUCCESS_NO_INFO(-2)를 반환할 수 있다
       WeatherGrid grid = WeatherGrid.create(60, 127);
       Chunk<List<Weather>> chunk = new Chunk<>(
@@ -139,7 +139,7 @@ class WeatherFetchWriterTest {
       assertThat(appender.list)
           .extracting(ILoggingEvent::getFormattedMessage)
           .anySatisfy(message -> assertThat(message)
-              .contains("실insert=1")
+              .contains("삽입=1")
               .contains("결과불명=1"));
     }
   }

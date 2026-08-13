@@ -38,7 +38,7 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
   public void write(Chunk<? extends List<Weather>> chunk) {
     List<Weather> all = chunk.getItems().stream().flatMap(List::stream).toList();
     if (all.isEmpty()) {
-      log.info("WeatherFetchWriter chunk 저장 완료: gridCount={}, 시도=0, 실insert=0", chunk.size());
+      log.info("WeatherFetchWriter chunk 저장 완료: 격자수={}, 시도=0, 삽입=0", chunk.size());
       return;
     }
 
@@ -71,13 +71,13 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
     });
 
     // pgjdbc가 배치를 재작성하면 개별 영향 행 수 대신 Statement.SUCCESS_NO_INFO(-2)를 반환할 수
-    // 있다 - 이 경우는 실패가 아니라 "insert는 됐는데 정확한 건수를 모른다"는 뜻이라 실insert에서
+    // 있다 - 이 경우는 실패가 아니라 "insert는 됐는데 정확한 건수를 모른다"는 뜻이라 삽입 건수에서
     // 빠뜨리지 않고 별도로 집계한다.
     long insertedCount = Arrays.stream(results).filter(result -> result > 0).count();
     long unknownCount = Arrays.stream(results)
         .filter(result -> result == Statement.SUCCESS_NO_INFO)
         .count();
-    log.info("WeatherFetchWriter chunk 저장 완료: gridCount={}, 시도={}, 실insert={}, 결과불명={}",
+    log.info("WeatherFetchWriter chunk 저장 완료: 격자수={}, 시도={}, 삽입={}, 결과불명={}",
         chunk.size(), all.size(), insertedCount, unknownCount);
   }
 }
