@@ -39,7 +39,7 @@ public class KmaForecastFetcher {
           FORECAST_PAGE_NO, "JSON", baseTime.baseDate(), baseTime.baseTime(), grid.nx(),
           grid.ny());
     } catch (FeignException e) {
-      throw KmaApiException.wrap(e);
+      throw KmaApiException.wrap(new RuntimeException(KmaServiceKeyMasker.mask(e.getMessage())));
     }
     validateResultCode(response);
     return kmaForecastParser.parseDailyForecast(response, now).stream()

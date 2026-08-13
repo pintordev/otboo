@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -128,21 +129,68 @@ class KmaForecastFetcherTest {
           .sample();
       Instant now = Instant.parse("2026-07-27T09:00:00Z");
 
-      FeignException.ServiceUnavailable feignException = new FeignException.ServiceUnavailable(
-          "503 Service Unavailable", request(), null, null);
+      FeignException feignException = FeignException.errorStatus("KmaWeatherClient#getVillageForecast",
+          response("/getVillageForecast"));
       given(kmaWeatherClient.getVillageForecast("kma-service-key", 2000, 1, "JSON", "20260727",
           "1700", 60, 127)).willThrow(feignException);
 
       // when & then
       assertThatThrownBy(() -> kmaForecastFetcher.fetch(grid, baseTime, now))
-          .isInstanceOf(KmaApiException.class)
-          .hasCause(feignException);
+          .isInstanceOf(KmaApiException.class);
+      verifyNoInteractions(kmaForecastParser);
+    }
+
+    @Test
+    @DisplayName("FeignException_메시지의_serviceKey를_마스킹한_뒤_cause로_보관한다")
+    void FeignException_메시지의_serviceKey를_마스킹한_뒤_cause로_보관한다() {
+      // given
+      kmaForecastFetcher = new KmaForecastFetcher(kmaWeatherClient, kmaForecastParser,
+          "real-secret-key");
+      KmaGridPoint grid = FIXTURE_MONKEY.giveMeBuilder(KmaGridPoint.class)
+          .set("nx", 60)
+          .set("ny", 127)
+          .sample();
+      BaseTime baseTime = FIXTURE_MONKEY.giveMeBuilder(BaseTime.class)
+          .set("baseDate", "20260727")
+          .set("baseTime", "1700")
+          .sample();
+      Instant now = Instant.parse("2026-07-27T09:00:00Z");
+
+      FeignException feignException = FeignException.errorStatus(
+          "KmaWeatherClient#getVillageForecast",
+          response("http://apis.data.go.kr/getVilageFcst?serviceKey=real-secret-key&pageNo=1"));
+      given(kmaWeatherClient.getVillageForecast("real-secret-key", 2000, 1, "JSON", "20260727",
+          "1700", 60, 127)).willThrow(feignException);
+
+      // when
+      KmaApiException thrown = (KmaApiException) catchThrowable(
+          () -> kmaForecastFetcher.fetch(grid, baseTime, now));
+
+      // then
+      assertThat(thrown.getCause()).isNotNull();
+      assertThat(thrown.getCause().getMessage()).contains("serviceKey=***");
+      for (Throwable cause = thrown; cause != null; cause = cause.getCause()) {
+        assertThat(cause.getMessage()).doesNotContain("real-secret-key");
+      }
       verifyNoInteractions(kmaForecastParser);
     }
 
     private Request request() {
-      return Request.create(Request.HttpMethod.GET, "/getVillageForecast", Map.of(),
+      return request("/getVillageForecast");
+    }
+
+    private Request request(String url) {
+      return Request.create(Request.HttpMethod.GET, url, Map.of(),
           Request.Body.empty(), new RequestTemplate());
+    }
+
+    private feign.Response response(String url) {
+      return feign.Response.builder()
+          .request(request(url))
+          .status(503)
+          .reason("Service Unavailable")
+          .headers(Map.of())
+          .build();
     }
   }
 }
