@@ -1,10 +1,9 @@
 package com.sprint.mission.otboo.batch.weatherfetch.writer;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -15,17 +14,19 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
-import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.infrastructure.item.Chunk;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchWriterTest {
@@ -34,15 +35,15 @@ class WeatherFetchWriterTest {
   private WeatherFetchWriter writer;
 
   @Mock
-  private WeatherRepository weatherRepository;
+  private JdbcTemplate jdbcTemplate;
 
   @Nested
   @DisplayName("Write")
   class Write {
 
     @Test
-    @DisplayName("여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_각각_insertIfAbsent로_저장한다")
-    void 여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_각각_insertIfAbsent로_저장한다() {
+    @DisplayName("여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_한_번의_batchUpdate로_저장한다")
+    void 여러_WeatherGrid의_List_Weather가_섞인_청크를_flatten해서_한_번의_batchUpdate로_저장한다() {
       // given
       WeatherGrid grid1 = WeatherGrid.create(60, 127);
       WeatherGrid grid2 = WeatherGrid.create(61, 128);
@@ -52,20 +53,24 @@ class WeatherFetchWriterTest {
 
       Chunk<List<Weather>> chunk = new Chunk<>(
           List.of(List.of(weather1), List.of(weather2, weather3)));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1, 1, 1});
 
       // when
       writer.write(chunk);
 
-      // then
-      verify(weatherRepository, times(3)).insertIfAbsent(any(), any(),
-          eq(weather1.getForecastedAt()), eq(weather1.getForecastAt()), anyString(), anyString(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyString());
+      // then - 격자별 개별 insertIfAbsent 호출이 아니라, chunk 전체를 한 번의 batchUpdate로 저장한다
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+      verify(jdbcTemplate, times(1)).batchUpdate(sqlCaptor.capture(), setterCaptor.capture());
+      assertThat(sqlCaptor.getValue()).contains("ON CONFLICT").contains("weathers");
+      assertThat(setterCaptor.getValue().getBatchSize()).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("빈_청크는_insertIfAbsent를_호출하지_않는다")
-    void 빈_청크는_insertIfAbsent를_호출하지_않는다() {
+    @DisplayName("빈_청크는_batchUpdate를_호출하지_않는다")
+    void 빈_청크는_batchUpdate를_호출하지_않는다() {
       // given
       Chunk<List<Weather>> chunk = new Chunk<>(List.of());
 
@@ -73,28 +78,24 @@ class WeatherFetchWriterTest {
       writer.write(chunk);
 
       // then
-      verify(weatherRepository, never()).insertIfAbsent(any(), any(), any(), any(), anyString(),
-          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+      verify(jdbcTemplate, never()).batchUpdate(anyString(),
+          any(BatchPreparedStatementSetter.class));
     }
 
     @Test
-    @DisplayName("청크_안에_중복_항목이_섞여도_insertIfAbsent가_0을_반환할_뿐_예외_없이_끝난다")
-    void 청크_안에_중복_항목이_섞여도_insertIfAbsent가_0을_반환할_뿐_예외_없이_끝난다() {
-      // given - 방어적 시나리오(정상 흐름에선 발생하지 않음): 같은 항목이 청크에 두 번 들어온 경우
+    @DisplayName("일부_행이_충돌로_스킵돼도_예외_없이_끝난다")
+    void 일부_행이_충돌로_스킵돼도_예외_없이_끝난다() {
+      // given - ON CONFLICT DO NOTHING으로 스킵된 행은 batchUpdate 결과 배열에서 0으로 온다
       WeatherGrid grid = WeatherGrid.create(60, 127);
       Weather duplicated = weather(grid);
       Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(duplicated, duplicated)));
-      given(weatherRepository.insertIfAbsent(any(), any(), any(), any(), anyString(), anyString(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyString()))
-          .willReturn(1, 0);
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1, 0});
 
       // when & then
       assertThatCode(() -> writer.write(chunk)).doesNotThrowAnyException();
-      verify(weatherRepository, times(2)).insertIfAbsent(any(), any(), any(), any(), anyString(),
-          anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
+      verify(jdbcTemplate, times(1)).batchUpdate(anyString(),
+          any(BatchPreparedStatementSetter.class));
     }
   }
 
