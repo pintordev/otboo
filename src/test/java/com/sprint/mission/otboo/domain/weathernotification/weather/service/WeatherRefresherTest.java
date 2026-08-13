@@ -189,5 +189,42 @@ class WeatherRefresherTest {
       assertThat(existingByDateCaptor.getValue())
           .containsEntry(LocalDate.of(2026, 7, 26), yesterdayWeather);
     }
+
+    @Test
+    @DisplayName("같은_날짜로_축약되는_리비전이_2건이어도_예외없이_먼저_들어온_값을_유지한다")
+    void 같은_날짜로_축약되는_리비전이_2건이어도_예외없이_먼저_들어온_값을_유지한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Weather firstRevision = Weather.create(weatherGrid,
+          Instant.parse("2026-07-26T00:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
+          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
+          WindStrength.WEAK);
+      Weather secondRevision = Weather.create(weatherGrid,
+          Instant.parse("2026-07-26T03:00:00Z"), Instant.parse("2026-07-26T03:00:00Z"),
+          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
+          WindStrength.WEAK);
+      given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
+          .willReturn(List.of(firstRevision, secondRevision));
+
+      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
+              DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .sample();
+      given(kmaForecastFetcher.fetch(GRID, BASE_TIME, Instant.parse("2026-07-27T09:00:00Z")))
+          .willReturn(List.of(todayForecast));
+      given(weatherWriter.build(any(), any(), any(), any())).willReturn(List.of());
+
+      // when & then
+      weatherRefresher.build(weatherGrid, GRID, BASE_TIME);
+
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<Map<LocalDate, Weather>> existingByDateCaptor =
+          ArgumentCaptor.forClass(Map.class);
+      verify(weatherWriter).build(eq(weatherGrid), eq(BASE_TIME.toInstant()),
+          eq(List.of(todayForecast)), existingByDateCaptor.capture());
+      assertThat(existingByDateCaptor.getValue())
+          .hasSize(1)
+          .containsEntry(LocalDate.of(2026, 7, 26), firstRevision);
+    }
   }
 }
