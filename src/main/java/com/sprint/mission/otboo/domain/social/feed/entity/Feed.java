@@ -17,6 +17,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -56,34 +57,34 @@ public class Feed {
   // 참조가 아니라 기록용 값이다 — FK 없음, weathers 원본은 retention 배치로 물리 삭제된다.
   // 화면 표시는 이 필드가 아니라 아래 skyStatus/precipitationType 등 Feed 자체 스냅샷 컬럼을 쓴다.
   // weatherRepository.findById(weatherId)로 원본을 다시 조회하려 하면 안 됨(삭제돼 없을 수 있음).
-  @Column(name = "weather_id")
+  @Column(name = "weather_id", nullable = false)
   private UUID weatherId;
 
   // 날씨 스냅샷 — 등록 시점 값 복사
   @Enumerated(EnumType.STRING)
-  @Column(name = "sky_status")
+  @Column(name = "sky_status", nullable = false)
   private SkyStatus skyStatus;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "precipitation_type")
+  @Column(name = "precipitation_type", nullable = false)
   private PrecipitationType precipitationType;
 
-  @Column(name = "precipitation_amount")
+  @Column(name = "precipitation_amount", nullable = false)
   private Double precipitationAmount;
 
-  @Column(name = "precipitation_probability")
+  @Column(name = "precipitation_probability", nullable = false)
   private Double precipitationProbability;
 
-  @Column(name = "temperature_current")
+  @Column(name = "temperature_current", nullable = false)
   private Double temperatureCurrent;
 
-  @Column(name = "temperature_compared")
+  @Column(name = "temperature_compared", nullable = false)
   private Double temperatureCompared;
 
-  @Column(name = "temperature_min")
+  @Column(name = "temperature_min", nullable = false)
   private Double temperatureMin;
 
-  @Column(name = "temperature_max")
+  @Column(name = "temperature_max", nullable = false)
   private Double temperatureMax;
 
   @JdbcTypeCode(SqlTypes.JSON)
@@ -104,16 +105,17 @@ public class Feed {
     this.authorId = authorId;
     this.weatherId = weatherId;
     this.content = content;
-    if (weatherSnapshot != null) {
-      this.skyStatus = weatherSnapshot.skyStatus();
-      this.precipitationType = weatherSnapshot.precipitationType();
-      this.precipitationAmount = weatherSnapshot.precipitationAmount();
-      this.precipitationProbability = weatherSnapshot.precipitationProbability();
-      this.temperatureCurrent = weatherSnapshot.temperatureCurrent();
-      this.temperatureCompared = weatherSnapshot.temperatureCompared();
-      this.temperatureMin = weatherSnapshot.temperatureMin();
-      this.temperatureMax = weatherSnapshot.temperatureMax();
-    }
+
+    Objects.requireNonNull(weatherSnapshot, "weatherSnapshot은 필수입니다");
+    this.skyStatus = weatherSnapshot.skyStatus();
+    this.precipitationType = weatherSnapshot.precipitationType();
+    this.precipitationAmount = weatherSnapshot.precipitationAmount();
+    this.precipitationProbability = weatherSnapshot.precipitationProbability();
+    this.temperatureCurrent = weatherSnapshot.temperatureCurrent();
+    this.temperatureCompared = weatherSnapshot.temperatureCompared();
+    this.temperatureMin = weatherSnapshot.temperatureMin();
+    this.temperatureMax = weatherSnapshot.temperatureMax();
+
     this.ootds = ootdSnapshots == null ? List.of() : List.copyOf(ootdSnapshots);
     this.likeCount = 0;
     this.commentCount = 0;

@@ -22,6 +22,7 @@ public class AsyncConfig implements AsyncConfigurer {
     executor.setMaxPoolSize(4);
     executor.setQueueCapacity(50);
     executor.setThreadNamePrefix("mail-async-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
     executor.initialize();
     // TODO: 유실에 대한 정책 정의 논의 필요
     return executor;

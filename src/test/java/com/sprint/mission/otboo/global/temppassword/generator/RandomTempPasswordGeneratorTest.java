@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.global.temppassword.generator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.global.temppassword.generator.impl.RandomTempPasswordGenerator;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

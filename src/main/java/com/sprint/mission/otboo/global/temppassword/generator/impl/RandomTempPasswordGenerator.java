@@ -1,11 +1,8 @@
-package com.sprint.mission.otboo.global.temppassword.generator;
+package com.sprint.mission.otboo.global.temppassword.generator.impl;
 
+import com.sprint.mission.otboo.global.temppassword.generator.TempPasswordGenerator;
 import java.security.SecureRandom;
-import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Component;
 
-@Component
-@Profile({"local", "test"})
 public class RandomTempPasswordGenerator implements TempPasswordGenerator {
 
   private static final int PASSWORD_LENGTH = 12;

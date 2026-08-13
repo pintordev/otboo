@@ -1,31 +1,31 @@
-package com.sprint.mission.otboo.global.mail;
+package com.sprint.mission.otboo.global.mail.service.impl;
 
 import com.sprint.mission.otboo.global.mail.exception.MailSendErrorException;
+import com.sprint.mission.otboo.global.mail.service.MailService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
 public class GoogleSmtpMailService implements MailService {
 
   private final JavaMailSender mailSender;
   private final TemplateEngine templateEngine;
 
+  public GoogleSmtpMailService(JavaMailSender mailSender, TemplateEngine templateEngine) {
+    this.mailSender = mailSender;
+    this.templateEngine = templateEngine;
+  }
+
   @Override
-  public void sendTempPassword(String toEmail, String rawTempPassword) {
+  public void sendTempPassword(String toEmail, String rawTempPassword, int expireMinutes) {
     try {
       Context context = new Context();
       context.setVariable("temporaryPassword", rawTempPassword);
-      context.setVariable("expireMinutes", 3);
+      context.setVariable("expireMinutes", expireMinutes);
       String html = templateEngine.process("mail/temporary-password", context);
 
       MimeMessage message = mailSender.createMimeMessage();

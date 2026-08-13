@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.social.follow.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -528,7 +529,7 @@ class FollowServiceTest {
       given(followRepository.findFollowings(params)).willReturn(repoPage);
       given(userSummaryQueryRepository.findByUserIds(any()))
           .willReturn(List.of(followerSummary, followeeSummary));
-      given(followMapper.toDto(follow, followerSummary, followeeSummary)).willReturn(dto);
+      given(followMapper.toDto(eq(follow), anyMap())).willReturn(dto);
 
       // when
       CursorPageResponse<FollowDto> result = followService.getFollowings(params);
@@ -626,7 +627,7 @@ class FollowServiceTest {
       given(followRepository.findFollowers(params)).willReturn(repoPage);
       given(userSummaryQueryRepository.findByUserIds(any()))
           .willReturn(List.of(followerSummary, followeeSummary));
-      given(followMapper.toDto(follow, followerSummary, followeeSummary)).willReturn(dto);
+      given(followMapper.toDto(eq(follow), anyMap())).willReturn(dto);
 
       // when
       CursorPageResponse<FollowDto> result = followService.getFollowers(params);

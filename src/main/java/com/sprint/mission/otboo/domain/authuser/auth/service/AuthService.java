@@ -13,7 +13,6 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
-import com.sprint.mission.otboo.global.temppassword.generator.TempPasswordGenerator;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
@@ -45,7 +44,6 @@ public class AuthService {
   private final AuthMapper authMapper;
   private final UserRepository userRepository;
   private final SseService sseService;
-  private final TempPasswordGenerator tempPasswordGenerator;
   private final TempPasswordRegistry tempPasswordRegistry;
   private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
@@ -115,10 +113,10 @@ public class AuthService {
   public void resetPassword(ResetPasswordRequest request) {
     userRepository.findByEmail(request.email())
         .ifPresent(user -> {
-          String rawTempPassword = tempPasswordGenerator.generate();
-          tempPasswordRegistry.save(user.getId(), rawTempPassword);
+          String rawTempPassword = tempPasswordRegistry.issue(user.getId());
           eventPublisher.publishEvent(
-              new TempPasswordRequestedEvent(user.getEmail(), rawTempPassword));
+              new TempPasswordRequestedEvent(user.getEmail(), rawTempPassword,
+                  tempPasswordRegistry.getExpirationMinutes()));
         });
   }
 

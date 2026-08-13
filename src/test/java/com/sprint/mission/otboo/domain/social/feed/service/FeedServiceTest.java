@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -420,6 +421,26 @@ class FeedServiceTest {
 
       // then
       verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("날씨 스냅샷이 없으면 NullPointerException을 던진다")
+    void 날씨_스냅샷이_없으면_NullPointerException을_던진다() {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      FeedCreateRequest request = fm.giveMeBuilder(FeedCreateRequest.class)
+          .set("authorId", currentUserId)
+          .sample();
+
+      when(weatherSnapshotProvider.readSnapshot(any())).thenReturn(null);
+      lenient().when(feedRepository.save(any(Feed.class)))
+          .thenAnswer(inv -> inv.getArgument(0));
+      lenient().when(userSummaryQueryRepository.findByUserId(currentUserId))
+          .thenReturn(new UserSummary(currentUserId, "테스터", null));
+
+      // when & then
+      assertThatThrownBy(() -> feedService.create(request, currentUserId))
+          .isInstanceOf(NullPointerException.class);
     }
   }
 

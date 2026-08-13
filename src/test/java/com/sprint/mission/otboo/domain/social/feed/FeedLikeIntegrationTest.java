@@ -54,7 +54,7 @@ class FeedLikeIntegrationTest {
 
   private Feed persistFeed(UUID authorId) {
     return feedRepository.save(
-        Feed.create(authorId, null, "테스트 피드", DUMMY_SNAPSHOT, List.of()));
+        Feed.create(authorId, UUID.randomUUID(), "테스트 피드", DUMMY_SNAPSHOT, List.of()));
   }
 
   @Nested

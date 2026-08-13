@@ -25,7 +25,6 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
-import com.sprint.mission.otboo.global.temppassword.generator.TempPasswordGenerator;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
@@ -79,9 +78,6 @@ class AuthServiceTest {
 
   @Mock
   private SseService sseService;
-
-  @Mock
-  private TempPasswordGenerator tempPasswordGenerator;
 
   @Mock
   private TempPasswordRegistry tempPasswordRegistry;
@@ -236,12 +232,13 @@ class AuthServiceTest {
   class ResetPassword {
 
     @Test
-    @DisplayName("가입된 이메일이면 임시 비밀번호를 생성해 저장하고 이벤트를 발행한다")
-    void 가입된_이메일이면_임시_비밀번호를_생성해_저장하고_이벤트를_발행한다() {
+    @DisplayName("가입된 이메일이면 임시 비밀번호를 발급하고 이벤트를 발행한다")
+    void 가입된_이메일이면_임시_비밀번호를_발급하고_이벤트를_발행한다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
       given(userRepository.findByEmail("hong@test.com")).willReturn(Optional.of(user));
-      given(tempPasswordGenerator.generate()).willReturn("temp-password!");
+      given(tempPasswordRegistry.issue(user.getId())).willReturn("temp-password!");
+      given(tempPasswordRegistry.getExpirationMinutes()).willReturn(3);
 
       ResetPasswordRequest request = new ResetPasswordRequest("hong@test.com");
 
@@ -249,9 +246,9 @@ class AuthServiceTest {
       authService.resetPassword(request);
 
       // then
-      verify(tempPasswordRegistry).save(user.getId(), "temp-password!");
+      verify(tempPasswordRegistry).issue(user.getId());
       verify(eventPublisher).publishEvent(
-          new TempPasswordRequestedEvent("hong@test.com", "temp-password!"));
+          new TempPasswordRequestedEvent("hong@test.com", "temp-password!", 3));
     }
 
     @Test

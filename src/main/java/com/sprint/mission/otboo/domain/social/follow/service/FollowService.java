@@ -139,7 +139,7 @@ public class FollowService {
             log.warn("팔로우 사용자 정보를 조회할 수 없습니다: followId={}", f.getId());
             throw FollowUserNotFoundException.withNone();
           }
-          return followMapper.toDto(f, follower, followee);
+          return followMapper.toDto(f, summaryMap);
         })
         .toList();
 
