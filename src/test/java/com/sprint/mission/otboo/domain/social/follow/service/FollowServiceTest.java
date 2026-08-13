@@ -21,6 +21,7 @@ import com.sprint.mission.otboo.domain.social.follow.dto.FollowSummaryDto;
 import com.sprint.mission.otboo.domain.social.follow.dto.FollowerListParams;
 import com.sprint.mission.otboo.domain.social.follow.dto.FollowingListParams;
 import com.sprint.mission.otboo.domain.social.follow.entity.Follow;
+import com.sprint.mission.otboo.domain.social.follow.exception.FollowConflictException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowForbiddenException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowNotFoundException;
 import com.sprint.mission.otboo.domain.social.follow.exception.FollowUserNotFoundException;
@@ -225,6 +226,34 @@ class FollowServiceTest {
       // then
       assertThat(result).isEqualTo(expected);
       verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("멱등 경로에서 기존 팔로우를 찾지 못하면 FollowConflictException을 던진다")
+    void 멱등_경로에서_기존_팔로우를_찾지_못하면_FollowConflictException을_던진다() {
+      // given
+      UUID followerId = UUID.randomUUID();
+      UUID followeeId = UUID.randomUUID();
+      FollowCreateRequest request = fm.giveMeBuilder(FollowCreateRequest.class)
+          .set("followerId", followerId)
+          .set("followeeId", followeeId)
+          .sample();
+
+      UserSummary followerSummary = fm.giveMeBuilder(UserSummary.class)
+          .set("userId", followerId).sample();
+      UserSummary followeeSummary = fm.giveMeBuilder(UserSummary.class)
+          .set("userId", followeeId).sample();
+      given(userSummaryQueryRepository.findByUserId(followerId)).willReturn(followerSummary);
+      given(userSummaryQueryRepository.findByUserId(followeeId)).willReturn(followeeSummary);
+
+      given(followRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId))
+          .willReturn(true);
+      given(followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId))
+          .willReturn(Optional.empty());
+
+      // when & then
+      assertThatThrownBy(() -> followService.create(request, followerId))
+          .isInstanceOf(FollowConflictException.class);
     }
 
     @Test

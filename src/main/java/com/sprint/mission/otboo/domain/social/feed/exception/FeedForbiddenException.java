@@ -1,7 +1,6 @@
 package com.sprint.mission.otboo.domain.social.feed.exception;
 
 import java.util.Map;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 
 public class FeedForbiddenException extends FeedException {
@@ -12,8 +11,7 @@ public class FeedForbiddenException extends FeedException {
     super(HttpStatus.FORBIDDEN, MESSAGE, details);
   }
 
-  public static FeedForbiddenException authorMismatch(UUID current, UUID requested) {
-    return new FeedForbiddenException(
-        Map.of("currentUserId", current, "requestedAuthorId", requested));
+  public static FeedForbiddenException authorMismatch() {
+    return new FeedForbiddenException(Map.of());
   }
 }

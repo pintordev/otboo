@@ -12,12 +12,14 @@ import org.springframework.data.repository.query.Param;
 public interface FeedRepository extends JpaRepository<Feed, UUID>, FeedCustomRepository {
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
-  @Query("update Feed f set f.likeCount = f.likeCount + 1 where f.id = :feedId")
-  void incrementLikeCount(@Param("feedId") UUID feedId);
+  @Query("update Feed f set f.likeCount = f.likeCount + 1 "
+      + "where f.id = :feedId and f.softDeletable.deletedAt is null")
+  int incrementLikeCount(@Param("feedId") UUID feedId);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
-  @Query("update Feed f set f.likeCount = f.likeCount - 1 where f.id = :feedId and f.likeCount > 0")
-  void decrementLikeCount(@Param("feedId") UUID feedId);
+  @Query("update Feed f set f.likeCount = f.likeCount - 1 "
+      + "where f.id = :feedId and f.likeCount > 0 and f.softDeletable.deletedAt is null")
+  int decrementLikeCount(@Param("feedId") UUID feedId);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("update Feed f set f.commentCount = f.commentCount + 1 "

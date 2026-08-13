@@ -31,6 +31,4 @@ public class DirectMessageController implements DirectMessageApi {
         directMessageService.getDirectMessages(principal.userId(), params);
     return ResponseEntity.ok(response);
   }
-
-  
 }

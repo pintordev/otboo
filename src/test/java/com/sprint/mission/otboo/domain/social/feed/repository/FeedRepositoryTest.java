@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.social.feed.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -39,9 +40,15 @@ class FeedRepositoryTest {
   @Autowired
   private TestEntityManager testEntityManager;
 
+  private User persistUser(String name) {
+    return testEntityManager.persist(
+        User.create(name, UUID.randomUUID() + "@otboo.io", "password"));
+  }
+
   private Feed createAndSaveFeed(String content) {
+    User author = persistUser("작성자");
     return feedRepository.save(
-        Feed.create(UUID.randomUUID(), UUID.randomUUID(), content, DUMMY_SNAPSHOT, List.of()));
+        Feed.create(author.getId(), UUID.randomUUID(), content, DUMMY_SNAPSHOT, List.of()));
   }
 
   private void setLikeCount(UUID feedId, long count) {
@@ -65,17 +72,34 @@ class FeedRepositoryTest {
   class IncrementLikeCount {
 
     @Test
-    @DisplayName("좋아요 카운트를 1 증가시킨다")
-    void 좋아요_카운트를_1_증가시킨다() {
+    @DisplayName("좋아요 카운트를 1 증가시키고 수정 행 수 1을 반환한다")
+    void 좋아요_카운트를_1_증가시키고_수정_행_수_1을_반환한다() {
       // given
       Feed feed = createAndSaveFeed("내용");
 
       // when
-      feedRepository.incrementLikeCount(feed.getId());
+      int updated = feedRepository.incrementLikeCount(feed.getId());
 
       // then
+      assertThat(updated).isEqualTo(1);
       Feed found = feedRepository.findById(feed.getId()).orElseThrow();
       assertThat(found.getLikeCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 피드는 카운트가 변경되지 않고 0을 반환한다")
+    void 소프트_삭제된_피드는_카운트가_변경되지_않고_0을_반환한다() {
+      // given
+      Feed feed = createAndSaveFeed("내용");
+      setDeletedAt(feed.getId(), Instant.now());
+
+      // when
+      int updated = feedRepository.incrementLikeCount(feed.getId());
+
+      // then
+      assertThat(updated).isZero();
+      Feed found = feedRepository.findById(feed.getId()).orElseThrow();
+      assertThat(found.getLikeCount()).isZero();
     }
   }
 
@@ -84,33 +108,52 @@ class FeedRepositoryTest {
   class DecrementLikeCount {
 
     @Test
-    @DisplayName("좋아요 카운트를 1 감소시킨다")
-    void 좋아요_카운트를_1_감소시킨다() {
+    @DisplayName("좋아요 카운트를 1 감소시키고 수정 행 수 1을 반환한다")
+    void 좋아요_카운트를_1_감소시키고_수정_행_수_1을_반환한다() {
       // given
       Feed feed = createAndSaveFeed("내용");
       setLikeCount(feed.getId(), 2L);
 
       // when
-      feedRepository.decrementLikeCount(feed.getId());
+      int updated = feedRepository.decrementLikeCount(feed.getId());
 
       // then
+      assertThat(updated).isEqualTo(1);
       Feed found = feedRepository.findById(feed.getId()).orElseThrow();
       assertThat(found.getLikeCount()).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("좋아요 카운트가 0이면 감소시켜도 0을 유지한다")
-    void 좋아요_카운트가_0이면_감소시켜도_0을_유지한다() {
+    @DisplayName("좋아요 카운트가 0이면 감소시키지 않고 0을 반환한다")
+    void 좋아요_카운트가_0이면_감소시키지_않고_0을_반환한다() {
       // given
       Feed feed = createAndSaveFeed("내용");
       // like_count는 생성 시 0
 
       // when
-      feedRepository.decrementLikeCount(feed.getId());
+      int updated = feedRepository.decrementLikeCount(feed.getId());
 
       // then
+      assertThat(updated).isZero();
       Feed found = feedRepository.findById(feed.getId()).orElseThrow();
-      assertThat(found.getLikeCount()).isEqualTo(0L);
+      assertThat(found.getLikeCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 피드는 카운트가 변경되지 않고 0을 반환한다")
+    void 소프트_삭제된_피드는_카운트가_변경되지_않고_0을_반환한다() {
+      // given
+      Feed feed = createAndSaveFeed("내용");
+      setLikeCount(feed.getId(), 2L);
+      setDeletedAt(feed.getId(), Instant.now());
+
+      // when
+      int updated = feedRepository.decrementLikeCount(feed.getId());
+
+      // then
+      assertThat(updated).isZero();
+      Feed found = feedRepository.findById(feed.getId()).orElseThrow();
+      assertThat(found.getLikeCount()).isEqualTo(2L);
     }
   }
 
@@ -164,15 +207,15 @@ class FeedRepositoryTest {
     @DisplayName("피드의 작성자 ID를 반환한다")
     void 피드의_작성자_ID를_반환한다() {
       // given
-      UUID authorId = UUID.randomUUID();
+      User author = persistUser("작성자");
       Feed feed = feedRepository.save(
-          Feed.create(authorId, UUID.randomUUID(), "내용", DUMMY_SNAPSHOT, List.of()));
+          Feed.create(author.getId(), UUID.randomUUID(), "내용", DUMMY_SNAPSHOT, List.of()));
 
       // when
       Optional<UUID> result = feedRepository.findAuthorId(feed.getId());
 
       // then
-      assertThat(result).contains(authorId);
+      assertThat(result).contains(author.getId());
     }
 
     @Test
@@ -189,8 +232,7 @@ class FeedRepositoryTest {
     @DisplayName("소프트 삭제된 피드는 빈 Optional을 반환한다")
     void 소프트_삭제된_피드는_빈_Optional을_반환한다() {
       // given
-      Feed feed = feedRepository.save(
-          Feed.create(UUID.randomUUID(), UUID.randomUUID(), "내용", DUMMY_SNAPSHOT, List.of()));
+      Feed feed = createAndSaveFeed("내용");
       setDeletedAt(feed.getId(), Instant.now());
 
       // when

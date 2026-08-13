@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.social.follow.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.social.follow.entity.Follow;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
@@ -33,6 +34,11 @@ class FollowRepositoryTest {
 
   @Autowired
   private TestEntityManager testEntityManager;
+
+  private User persistUser(String name) {
+    return testEntityManager.persist(
+        User.create(name, UUID.randomUUID() + "@otboo.io", "password"));
+  }
 
   @Nested
   @DisplayName("existsByFollowerIdAndFolloweeId")
@@ -120,13 +126,15 @@ class FollowRepositoryTest {
     @DisplayName("동일한 follower-followee 조합을 중복 저장하면 uq_follows_follower_id_followee_id 위반이 발생한다")
     void 동일한_follower_followee_조합을_중복_저장하면_uq_follows_follower_id_followee_id_위반이_발생한다() {
       // given
-      UUID followerId = UUID.randomUUID();
-      UUID followeeId = UUID.randomUUID();
-      followRepository.saveAndFlush(Follow.create(followerId, followeeId));
+      User follower = persistUser("팔로워");
+      User followee = persistUser("팔로위");
+      testEntityManager.flush();
+
+      followRepository.saveAndFlush(Follow.create(follower.getId(), followee.getId()));
 
       // when & then
       assertThatThrownBy(() ->
-          followRepository.saveAndFlush(Follow.create(followerId, followeeId))
+          followRepository.saveAndFlush(Follow.create(follower.getId(), followee.getId()))
       ).isInstanceOf(DataIntegrityViolationException.class)
           .satisfies(e -> {
             Throwable cause = e.getCause();
