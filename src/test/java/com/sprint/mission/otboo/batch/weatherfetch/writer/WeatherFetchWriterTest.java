@@ -9,13 +9,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,6 +43,23 @@ class WeatherFetchWriterTest {
 
   @Mock
   private JdbcTemplate jdbcTemplate;
+
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
+
+  @BeforeEach
+  void setUp() {
+    logger = (Logger) LoggerFactory.getLogger(WeatherFetchWriter.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    logger.detachAppender(appender);
+    appender.stop();
+  }
 
   @Nested
   @DisplayName("Write")
@@ -96,6 +120,27 @@ class WeatherFetchWriterTest {
       assertThatCode(() -> writer.write(chunk)).doesNotThrowAnyException();
       verify(jdbcTemplate, times(1)).batchUpdate(anyString(),
           any(BatchPreparedStatementSetter.class));
+    }
+
+    @Test
+    @DisplayName("SUCCESS_NO_INFO_결과는_실insert가_아니라_결과불명_건수로_로그에_남는다")
+    void SUCCESS_NO_INFO_결과는_실insert가_아니라_결과불명_건수로_로그에_남는다() {
+      // given - pgjdbc가 배치를 재작성하면 개별 영향 행 수 대신 SUCCESS_NO_INFO(-2)를 반환할 수 있다
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Chunk<List<Weather>> chunk = new Chunk<>(
+          List.of(List.of(weather(grid), weather(grid), weather(grid))));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1, 0, Statement.SUCCESS_NO_INFO});
+
+      // when
+      writer.write(chunk);
+
+      // then - result>0(실제 insert) 1건과 SUCCESS_NO_INFO(결과불명) 1건을 구분해서 남긴다
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anySatisfy(message -> assertThat(message)
+              .contains("실insert=1")
+              .contains("결과불명=1"));
     }
   }
 
