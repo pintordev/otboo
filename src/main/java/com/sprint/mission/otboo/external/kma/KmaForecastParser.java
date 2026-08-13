@@ -122,9 +122,11 @@ public class KmaForecastParser {
         case "PCP" -> precipitationAmount += parsePrecipitationAmount(item.fcstValue());
         case "PTY" -> {
           int priority = parsePtyPriority(item.fcstValue(), item.fcstTime(), representativeTime);
+          PrecipitationType candidate =
+              priority >= 0 ? toPrecipitationType(item.fcstValue()) : PrecipitationType.NONE;
           if (priority > precipitationPriority) {
             precipitationPriority = priority;
-            precipitationType = toPrecipitationType(item.fcstValue());
+            precipitationType = candidate;
           }
         }
         default -> {
