@@ -20,9 +20,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
 
-  // WeatherRepository.insertIfAbsent()(@Modifying 단건 native 쿼리)는 API 경로(WeatherWriter.save())
-  // 전용으로 남겨두고, 배치 경로는 JDBC 배치로 분리한다 - 건당 개별 insert 왕복과 매 건 flush를
-  // 없애기 위함. 멱등성은 ON CONFLICT DO NOTHING으로 그대로 유지한다.
+  // 건당 개별 insert 왕복과 매 건 flush를 없애기 위해 JDBC 배치로 저장한다. 멱등성은
+  // ON CONFLICT DO NOTHING으로 유지한다.
   private static final String INSERT_SQL = """
       INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
           precipitation_type, precipitation_amount, precipitation_probability,
