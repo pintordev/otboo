@@ -2,6 +2,10 @@ package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -16,9 +20,12 @@ import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class KmaForecastParserTest {
 
@@ -27,6 +34,23 @@ class KmaForecastParserTest {
       .build();
 
   private final KmaForecastParser parser = new KmaForecastParser();
+
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
+
+  @BeforeEach
+  void setUpLogger() {
+    logger = (Logger) LoggerFactory.getLogger(KmaForecastParser.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDownLogger() {
+    logger.detachAppender(appender);
+    appender.stop();
+  }
 
   @Nested
   @DisplayName("ParseDailyForecast")
@@ -183,6 +207,54 @@ class KmaForecastParserTest {
 
       // then
       assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("SKY_미상_코드는_CLEAR로_대체하고_경고_로그를_남긴다")
+    void SKY_미상_코드는_CLEAR로_대체하고_경고_로그를_남긴다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("TMP", "20260730", "1500", "28"),
+          item("SKY", "20260730", "1500", "9")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).skyStatus()).isEqualTo(SkyStatus.CLEAR);
+      assertThat(appender.list)
+          .anySatisfy(logEvent -> {
+            assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
+            assertThat(logEvent.getFormattedMessage()).contains("SKY").contains("9");
+          });
+    }
+
+    @Test
+    @DisplayName("PTY_미상_코드는_NONE으로_대체하고_경고_로그를_남긴다")
+    void PTY_미상_코드는_NONE으로_대체하고_경고_로그를_남긴다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("TMP", "20260730", "1500", "28"),
+          item("PTY", "20260730", "1500", "9")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).precipitationType()).isEqualTo(PrecipitationType.NONE);
+      assertThat(appender.list)
+          .anySatisfy(logEvent -> {
+            assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
+            assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
+          });
     }
   }
 
