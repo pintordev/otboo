@@ -1,12 +1,12 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
@@ -23,14 +23,16 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherWriterTest {
@@ -43,11 +45,14 @@ class WeatherWriterTest {
   @Mock
   private WeatherRepository weatherRepository;
 
+  @Mock
+  private JdbcTemplate jdbcTemplate;
+
   private WeatherWriter weatherWriter;
 
   @BeforeEach
   void setUp() {
-    weatherWriter = new WeatherWriter(weatherRepository);
+    weatherWriter = new WeatherWriter(weatherRepository, jdbcTemplate);
   }
 
   @Nested
@@ -110,70 +115,67 @@ class WeatherWriterTest {
   class Save {
 
     @Test
-    @DisplayName("build한_결과를_insertIfAbsent로_저장하고_재조회해서_반환한다")
-    void build한_결과를_insertIfAbsent로_저장하고_재조회해서_반환한다() {
+    @DisplayName("build한_결과를_한_번의_배치_insert로_저장하고_한_번의_조회로_반환한다")
+    void build한_결과를_한_번의_배치_insert로_저장하고_한_번의_조회로_반환한다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
-      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
-              DailyWeatherForecastDto.class)
+      DailyWeatherForecastDto day1 = FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
           .set("skyStatus", SkyStatus.CLEAR)
           .set("precipitationType", PrecipitationType.NONE)
           .sample();
-      Instant expectedForecastAt = todayForecast.date().atStartOfDay(KST).toInstant();
-      Weather persisted = Weather.create(weatherGrid, forecastedAt, expectedForecastAt,
-          todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
-          0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
-      given(weatherRepository.insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
-          eq(expectedForecastAt), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyString()))
-          .willReturn(1);
-      given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
-          eq(expectedForecastAt), eq(forecastedAt))).willReturn(Optional.of(persisted));
+      DailyWeatherForecastDto day2 = FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
+          .set("date", LocalDate.of(2026, 7, 28))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .sample();
+      Instant forecastAt1 = day1.date().atStartOfDay(KST).toInstant();
+      Instant forecastAt2 = day2.date().atStartOfDay(KST).toInstant();
+      Weather persisted1 = Weather.create(weatherGrid, forecastedAt, forecastAt1,
+          day1.skyStatus(), day1.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          WindStrength.WEAK);
+      Weather persisted2 = Weather.create(weatherGrid, forecastedAt, forecastAt2,
+          day2.skyStatus(), day2.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          WindStrength.WEAK);
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1, 1});
+      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(forecastedAt), eq(List.of(forecastAt1, forecastAt2))))
+          .willReturn(List.of(persisted1, persisted2));
 
       // when
-      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
-          List.of(todayForecast), Map.of());
+      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt, List.of(day1, day2),
+          Map.of());
 
-      // then
-      assertThat(result).containsExactly(persisted);
-      verify(weatherRepository).insertIfAbsent(any(), eq(weatherGrid.getId()), eq(forecastedAt),
-          eq(expectedForecastAt), anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyString());
+      // then - insert는 한 번의 배치로, 조회도 한 번만 = 총 2회 왕복
+      assertThat(result).containsExactly(persisted1, persisted2);
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate, times(1)).batchUpdate(anyString(), setterCaptor.capture());
+      assertThat(setterCaptor.getValue().getBatchSize()).isEqualTo(2);
+      verify(weatherRepository, times(1))
+          .findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(eq(weatherGrid),
+              eq(forecastedAt), eq(List.of(forecastAt1, forecastAt2)));
     }
 
     @Test
-    @DisplayName("이미_존재하는_조합이면_insertIfAbsent가_0을_반환해도_예외_없이_기존_행을_반환한다")
-    void 이미_존재하는_조합이면_insertIfAbsent가_0을_반환해도_예외_없이_기존_행을_반환한다() {
+    @DisplayName("예보가_없으면_배치_insert도_조회도_호출하지_않는다")
+    void 예보가_없으면_배치_insert도_조회도_호출하지_않는다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
-      DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
-              DailyWeatherForecastDto.class)
-          .set("date", LocalDate.of(2026, 7, 27))
-          .set("skyStatus", SkyStatus.CLEAR)
-          .set("precipitationType", PrecipitationType.NONE)
-          .sample();
-      Instant expectedForecastAt = todayForecast.date().atStartOfDay(KST).toInstant();
-      Weather existing = Weather.create(weatherGrid, forecastedAt, expectedForecastAt,
-          todayForecast.skyStatus(), todayForecast.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0,
-          0.0, 0.0, 0.0, 0.0, WindStrength.WEAK);
-      given(weatherRepository.insertIfAbsent(any(), any(), any(), eq(expectedForecastAt),
-          anyString(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
-          anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString()))
-          .willReturn(0);
-      given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(eq(weatherGrid),
-          eq(expectedForecastAt), eq(forecastedAt))).willReturn(Optional.of(existing));
 
-      // when & then
-      assertThatCode(() -> weatherWriter.save(weatherGrid, forecastedAt, List.of(todayForecast),
-          Map.of())).doesNotThrowAnyException();
-      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt,
-          List.of(todayForecast), Map.of());
-      assertThat(result).containsExactly(existing);
+      // when
+      List<Weather> result = weatherWriter.save(weatherGrid, forecastedAt, List.of(), Map.of());
+
+      // then
+      assertThat(result).isEmpty();
+      verify(jdbcTemplate, never()).batchUpdate(anyString(),
+          any(BatchPreparedStatementSetter.class));
+      verify(weatherRepository, never())
+          .findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(any(), any(),
+              any());
     }
   }
 }

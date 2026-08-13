@@ -26,6 +26,9 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   Optional<Weather> findByWeatherGridAndForecastAtAndForecastedAt(WeatherGrid weatherGrid,
       Instant forecastAt, Instant forecastedAt);
 
+  List<Weather> findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+      WeatherGrid weatherGrid, Instant forecastedAt, List<Instant> forecastAts);
+
   @Query(value = """
       SELECT * FROM (
         SELECT *, ROW_NUMBER() OVER (PARTITION BY forecast_at ORDER BY forecasted_at DESC) AS rn
