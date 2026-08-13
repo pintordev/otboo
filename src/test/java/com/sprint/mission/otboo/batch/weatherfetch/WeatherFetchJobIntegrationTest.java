@@ -170,8 +170,9 @@ class WeatherFetchJobIntegrationTest {
     }
 
     @Test
-    @DisplayName("skipLimit을_초과하면_Job이_FAILED로_끝나고_weatherFetchRetryStep은_실행되지_않는다")
-    void skipLimit을_초과하면_Job이_FAILED로_끝나고_weatherFetchRetryStep은_실행되지_않는다() throws Exception {
+    @DisplayName("skipLimit을_초과해_weatherFetchStep이_FAILED여도_weatherFetchRetryStep이_실행된다")
+    void skipLimit을_초과해_weatherFetchStep이_FAILED여도_weatherFetchRetryStep이_실행된다()
+        throws Exception {
       // given
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
@@ -183,11 +184,13 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then
+      // then - weatherFetchStep이 skipLimit 초과로 FAILED여도 .on("*")으로 weatherFetchRetryStep까지
+      // 실행돼야 한다(재시도가 가장 필요한 순간에 실행되지 않던 기존 버그).
+      // 두 Step 모두 같은 격자에 계속 실패하므로 최종 Job 상태는 여전히 FAILED다.
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
       assertThat(weatherRepository.count()).isEqualTo(0);
       assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
-          .containsExactly("weatherFetchStep");
+          .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
     }
 
     @Test
