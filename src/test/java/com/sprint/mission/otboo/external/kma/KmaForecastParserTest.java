@@ -262,6 +262,34 @@ class KmaForecastParserTest {
             assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
           });
     }
+
+    @Test
+    @DisplayName("유효_PTY가_먼저_우선순위를_차지해도_그_뒤_미상_PTY는_경고_로그를_남긴다")
+    void 유효_PTY가_먼저_우선순위를_차지해도_그_뒤_미상_PTY는_경고_로그를_남긴다() {
+      // given
+      Instant now = Instant.parse("2026-07-27T08:00:00Z");
+      List<Item> items = List.of(
+          item("TMP", "20260730", "0000", "24"),
+          item("TMP", "20260730", "0900", "27"),
+          item("TMP", "20260730", "1200", "30"),
+          item("TMP", "20260730", "1500", "28"),
+          item("PTY", "20260730", "1500", "1"),
+          item("PTY", "20260730", "0900", "9")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<DailyWeatherForecastDto> result = parser.parseDailyForecast(response, now);
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).precipitationType()).isEqualTo(PrecipitationType.RAIN);
+      assertThat(appender.list)
+          .anySatisfy(logEvent -> {
+            assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
+            assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
+          });
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
