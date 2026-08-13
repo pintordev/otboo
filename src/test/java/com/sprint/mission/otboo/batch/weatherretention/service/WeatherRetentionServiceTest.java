@@ -12,6 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.BatchStatus;
@@ -71,12 +73,14 @@ class WeatherRetentionServiceTest {
           .hasCauseInstanceOf(JobExecutionAlreadyRunningException.class);
     }
 
-    @Test
-    @DisplayName("Step이_FAILED로_끝나면_WeatherRetentionJobFailedException을_던진다")
-    void Step이_FAILED로_끝나면_WeatherRetentionJobFailedException을_던진다() throws Exception {
+    @ParameterizedTest(name = "JobExecution 상태={0}")
+    @EnumSource(value = BatchStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "COMPLETED")
+    @DisplayName("JobExecution이_COMPLETED가_아니면_WeatherRetentionJobFailedException을_던진다")
+    void JobExecution이_COMPLETED가_아니면_WeatherRetentionJobFailedException을_던진다(
+        BatchStatus status) throws Exception {
       // given
       given(jobOperator.start(any(Job.class), any(JobParameters.class))).willReturn(jobExecution);
-      given(jobExecution.getStatus()).willReturn(BatchStatus.FAILED);
+      given(jobExecution.getStatus()).willReturn(status);
 
       // when & then
       assertThatThrownBy(() -> weatherRetentionService.execute())
