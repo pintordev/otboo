@@ -208,10 +208,11 @@ class WeatherFetchJobIntegrationTest {
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then
+      // then - .on("*")는 실패 원인을 가리지 않으므로 복구 불가능한 예외로 즉시 FAILED여도
+      // weatherFetchRetryStep까지 실행된다(같은 격자를 다시 시도하다 마찬가지로 즉시 FAILED)
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
       assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
-          .containsExactly("weatherFetchStep");
+          .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
     }
   }
 
@@ -296,9 +297,10 @@ class WeatherFetchJobIntegrationTest {
           jobOperatorTestUtils.getUniqueJobParameters());
 
       // then - 저장(WeatherFetchWriter.insertIfAbsent)은 skip 대상이 아니라 재시도만 하고
-      // 소진되면 즉시 FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미
+      // 소진되면 즉시 FAILED. retryLimit(3)은 최초 시도 포함 4회 시도를 의미하고, weatherFetchStep이
+      // FAILED여도 weatherFetchRetryStep이 같은 격자를 다시 4회 시도하므로 총 8회다
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.FAILED);
-      verify(weatherRepository, times(4)).insertIfAbsent(any(), any(), any(), any(), anyString(),
+      verify(weatherRepository, times(8)).insertIfAbsent(any(), any(), any(), any(), anyString(),
           anyString(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
           anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyString());
     }

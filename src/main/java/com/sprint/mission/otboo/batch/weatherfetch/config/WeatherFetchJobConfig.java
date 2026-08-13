@@ -22,6 +22,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
+// weatherFetchStep과 weatherFetchRetryStep은 buildStep() 하나를 공유해 완전히 동일한 설정이고,
+// 각 Step의 WeatherFetchReader는 @StepScope라 Step마다 새 인스턴스가 생성돼 커서가 매번
+// Instant.EPOCH부터 다시 읽는다. 이때 findPageByCursorExcludingForecasted()의 "이미 이번
+// baseTime으로 저장된 격자 제외" 필터가 유일한 안전장치다 - 이 필터 조건이 바뀌면
+// weatherFetchRetryStep이 전 격자를 다시 조회하게 된다.
 @Configuration
 @RequiredArgsConstructor
 @EnableConfigurationProperties({WeatherFetchProperties.class, WeatherChangeProperties.class})
@@ -43,7 +48,8 @@ public class WeatherFetchJobConfig {
     return new JobBuilder("weatherFetchJob", jobRepository)
         .listener(weatherFetchJobListener)
         .start(weatherFetchStep())
-        .next(weatherFetchRetryStep())
+        .on("*").to(weatherFetchRetryStep())
+        .end()
         .build();
   }
 
