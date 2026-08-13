@@ -7,12 +7,16 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherRefresher;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherFetchProcessorTest {
@@ -31,12 +36,24 @@ class WeatherFetchProcessorTest {
   private WeatherRefresher weatherRefresher;
 
   private WeatherFetchProcessor processor;
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
 
   @BeforeEach
   void setUp() {
     // JobExecutionContext에서 SpEL로 주입받는 값을 생성자 인자로 직접 대신한다
     processor = new WeatherFetchProcessor(weatherRefresher, BASE_TIME.baseDate(),
         BASE_TIME.baseTime());
+    logger = (Logger) LoggerFactory.getLogger(WeatherFetchProcessor.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    logger.detachAppender(appender);
+    appender.stop();
   }
 
   @Nested
@@ -76,6 +93,33 @@ class WeatherFetchProcessorTest {
       List<BaseTime> capturedBaseTimes = baseTimeCaptor.getAllValues();
       assertThat(capturedBaseTimes.get(0)).isEqualTo(BASE_TIME);
       assertThat(capturedBaseTimes.get(1)).isEqualTo(BASE_TIME);
+    }
+  }
+
+  @Nested
+  @DisplayName("KMA 호출 횟수 계측")
+  class KmaCallCountLogging {
+
+    @Test
+    @DisplayName("격자를_처리할_때마다_누적_KMA_호출_횟수를_로그로_남긴다")
+    void 격자를_처리할_때마다_누적_KMA_호출_횟수를_로그로_남긴다() {
+      // given
+      WeatherGrid grid1 = WeatherGrid.create(60, 127);
+      WeatherGrid grid2 = WeatherGrid.create(61, 128);
+
+      // when
+      processor.process(grid1);
+      processor.process(grid2);
+
+      // then - skip 재실행으로 process()가 같은 chunk 안에서 여러 번 호출되면 그만큼 누적치가
+      // 올라가는 걸 로그로 관측할 수 있어야 한다
+      List<String> kmaCallLogs = appender.list.stream()
+          .map(ILoggingEvent::getFormattedMessage)
+          .filter(message -> message.contains("누적 호출 횟수"))
+          .toList();
+      assertThat(kmaCallLogs)
+          .anySatisfy(message -> assertThat(message).contains("누적 호출 횟수=1"))
+          .anySatisfy(message -> assertThat(message).contains("누적 호출 횟수=2"));
     }
   }
 }
