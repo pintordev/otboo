@@ -7,6 +7,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.sprint.mission.otboo.batch.weatherretention.dto.WeatherRetentionItem;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.querydsl.WeatherCustomRepository;
+import com.sprint.mission.otboo.global.batch.BatchConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -14,9 +15,6 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class WeatherCustomRepositoryImpl implements WeatherCustomRepository {
-
-  // WeatherGridCustomRepositoryImpl과 동일한 방어적 상한
-  private static final int MAX_LIMIT = 1000;
 
   private final JPAQueryFactory queryFactory;
 
@@ -37,7 +35,7 @@ public class WeatherCustomRepositoryImpl implements WeatherCustomRepository {
     if (limit <= 0) {
       throw new IllegalArgumentException("limit은 1 이상이어야 합니다: " + limit);
     }
-    return Math.min(limit, MAX_LIMIT);
+    return Math.min(limit, BatchConstants.MAX_CHUNK_SIZE);
   }
 
   private BooleanExpression cursorCondition(Instant lastForecastAt, UUID lastId) {
