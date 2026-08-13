@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -38,6 +39,10 @@ class WeatherRefresherTest {
 
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
       .build();
   private static final BaseTime BASE_TIME = new BaseTime("20260727", "1700");
   private static final KmaGridPoint GRID = new KmaGridPoint(60, 127);
@@ -195,14 +200,16 @@ class WeatherRefresherTest {
     void 같은_날짜로_축약되는_리비전이_2건이어도_예외없이_먼저_들어온_값을_유지한다() {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
-      Weather firstRevision = Weather.create(weatherGrid,
-          Instant.parse("2026-07-26T00:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
-          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK);
-      Weather secondRevision = Weather.create(weatherGrid,
-          Instant.parse("2026-07-26T03:00:00Z"), Instant.parse("2026-07-26T03:00:00Z"),
-          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK);
+      Weather firstRevision = ENTITY_FIXTURE_MONKEY.giveMeBuilder(Weather.class)
+          .set("weatherGrid", weatherGrid)
+          .set("forecastedAt", Instant.parse("2026-07-26T00:00:00Z"))
+          .set("forecastAt", Instant.parse("2026-07-26T00:00:00Z"))
+          .sample();
+      Weather secondRevision = ENTITY_FIXTURE_MONKEY.giveMeBuilder(Weather.class)
+          .set("weatherGrid", weatherGrid)
+          .set("forecastedAt", Instant.parse("2026-07-26T03:00:00Z"))
+          .set("forecastAt", Instant.parse("2026-07-26T03:00:00Z"))
+          .sample();
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(firstRevision, secondRevision));
 
