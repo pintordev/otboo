@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -18,6 +19,7 @@ public class SseMessageRepository {
 
   private final ConcurrentLinkedDeque<UUID> eventIdQueue = new ConcurrentLinkedDeque<>();
   private final Map<UUID, SseMessage> messages = new ConcurrentHashMap<>();
+  private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
   private final Clock clock;
   private final Duration retention;
 
@@ -27,34 +29,50 @@ public class SseMessageRepository {
   }
 
   public UUID save(SseMessage message) {
-    messages.put(message.id(), message);
-    eventIdQueue.addLast(message.id());
-    evictExpired();
-    return message.id();
+    lock.writeLock().lock();
+    try {
+      messages.put(message.id(), message);
+      eventIdQueue.addLast(message.id());
+      evictExpired();
+      return message.id();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   public List<SseMessage> findAllAfter(UUID lastEventId, UUID userId) {
-    if (lastEventId == null || !messages.containsKey(lastEventId)) {
-      return List.of();
+    lock.readLock().lock();
+    try {
+      if (lastEventId == null || !messages.containsKey(lastEventId)) {
+        return List.of();
+      }
+      return eventIdQueue.stream()
+          .dropWhile(id -> !id.equals(lastEventId))
+          .skip(1)
+          .map(messages::get)
+          .filter(Objects::nonNull)
+          .filter(message -> message.isTargetedTo(userId))
+          .toList();
+    } finally {
+      lock.readLock().unlock();
     }
-    return eventIdQueue.stream()
-        .dropWhile(id -> !id.equals(lastEventId))
-        .skip(1)
-        .map(messages::get)
-        .filter(Objects::nonNull)
-        .filter(message -> message.isTargetedTo(userId))
-        .toList();
   }
 
   public Instant getLatestCreatedAt() {
-    UUID latestId = eventIdQueue.peekLast();
-    if (latestId == null) {
-      return null;
+    lock.readLock().lock();
+    try {
+      UUID latestId = eventIdQueue.peekLast();
+      if (latestId == null) {
+        return null;
+      }
+      SseMessage latest = messages.get(latestId);
+      return latest != null ? latest.createdAt() : null;
+    } finally {
+      lock.readLock().unlock();
     }
-    SseMessage latest = messages.get(latestId);
-    return latest != null ? latest.createdAt() : null;
   }
 
+  // save()의 writeLock 안에서만 호출된다 — 별도 락 없이 eventIdQueue/messages를 직접 조작
   private void evictExpired() {
     Instant threshold = Instant.now(clock).minus(retention);
     UUID oldestId;
