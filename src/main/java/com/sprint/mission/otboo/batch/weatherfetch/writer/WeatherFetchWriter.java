@@ -22,15 +22,32 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
 
-  // 건당 개별 insert 왕복과 매 건 flush를 없애기 위해 JDBC 배치로 저장한다. 멱등성은
-  // ON CONFLICT DO NOTHING으로 유지한다.
-  private static final String INSERT_SQL = """
+  // 건당 개별 insert 왕복과 매 건 flush를 없애기 위해 JDBC 배치로 저장한다. weathers의 유니크
+  // 제약이 (weather_grid_id, forecast_at)로 바뀌면서(V14) 슬롯당 row가 1개로 고정돼 INSERT만으로는
+  // 재수집 시 제약 위반이 난다 - WeatherWriter.saveSlots()와 동일한 upsert로 전환한다.
+  // baseline_*은 DO UPDATE SET 목록에 없다 - 최초 INSERT 값이 이후 갱신에도 그대로 유지된다.
+  private static final String UPSERT_SQL = """
       INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
           precipitation_type, precipitation_amount, precipitation_probability,
           humidity_current, humidity_compared, temperature_current, temperature_compared,
-          temperature_min, temperature_max, wind_speed, wind_as_word, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
-      ON CONFLICT (weather_grid_id, forecast_at, forecasted_at) DO NOTHING
+          temperature_min, temperature_max, wind_speed, wind_as_word,
+          baseline_temperature_current, baseline_precipitation_type,
+          baseline_precipitation_probability, baseline_precipitation_amount, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+      ON CONFLICT (weather_grid_id, forecast_at) DO UPDATE SET
+          forecasted_at = EXCLUDED.forecasted_at,
+          sky_status = EXCLUDED.sky_status,
+          precipitation_type = EXCLUDED.precipitation_type,
+          precipitation_amount = EXCLUDED.precipitation_amount,
+          precipitation_probability = EXCLUDED.precipitation_probability,
+          humidity_current = EXCLUDED.humidity_current,
+          humidity_compared = EXCLUDED.humidity_compared,
+          temperature_current = EXCLUDED.temperature_current,
+          temperature_compared = EXCLUDED.temperature_compared,
+          temperature_min = EXCLUDED.temperature_min,
+          temperature_max = EXCLUDED.temperature_max,
+          wind_speed = EXCLUDED.wind_speed,
+          wind_as_word = EXCLUDED.wind_as_word
       """;
 
   private final JdbcTemplate jdbcTemplate;
@@ -43,7 +60,7 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
       return;
     }
 
-    int[] results = jdbcTemplate.batchUpdate(INSERT_SQL, new BatchPreparedStatementSetter() {
+    int[] results = jdbcTemplate.batchUpdate(UPSERT_SQL, new BatchPreparedStatementSetter() {
       @Override
       public void setValues(PreparedStatement ps, int i) throws SQLException {
         Weather weather = all.get(i);
@@ -63,6 +80,11 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
         ps.setDouble(14, weather.getTemperatureMax());
         ps.setDouble(15, weather.getWindSpeed());
         ps.setString(16, weather.getWindAsWord().name());
+        ps.setObject(17, weather.getBaselineTemperatureCurrent(), Types.DOUBLE);
+        ps.setString(18, weather.getBaselinePrecipitationType() == null ? null
+            : weather.getBaselinePrecipitationType().name());
+        ps.setObject(19, weather.getBaselinePrecipitationProbability(), Types.DOUBLE);
+        ps.setObject(20, weather.getBaselinePrecipitationAmount(), Types.DOUBLE);
       }
 
       @Override

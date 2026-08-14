@@ -205,7 +205,8 @@ public class WeatherWriter {
         ps.setDouble(15, weather.getWindSpeed());
         ps.setString(16, weather.getWindAsWord().name());
         ps.setObject(17, weather.getBaselineTemperatureCurrent(), Types.DOUBLE);
-        ps.setString(18, weather.getBaselinePrecipitationType().name());
+        ps.setString(18, weather.getBaselinePrecipitationType() == null ? null
+            : weather.getBaselinePrecipitationType().name());
         ps.setObject(19, weather.getBaselinePrecipitationProbability(), Types.DOUBLE);
         ps.setObject(20, weather.getBaselinePrecipitationAmount(), Types.DOUBLE);
       }
