@@ -219,6 +219,33 @@ class WeatherRepositoryTest {
   }
 
   @Nested
+  @DisplayName("FindAllByWeatherGridAndForecastAtGreaterThanEqual")
+  class FindAllByWeatherGridAndForecastAtGreaterThanEqual {
+
+    @Test
+    @DisplayName("from_이후_슬롯만_반환하고_이전_슬롯은_제외한다")
+    void from_이후_슬롯만_반환하고_이전_슬롯은_제외한다() {
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Instant from = Instant.parse("2026-07-27T00:00:00Z");
+      Weather before = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T23:00:00Z"), 20.0));
+      Weather after = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-27T08:00:00Z"), Instant.parse("2026-07-27T01:00:00Z"), 25.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<Weather> result = weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(
+          weatherGrid, from);
+
+      assertThat(result).extracting(Weather::getId)
+          .containsExactly(after.getId())
+          .doesNotContain(before.getId());
+    }
+  }
+
+  @Nested
   @DisplayName("FindGridsUpdatedAt")
   class FindGridsUpdatedAt {
 
