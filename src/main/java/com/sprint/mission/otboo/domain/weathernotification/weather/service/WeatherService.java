@@ -16,6 +16,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,11 +30,14 @@ import org.springframework.stereotype.Service;
 public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  // D1 이후(내일부터) 날짜의 대표 슬롯 기준 시각 - KmaForecastParser의 기존 FUTURE_REPRESENTATIVE_TIME과 동일
+  private static final int FUTURE_REPRESENTATIVE_HOUR = 15;
 
   private final WeatherRepository weatherRepository;
   private final WeatherRefresher weatherRefresher;
   private final LocationResolver locationResolver;
   private final WeatherMapper weatherMapper;
+  private final RepresentativeSlotSelector representativeSlotSelector;
   private final Clock clock;
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
@@ -41,23 +48,21 @@ public class WeatherService {
     LocalDate today = LocalDate.now(clock.withZone(KST));
     LocalDate yesterday = today.minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
-    List<Weather> latestRevisions = weatherRepository.findLatestRevisions(weatherGrid, from);
+    List<Weather> slots = weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(
+        weatherGrid, from);
 
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
-    Weather todayWeather = latestRevisions.stream()
-        .filter(w -> toForecastDate(w).equals(today))
-        .findFirst()
+    Weather todayRepresentative = representativeSlotSelector
+        .select(slotsOfDate(slots, today), clock.instant())
         .orElse(null);
-    boolean stale = todayWeather == null
-        || todayWeather.getForecastedAt().isBefore(latestBaseTime.toInstant());
+    boolean stale = todayRepresentative == null
+        || todayRepresentative.getForecastedAt().isBefore(latestBaseTime.toInstant());
 
     List<Weather> fetched = stale
-        ? weatherRefresher.refresh(weatherGrid, grid, latestBaseTime)
-        : latestRevisions;
+        ? weatherRefresher.refreshSlots(weatherGrid, grid, latestBaseTime)
+        : slots;
 
-    List<Weather> result = fetched.stream()
-        .filter(w -> !toForecastDate(w).isBefore(today))
-        .toList();
+    List<Weather> result = representativesFrom(fetched, today);
 
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return result.stream()
@@ -72,6 +77,32 @@ public class WeatherService {
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
         locationNames);
+  }
+
+  // 오늘 이전 날짜는 제외하고, 날짜별로 대표 슬롯 1건씩만 남긴다 - 오늘은 조회 시각과 가장
+  // 가까운 슬롯, 내일 이후는 15시(KST) 고정 기준 슬롯을 대표값으로 삼는다.
+  private List<Weather> representativesFrom(List<Weather> slots, LocalDate today) {
+    Map<LocalDate, List<Weather>> byDate = slots.stream()
+        .filter(w -> !toForecastDate(w).isBefore(today))
+        .collect(Collectors.groupingBy(this::toForecastDate, TreeMap::new, Collectors.toList()));
+
+    return byDate.entrySet().stream()
+        .map(entry -> representativeSlotSelector
+            .select(entry.getValue(), referenceInstant(entry.getKey(), today))
+            .orElse(null))
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private List<Weather> slotsOfDate(List<Weather> slots, LocalDate date) {
+    return slots.stream().filter(w -> toForecastDate(w).equals(date)).toList();
+  }
+
+  private Instant referenceInstant(LocalDate date, LocalDate today) {
+    if (date.equals(today)) {
+      return clock.instant();
+    }
+    return date.atTime(FUTURE_REPRESENTATIVE_HOUR, 0).atZone(KST).toInstant();
   }
 
   private LocalDate toForecastDate(Weather weather) {
