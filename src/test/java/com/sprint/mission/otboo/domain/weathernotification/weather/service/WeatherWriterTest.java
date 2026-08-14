@@ -19,6 +19,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.time.Instant;
@@ -110,6 +111,39 @@ class WeatherWriterTest {
       assertThat(result).hasSize(1);
       assertThat(result.get(0).getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
       assertThat(result.get(0).getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
+    }
+  }
+
+  @Nested
+  @DisplayName("BuildSlots")
+  class BuildSlots {
+
+    @Test
+    @DisplayName("슬롯의_baseline은_현재_값으로_채워진다")
+    void 슬롯의_baseline은_현재_값으로_채워진다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      WeatherForecastSlotDto slot = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("slotAt", Instant.parse("2026-07-27T00:00:00Z"))
+          .set("temperatureCurrent", 28.0)
+          .set("precipitationType", PrecipitationType.RAIN)
+          .set("precipitationProbability", 60.0)
+          .set("precipitationAmount", 5.0)
+          .sample();
+
+      // when
+      List<Weather> result = weatherWriter.buildSlots(weatherGrid, forecastedAt, List.of(slot),
+          Map.of());
+
+      // then
+      assertThat(result).hasSize(1);
+      Weather built = result.get(0);
+      assertThat(built.getBaselineTemperatureCurrent()).isEqualTo(28.0);
+      assertThat(built.getBaselinePrecipitationType()).isEqualTo(PrecipitationType.RAIN);
+      assertThat(built.getBaselinePrecipitationProbability()).isEqualTo(60.0);
+      assertThat(built.getBaselinePrecipitationAmount()).isEqualTo(5.0);
     }
   }
 
