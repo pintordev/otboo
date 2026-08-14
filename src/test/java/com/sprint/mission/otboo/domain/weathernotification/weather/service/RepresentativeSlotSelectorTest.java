@@ -25,10 +25,10 @@ class RepresentativeSlotSelectorTest {
     @Test
     @DisplayName("D0_조회_시각과_가장_가까운_슬롯을_고른다")
     void D0_조회_시각과_가장_가까운_슬롯을_고른다() {
-      // given - 조회 시각 09:30 KST(baseTime 00:30Z), 08시/09시/11시 슬롯 중 09시가 가장 가깝다
-      Weather slot08 = slot("2026-07-27T08:00:00Z");
-      Weather slot09 = slot("2026-07-27T09:00:00Z");
-      Weather slot11 = slot("2026-07-27T11:00:00Z");
+      // given - 조회 시각 09:30 KST, 08시/09시/11시(KST) 슬롯 중 09시가 가장 가깝다
+      Weather slot08 = slot("2026-07-26T23:00:00Z"); // 08:00 KST
+      Weather slot09 = slot("2026-07-27T00:00:00Z"); // 09:00 KST
+      Weather slot11 = slot("2026-07-27T02:00:00Z"); // 11:00 KST
       Instant referenceInstant = Instant.parse("2026-07-27T00:30:00Z"); // 09:30 KST
 
       // when
