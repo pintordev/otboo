@@ -146,6 +146,48 @@ class KmaForecastParserTest {
           .noneMatch(slotAt -> slotAt.equals(
               LocalDate.of(2026, 8, 2).atTime(6, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant()));
     }
+
+    @Test
+    @DisplayName("TMN_TMX가_있으면_TMP_극값_대신_그_값을_일_기온_범위로_쓴다")
+    void TMN_TMX가_있으면_TMP_극값_대신_그_값을_일_기온_범위로_쓴다() {
+      // given - TMP 극값(17.0~19.0)과 다른 TMN(10.0)/TMX(25.0)
+      List<Item> items = List.of(
+          item("TMP", "20260803", "0000", "17.0"),
+          item("TMP", "20260803", "0300", "18.0"),
+          item("TMP", "20260803", "0600", "19.0"),
+          item("TMP", "20260803", "0900", "18.5"),
+          item("TMN", "20260803", "0600", "10.0"),
+          item("TMX", "20260803", "1500", "25.0")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(10.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(25.0);
+    }
+
+    @Test
+    @DisplayName("TMN_TMX가_없으면_TMP_극값으로_대체한다")
+    void TMN_TMX가_없으면_TMP_극값으로_대체한다() {
+      // given
+      List<Item> items = List.of(
+          item("TMP", "20260803", "0000", "17.0"),
+          item("TMP", "20260803", "0300", "18.0"),
+          item("TMP", "20260803", "0600", "19.0"),
+          item("TMP", "20260803", "0900", "18.5")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(17.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(19.0);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
