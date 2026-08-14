@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.sprint.mission.otboo.domain.weathernotification.weather.config.LocationBlockProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
@@ -38,12 +39,14 @@ class LocationResolverTest {
   @Mock
   private KakaoRegionFetcher kakaoRegionFetcher;
 
+  private LocationBlockCalculator locationBlockCalculator;
   private LocationResolver locationResolver;
 
   @BeforeEach
   void setUp() {
+    locationBlockCalculator = new LocationBlockCalculator(new LocationBlockProperties(500.0));
     locationResolver = new LocationResolver(weatherGridRepository, weatherGridWriter,
-        locationRepository, locationWriter, kakaoRegionFetcher);
+        locationRepository, locationWriter, kakaoRegionFetcher, locationBlockCalculator);
   }
 
   @Nested
@@ -93,7 +96,7 @@ class LocationResolverTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
+      BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
       Location cached = Location.create(block.latBlock(), block.lonBlock(),
           List.of("서울특별시", "중구"));
       given(locationRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
@@ -113,7 +116,7 @@ class LocationResolverTest {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
-      BlockIndex block = LocationBlockCalculator.toBlock(latitude, longitude);
+      BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
 
       given(locationRepository.findByLatBlockAndLonBlock(block.latBlock(), block.lonBlock()))
           .willReturn(Optional.empty());

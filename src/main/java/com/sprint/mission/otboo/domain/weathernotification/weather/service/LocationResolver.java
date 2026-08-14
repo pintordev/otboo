@@ -21,6 +21,7 @@ public class LocationResolver {
   private final LocationRepository locationRepository;
   private final LocationWriter locationWriter;
   private final KakaoRegionFetcher kakaoRegionFetcher;
+  private final LocationBlockCalculator locationBlockCalculator;
 
   public WeatherGrid resolveWeatherGrid(KmaGridPoint grid) {
     return weatherGridRepository.findByXAndY(grid.nx(), grid.ny())
@@ -28,7 +29,7 @@ public class LocationResolver {
   }
 
   public List<String> resolveLocationNames(double latitude, double longitude) {
-    BlockIndex blockIndex = LocationBlockCalculator.toBlock(latitude, longitude);
+    BlockIndex blockIndex = locationBlockCalculator.toBlock(latitude, longitude);
     return locationRepository
         .findByLatBlockAndLonBlock(blockIndex.latBlock(), blockIndex.lonBlock())
         .map(Location::getLocationNames)
