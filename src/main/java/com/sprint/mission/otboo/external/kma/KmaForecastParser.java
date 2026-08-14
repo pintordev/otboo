@@ -41,8 +41,10 @@ public class KmaForecastParser {
       }
       LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
       DailyTemperatureRange range = temperatureRange(dayItems);
-      for (String slotTime : dayItems.stream().map(Item::fcstTime).distinct().toList()) {
-        toSlotForecast(date, slotTime, dayItems, range).ifPresent(result::add);
+      Map<String, List<Item>> itemsBySlot = dayItems.stream()
+          .collect(Collectors.groupingBy(Item::fcstTime, TreeMap::new, Collectors.toList()));
+      for (Map.Entry<String, List<Item>> slot : itemsBySlot.entrySet()) {
+        toSlotForecast(date, slot.getKey(), slot.getValue(), range).ifPresent(result::add);
       }
     }
     return result;
@@ -72,7 +74,7 @@ public class KmaForecastParser {
   }
 
   private Optional<WeatherForecastSlotDto> toSlotForecast(LocalDate date, String slotTime,
-      List<Item> dayItems, DailyTemperatureRange range) {
+      List<Item> slotItems, DailyTemperatureRange range) {
     Double tempCurrent = null;
     double humidityCurrent = 0.0;
     double windSpeed = 0.0;
@@ -81,10 +83,7 @@ public class KmaForecastParser {
     double precipitationAmount = 0.0;
     double precipitationProbability = 0.0;
 
-    for (Item item : dayItems) {
-      if (!slotTime.equals(item.fcstTime())) {
-        continue;
-      }
+    for (Item item : slotItems) {
       switch (item.category()) {
         case "TMP" -> tempCurrent = Double.parseDouble(item.fcstValue());
         case "SKY" -> skyStatus = toSkyStatus(item.fcstValue());
