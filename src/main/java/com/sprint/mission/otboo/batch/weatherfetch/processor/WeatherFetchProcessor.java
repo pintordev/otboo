@@ -38,6 +38,6 @@ public class WeatherFetchProcessor implements ItemProcessor<WeatherGrid, List<We
   public List<Weather> process(WeatherGrid weatherGrid) {
     KmaGridPoint grid = new KmaGridPoint(weatherGrid.getX(), weatherGrid.getY());
     log.info("WeatherFetchProcessor KMA 호출: 누적 호출 횟수={}", kmaCallCount.incrementAndGet());
-    return weatherRefresher.build(weatherGrid, grid, baseTime);
+    return weatherRefresher.buildSlots(weatherGrid, grid, baseTime);
   }
 }
