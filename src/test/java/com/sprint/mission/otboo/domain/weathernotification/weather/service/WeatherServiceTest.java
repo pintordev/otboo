@@ -222,7 +222,7 @@ class WeatherServiceTest {
       given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
           any())).willReturn(List.of()); // stale
 
-      // WeatherRefresher가 라이브 재조회 결과에 어제 슬롯 + 오늘 슬롯 2개(17시/19시) + 내일 슬롯(15시)를 반환해도
+      // WeatherRefresher가 라이브 재조회 결과에 어제 슬롯 + 오늘 슬롯 2개(17:00/18:30 KST) + 내일 슬롯(15시 KST)를 반환해도
       Weather pastSlot = Weather.create(weatherGrid, LATEST_BASE_TIME.toInstant(),
           Instant.parse("2026-07-26T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
           0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
@@ -260,7 +260,7 @@ class WeatherServiceTest {
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
 
-      // then — 어제(pastSlot)는 빠지고, 오늘은 조회시각(18시 KST)과 가장 가까운 슬롯(19시)만,
+      // then — 어제(pastSlot)는 빠지고, 오늘은 조회시각(18:00 KST)과 가장 가까운 슬롯(18:30 KST)만,
       // 내일은 대표 슬롯(15시 KST 고정) 1건만 반환된다
       assertThat(result).containsExactly(todayDto, tomorrowDto);
     }
