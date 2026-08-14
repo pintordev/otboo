@@ -25,6 +25,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -144,6 +145,34 @@ class WeatherWriterTest {
       assertThat(built.getBaselinePrecipitationType()).isEqualTo(PrecipitationType.RAIN);
       assertThat(built.getBaselinePrecipitationProbability()).isEqualTo(60.0);
       assertThat(built.getBaselinePrecipitationAmount()).isEqualTo(5.0);
+    }
+
+    @Test
+    @DisplayName("어제_같은_슬롯이_있으면_diff를_계산한다")
+    void 어제_같은_슬롯이_있으면_diff를_계산한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Instant slotAt = Instant.parse("2026-07-27T00:00:00Z");
+      Weather yesterdaySameSlot = Weather.create(weatherGrid,
+          Instant.parse("2026-07-26T08:00:00Z"), slotAt.minus(1, ChronoUnit.DAYS),
+          SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, null, 26.0, null, 24.0, 29.0,
+          2.0, WindStrength.WEAK, 26.0, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherForecastSlotDto slot = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("slotAt", slotAt)
+          .set("temperatureCurrent", 28.0)
+          .set("humidityCurrent", 65.0)
+          .sample();
+
+      // when
+      List<Weather> result = weatherWriter.buildSlots(weatherGrid, forecastedAt, List.of(slot),
+          Map.of(slotAt.minus(1, ChronoUnit.DAYS), yesterdaySameSlot));
+
+      // then
+      assertThat(result).hasSize(1);
+      assertThat(result.get(0).getTemperatureCompared()).isEqualTo(2.0); // 28.0 - 26.0
+      assertThat(result.get(0).getHumidityCompared()).isEqualTo(5.0); // 65.0 - 60.0
     }
   }
 
