@@ -173,6 +173,43 @@ class WeatherServiceTest {
     }
 
     @Test
+    @DisplayName("stale해도_WeatherRefresher_재조회_결과가_비면_기존_DB_슬롯으로_폴백한다")
+    void stale해도_WeatherRefresher_재조회_결과가_비면_기존_DB_슬롯으로_폴백한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+
+      // 오늘 슬롯이 DB에 있지만 stale(17시 발표보다 이전에 저장된 값)
+      Instant staleForecastedAt = Instant.parse("2026-07-27T05:00:00Z");
+      Weather staleTodaySlot = Weather.create(weatherGrid, staleForecastedAt,
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
+      given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
+          any())).willReturn(List.of(staleTodaySlot));
+
+      // 라이브 재조회는 비어서 돌아온다(KMA 응답이 게이트에 전부 걸러지는 등)
+      given(weatherRefresher.refreshSlots(weatherGrid, new KmaGridPoint(60, 127),
+          LATEST_BASE_TIME)).willReturn(List.of());
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(List.of("서울특별시", "중구", "명동"));
+
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(staleTodaySlot, weatherGrid, latitude, longitude,
+          List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
+
+      // then - 재조회가 비어도 기존 DB 슬롯을 그대로 사용해서 응답이 비지 않는다
+      assertThat(result).containsExactly(expectedDto);
+    }
+
+    @Test
     @DisplayName("stale해서_WeatherRefresher가_반환한_결과에도_오늘_이전_슬롯은_필터링되고_날짜별_대표_슬롯만_반환된다")
     void stale해서_WeatherRefresher가_반환한_결과에도_오늘_이전_슬롯은_필터링되고_날짜별_대표_슬롯만_반환된다() {
       // given
