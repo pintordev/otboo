@@ -340,6 +340,29 @@ class KmaForecastParserTest {
       assertThat(hour1.humidityCurrent()).isEqualTo(0.0);
       assertThat(hour1.windSpeed()).isEqualTo(0.0);
     }
+
+    @Test
+    @DisplayName("근접일 이후는_3시간_간격_8개_슬롯_응답이_슬롯마다_1개씩_8개_DTO로_분해된다")
+    void 근접일_이후는_3시간_간격_8개_슬롯_응답이_슬롯마다_1개씩_8개_DTO로_분해된다() {
+      // given - 0시부터 3시간 간격 8슬롯(근접일 이후 그리드)
+      List<Item> items = new ArrayList<>();
+      String[] slotTimes = {"0000", "0300", "0600", "0900", "1200", "1500", "1800", "2100"};
+      double[] temps = {18, 17, 19, 23, 27, 28, 25, 21};
+      for (int i = 0; i < slotTimes.length; i++) {
+        items.add(item("TMP", "20260801", slotTimes[i], String.valueOf(temps[i])));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).hasSize(8);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(17.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(28.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureCurrent)
+          .containsExactlyInAnyOrder(18.0, 17.0, 19.0, 23.0, 27.0, 28.0, 25.0, 21.0);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
