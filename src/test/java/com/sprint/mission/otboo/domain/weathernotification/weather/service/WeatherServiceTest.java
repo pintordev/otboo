@@ -9,8 +9,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.HumidityDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.PrecipitationDto;
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.TemperatureDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
+import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WindSpeedDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -196,9 +200,17 @@ class WeatherServiceTest {
       given(locationResolver.resolveLocationNames(latitude, longitude))
           .willReturn(List.of("서울특별시", "중구", "명동"));
 
-      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
-          .set("skyStatus", SkyStatus.CLEAR)
-          .sample();
+      WeatherDto expectedDto = new WeatherDto(
+          todayWeather.getId(),
+          todayWeather.getForecastedAt(),
+          todayWeather.getForecastAt(),
+          new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+              List.of("서울특별시", "중구", "명동")),
+          SkyStatus.CLEAR,
+          new PrecipitationDto(PrecipitationType.NONE, 0.0, 65.0),
+          new HumidityDto(28.0, 0.0),
+          new TemperatureDto(25.0, 0.0, 25.0, 31.0),
+          new WindSpeedDto(2.0, WindStrength.WEAK));
       given(weatherMapper.toDto(todayWeather, weatherGrid, latitude, longitude,
           List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
 
