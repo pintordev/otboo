@@ -119,37 +119,6 @@ class WeatherRepositoryTest {
   }
 
   @Nested
-  @DisplayName("FindLatestRevisions")
-  class FindLatestRevisions {
-
-    @Test
-    @DisplayName("같은_forecastAt에_여러_revision이_있으면_가장_최근_forecastedAt_행만_반환한다")
-    void 같은_forecastAt에_여러_revision이_있으면_가장_최근_forecastedAt_행만_반환한다() {
-      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
-      testEntityManager.flush();
-
-      Instant day1 = Instant.parse("2026-07-27T00:00:00Z");
-      Instant day2 = Instant.parse("2026-07-28T00:00:00Z");
-
-      Weather day1OldRevision = weatherRepository.save(
-          weatherOf(weatherGrid, Instant.parse("2026-07-27T02:10:00Z"), day1, 25.0));
-      Weather day1NewRevision = weatherRepository.save(
-          weatherOf(weatherGrid, Instant.parse("2026-07-27T17:10:00Z"), day1, 28.0));
-      Weather day2Revision = weatherRepository.save(
-          weatherOf(weatherGrid, Instant.parse("2026-07-27T17:10:00Z"), day2, 27.0));
-      testEntityManager.flush();
-      testEntityManager.clear();
-
-      List<Weather> latestRevisions = weatherRepository.findLatestRevisions(weatherGrid, day1);
-
-      assertThat(latestRevisions).hasSize(2);
-      assertThat(latestRevisions).extracting(Weather::getId)
-          .containsExactlyInAnyOrder(day1NewRevision.getId(), day2Revision.getId())
-          .doesNotContain(day1OldRevision.getId());
-    }
-  }
-
-  @Nested
   @DisplayName("FindRecentTwoRevisions")
   class FindRecentTwoRevisions {
 
@@ -298,15 +267,16 @@ class WeatherRepositoryTest {
     @Test
     @DisplayName("같은_forecastAt이면_id를_tie_breaker로_다음_페이지를_반환한다")
     void 같은_forecastAt이면_id를_tie_breaker로_다음_페이지를_반환한다() {
-      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid weatherGrid1 = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid weatherGrid2 = weatherGridRepository.save(WeatherGrid.create(61, 128));
       testEntityManager.flush();
 
       Instant cutoff = Instant.parse("2026-08-01T00:00:00Z");
       Instant sameForecastAt = Instant.parse("2026-07-15T00:00:00Z");
       weatherRepository.save(
-          weatherOf(weatherGrid, Instant.parse("2026-07-15T02:00:00Z"), sameForecastAt, 20.0));
+          weatherOf(weatherGrid1, Instant.parse("2026-07-15T02:00:00Z"), sameForecastAt, 20.0));
       weatherRepository.save(
-          weatherOf(weatherGrid, Instant.parse("2026-07-15T05:00:00Z"), sameForecastAt, 21.0));
+          weatherOf(weatherGrid2, Instant.parse("2026-07-15T05:00:00Z"), sameForecastAt, 21.0));
       testEntityManager.flush();
       testEntityManager.clear();
 

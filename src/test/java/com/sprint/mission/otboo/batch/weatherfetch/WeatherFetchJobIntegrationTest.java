@@ -31,7 +31,7 @@ import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
-import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -98,11 +98,13 @@ class WeatherFetchJobIntegrationTest {
     weatherGridRepository.deleteAll();
   }
 
-  private DailyWeatherForecastDto forecast() {
+  private WeatherForecastSlotDto forecast() {
     // skyStatus/precipitationType은 DB NOT NULL 컬럼이라 FixtureMonkey 랜덤 생성에 맡기지 않고
     // 명시적으로 고정한다 - 랜덤 생성 시 null이 나오면 제약 위반으로 flaky하게 실패했었음
-    return FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
-        .set("date", LocalDate.now())
+    LocalDate today = LocalDate.now();
+    return FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+        .set("date", today)
+        .set("slotAt", today.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant())
         .set("skyStatus", SkyStatus.CLEAR)
         .set("precipitationType", PrecipitationType.NONE)
         .sample();
@@ -119,7 +121,7 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
 
-      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
+      given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(forecast()));
 
       // when - 서로 다른 JobParameters로 두 번 실행. 같은 baseTime 안에서는 Reader의 baseTime
       // 필터(작업 순서 A 4번)가 이미 저장된 격자를 재조회 대상에서 제외하므로, 두 번째 실행은
@@ -142,8 +144,8 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
 
-      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
-      given(kmaForecastFetcher.fetch(eq(new KmaGridPoint(61, 128)), any(), any()))
+      given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(forecast()));
+      given(kmaForecastFetcher.fetchSlots(eq(new KmaGridPoint(61, 128)), any()))
           .willThrow(KmaApiException.of("03", "NO_DATA"));
 
       // when
@@ -167,7 +169,7 @@ class WeatherFetchJobIntegrationTest {
       // 실행됐다는 계약 자체를 명시적으로 검증한다
       assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
           .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
-      verify(kmaForecastFetcher, atLeast(8)).fetch(eq(new KmaGridPoint(61, 128)), any(), any());
+      verify(kmaForecastFetcher, atLeast(8)).fetchSlots(eq(new KmaGridPoint(61, 128)), any());
     }
 
     @Test
@@ -178,7 +180,7 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
 
-      given(kmaForecastFetcher.fetch(any(), any(), any()))
+      given(kmaForecastFetcher.fetchSlots(any(), any()))
           .willThrow(KmaApiException.of("03", "NO_DATA"));
 
       // when
@@ -201,8 +203,8 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherGridRepository.save(WeatherGrid.create(61, 128));
 
-      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
-      given(kmaForecastFetcher.fetch(eq(new KmaGridPoint(61, 128)), any(), any()))
+      given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(forecast()));
+      given(kmaForecastFetcher.fetchSlots(eq(new KmaGridPoint(61, 128)), any()))
           .willThrow(new IllegalStateException("DB/설정 오류 등 복구 불가능한 예외 시뮬레이션"));
 
       // when
@@ -228,7 +230,7 @@ class WeatherFetchJobIntegrationTest {
       weatherGridRepository.save(WeatherGrid.create(60, 127));
       KmaGridPoint grid = new KmaGridPoint(60, 127);
 
-      given(kmaForecastFetcher.fetch(eq(grid), any(), any()))
+      given(kmaForecastFetcher.fetchSlots(eq(grid), any()))
           .willThrow(KmaApiException.of("03", "NO_DATA"))
           .willThrow(KmaApiException.of("03", "NO_DATA"))
           .willReturn(List.of(forecast()));
@@ -240,7 +242,7 @@ class WeatherFetchJobIntegrationTest {
       // then
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(weatherRepository.count()).isEqualTo(1);
-      verify(kmaForecastFetcher, times(3)).fetch(eq(grid), any(), any());
+      verify(kmaForecastFetcher, times(3)).fetchSlots(eq(grid), any());
     }
 
     @Test
@@ -252,7 +254,7 @@ class WeatherFetchJobIntegrationTest {
 
       // retryLimit(3)은 최초 시도 포함 4회 시도를 의미 - Step1에서 4회 모두 실패해 skip되고,
       // Step2(재시도)의 첫 시도(5번째 호출)에서 성공
-      given(kmaForecastFetcher.fetch(eq(grid), any(), any()))
+      given(kmaForecastFetcher.fetchSlots(eq(grid), any()))
           .willThrow(KmaApiException.of("03", "NO_DATA"))
           .willThrow(KmaApiException.of("03", "NO_DATA"))
           .willThrow(KmaApiException.of("03", "NO_DATA"))
@@ -268,7 +270,7 @@ class WeatherFetchJobIntegrationTest {
       assertThat(execution.getStepExecutions()).extracting(se -> se.getStepName())
           .containsExactlyInAnyOrder("weatherFetchStep", "weatherFetchRetryStep");
       assertThat(weatherRepository.count()).isEqualTo(1);
-      verify(kmaForecastFetcher, times(5)).fetch(eq(grid), any(), any());
+      verify(kmaForecastFetcher, times(5)).fetchSlots(eq(grid), any());
     }
   }
 
@@ -288,7 +290,7 @@ class WeatherFetchJobIntegrationTest {
 
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willThrow(new TransientDataAccessResourceException("DB 커넥션 풀 고갈 시뮬레이션"));
-      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(forecast()));
+      given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(forecast()));
 
       // when
       JobExecution execution = jobOperatorTestUtils.startJob(
@@ -377,9 +379,10 @@ class WeatherFetchJobIntegrationTest {
           Location.create(37.5, 127.0, 60, 127, List.of("서울특별시", "강남구")), 3);
       profileRepository.save(profile);
 
-      given(kmaForecastFetcher.fetch(any(), any(), any())).willReturn(List.of(
-          FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
+      given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(
+          FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
               .set("date", today)
+              .set("slotAt", today.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant())
               .set("skyStatus", SkyStatus.CLEAR)
               .set("precipitationType", PrecipitationType.NONE)
               .set("temperatureCurrent", 25.0)

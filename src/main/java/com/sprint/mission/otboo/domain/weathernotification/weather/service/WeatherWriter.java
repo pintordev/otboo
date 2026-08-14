@@ -4,15 +4,12 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
-import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,19 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Component
 public class WeatherWriter {
-
-  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
-  // WeatherFetchWriter(batch/weatherfetch/writer/)와 같은 형태의 INSERT지만, API 경로는
-  // 도메인 서비스 레이어라 별도로 둔다.
-  private static final String INSERT_SQL = """
-      INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
-          precipitation_type, precipitation_amount, precipitation_probability,
-          humidity_current, humidity_compared, temperature_current, temperature_compared,
-          temperature_min, temperature_max, wind_speed, wind_as_word, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
-      ON CONFLICT (weather_grid_id, forecast_at, forecasted_at) DO NOTHING
-      """;
 
   // saveSlots()가 쓰는 upsert - baseline_*은 DO UPDATE SET 목록에 없다. PostgreSQL은
   // 명시 안 된 컬럼을 건드리지 않으므로, 슬롯이 최초 INSERT될 때 넣은 baseline이 이후 몇 번을
@@ -75,40 +59,7 @@ public class WeatherWriter {
   private final WeatherRepository weatherRepository;
   private final JdbcTemplate jdbcTemplate;
 
-  public List<Weather> build(WeatherGrid weatherGrid, Instant forecastedAt,
-      List<DailyWeatherForecastDto> dailyForecasts, Map<LocalDate, Weather> existingByDate) {
-    Weather previousDayWeather = dailyForecasts.isEmpty() ? null
-        : existingByDate.get(dailyForecasts.get(0).date().minusDays(1));
-    Double previousTemp =
-        previousDayWeather != null ? previousDayWeather.getTemperatureCurrent() : null;
-    Double previousHumidity =
-        previousDayWeather != null ? previousDayWeather.getHumidityCurrent() : null;
-
-    List<Weather> built = new ArrayList<>();
-    for (DailyWeatherForecastDto dto : dailyForecasts) {
-      Double temperatureCompared =
-          previousTemp != null ? dto.temperatureCurrent() - previousTemp : null;
-      Double humidityCompared =
-          previousHumidity != null ? dto.humidityCurrent() - previousHumidity : null;
-
-      built.add(Weather.create(weatherGrid, forecastedAt,
-          dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
-          dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
-          humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),
-          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed()),
-          // baseline_* - 매번 현재 값 그대로 전달. upsert 전환 전까지는 INSERT뿐이라
-          // baseline이 곧 최초값이지만, upsert SQL이 baseline_*을 SET 목록에서 뺀 뒤부터는
-          // 이미 존재하는 슬롯 갱신 시 이 인자가 무시되고 기존 baseline이 유지된다.
-          dto.temperatureCurrent(), dto.precipitationType(), dto.precipitationProbability(),
-          dto.precipitationAmount()));
-
-      previousTemp = dto.temperatureCurrent();
-      previousHumidity = dto.humidityCurrent();
-    }
-    return built;
-  }
-
-  // build()의 슬롯 단위 대체 - 날짜별 하루 1건이 아니라 슬롯(날짜+시각)마다 1건을 만든다.
+  // 슬롯 단위 변환 - 날짜별 하루 1건이 아니라 슬롯(날짜+시각)마다 1건을 만든다.
   // "어제 대비"도 날짜 단위 누적이 아니라 슬롯 단위로 정확히 24시간 전 같은 슬롯과 비교한다.
   public List<Weather> buildSlots(WeatherGrid weatherGrid, Instant forecastedAt,
       List<WeatherForecastSlotDto> slotForecasts, Map<Instant, Weather> existingBySlot) {
@@ -134,48 +85,6 @@ public class WeatherWriter {
     return built;
   }
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public List<Weather> save(WeatherGrid weatherGrid, Instant forecastedAt,
-      List<DailyWeatherForecastDto> dailyForecasts, Map<LocalDate, Weather> existingByDate) {
-    List<Weather> built = build(weatherGrid, forecastedAt, dailyForecasts, existingByDate);
-    if (built.isEmpty()) {
-      return built;
-    }
-
-    jdbcTemplate.batchUpdate(INSERT_SQL, new BatchPreparedStatementSetter() {
-      @Override
-      public void setValues(PreparedStatement ps, int i) throws SQLException {
-        Weather weather = built.get(i);
-        ps.setObject(1, UUID.randomUUID());
-        ps.setObject(2, weatherGrid.getId());
-        ps.setTimestamp(3, Timestamp.from(forecastedAt));
-        ps.setTimestamp(4, Timestamp.from(weather.getForecastAt()));
-        ps.setString(5, weather.getSkyStatus().name());
-        ps.setString(6, weather.getPrecipitationType().name());
-        ps.setDouble(7, weather.getPrecipitationAmount());
-        ps.setDouble(8, weather.getPrecipitationProbability());
-        ps.setDouble(9, weather.getHumidityCurrent());
-        ps.setObject(10, weather.getHumidityCompared(), Types.DOUBLE);
-        ps.setDouble(11, weather.getTemperatureCurrent());
-        ps.setObject(12, weather.getTemperatureCompared(), Types.DOUBLE);
-        ps.setDouble(13, weather.getTemperatureMin());
-        ps.setDouble(14, weather.getTemperatureMax());
-        ps.setDouble(15, weather.getWindSpeed());
-        ps.setString(16, weather.getWindAsWord().name());
-      }
-
-      @Override
-      public int getBatchSize() {
-        return built.size();
-      }
-    });
-
-    List<Instant> forecastAts = built.stream().map(Weather::getForecastAt).toList();
-    return weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
-        weatherGrid, forecastedAt, forecastAts);
-  }
-
-  // save()의 슬롯 단위 대체 - INSERT_SQL(ON CONFLICT DO NOTHING) 대신 UPSERT_SQL을 쓴다.
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public List<Weather> saveSlots(WeatherGrid weatherGrid, Instant forecastedAt,
       List<WeatherForecastSlotDto> slotForecasts, Map<Instant, Weather> existingBySlot) {

@@ -13,21 +13,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface WeatherRepository extends JpaRepository<Weather, UUID>, WeatherCustomRepository {
 
-  @Query(value = """
-      SELECT DISTINCT ON (forecast_at) *
-      FROM weathers
-      WHERE weather_grid_id = :#{#weatherGrid.id} AND forecast_at >= :from
-      ORDER BY forecast_at, forecasted_at DESC
-      """, nativeQuery = true)
-  List<Weather> findLatestRevisions(@Param("weatherGrid") WeatherGrid weatherGrid,
-      @Param("from") Instant from);
-
   Optional<Weather> findByWeatherGridAndForecastAtAndForecastedAt(WeatherGrid weatherGrid,
       Instant forecastAt, Instant forecastedAt);
 
   // findLatestRevisions()의 슬롯 단위 대체 - V14(유니크 제약 (weather_grid_id, forecast_at))
   // 이후로는 forecast_at당 row가 정확히 1개라 "최신 리비전 골라내기"(DISTINCT ON) 자체가 필요
-  // 없다. WeatherService/WeatherRefresher가 이걸로 갈아탄 뒤 findLatestRevisions는 삭제한다.
+  // 없다. WeatherService/WeatherRefresher가 갈아탄 뒤 findLatestRevisions는 삭제 완료.
   List<Weather> findAllByWeatherGridAndForecastAtGreaterThanEqual(WeatherGrid weatherGrid,
       Instant from);
 
