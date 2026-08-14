@@ -178,8 +178,8 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("로그인에 성공하면 UserSignedInEvent를 발행해 기존 SSE 연결을 종료시킨다")
-    void 로그인에_성공하면_UserSignedInEvent를_발행해_기존_SSE_연결을_종료시킨다() {
+    @DisplayName("로그인에 성공하면 UserSignedInEvent를 발행한다")
+    void 로그인에_성공하면_UserSignedInEvent를_발행한다() {
       // given
       UUID userId = UUID.randomUUID();
       UserDto userDto = userDtoOf(userId, Role.USER);
