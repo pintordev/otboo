@@ -148,6 +148,79 @@ class WeatherWriterTest {
   }
 
   @Nested
+  @DisplayName("SaveSlots")
+  class SaveSlots {
+
+    @Test
+    @DisplayName("upsert_SQL은_baseline_컬럼을_DO_UPDATE_SET_목록에서_제외한다")
+    void upsert_SQL은_baseline_컬럼을_DO_UPDATE_SET_목록에서_제외한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      WeatherForecastSlotDto slot = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("slotAt", Instant.parse("2026-07-27T00:00:00Z"))
+          .sample();
+      Instant slotAt = slot.slotAt();
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(forecastedAt), eq(List.of(slotAt))))
+          .willReturn(List.of());
+
+      // when
+      weatherWriter.saveSlots(weatherGrid, forecastedAt, List.of(slot), Map.of());
+
+      // then
+      ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+      verify(jdbcTemplate).batchUpdate(sqlCaptor.capture(),
+          any(BatchPreparedStatementSetter.class));
+      assertThat(sqlCaptor.getValue())
+          .contains("ON CONFLICT (weather_grid_id, forecast_at) DO UPDATE SET")
+          .doesNotContain("baseline_temperature_current = EXCLUDED")
+          .doesNotContain("baseline_precipitation_type = EXCLUDED")
+          .doesNotContain("baseline_precipitation_probability = EXCLUDED")
+          .doesNotContain("baseline_precipitation_amount = EXCLUDED");
+    }
+
+    @Test
+    @DisplayName("baseline_파라미터를_PreparedStatement에_바인딩한다")
+    void baseline_파라미터를_PreparedStatement에_바인딩한다() throws Exception {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      WeatherForecastSlotDto slot = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", LocalDate.of(2026, 7, 27))
+          .set("slotAt", Instant.parse("2026-07-27T00:00:00Z"))
+          .set("temperatureCurrent", 28.0)
+          .set("precipitationType", PrecipitationType.RAIN)
+          .set("precipitationProbability", 60.0)
+          .set("precipitationAmount", 5.0)
+          .sample();
+      Instant slotAt = slot.slotAt();
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(forecastedAt), eq(List.of(slotAt))))
+          .willReturn(List.of());
+
+      // when
+      weatherWriter.saveSlots(weatherGrid, forecastedAt, List.of(slot), Map.of());
+
+      // then
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate).batchUpdate(anyString(), setterCaptor.capture());
+      PreparedStatement preparedStatement = mock(PreparedStatement.class);
+      setterCaptor.getValue().setValues(preparedStatement, 0);
+      verify(preparedStatement).setObject(17, 28.0, Types.DOUBLE);
+      verify(preparedStatement).setString(18, "RAIN");
+      verify(preparedStatement).setObject(19, 60.0, Types.DOUBLE);
+      verify(preparedStatement).setObject(20, 5.0, Types.DOUBLE);
+    }
+  }
+
+  @Nested
   @DisplayName("Save")
   class Save {
 
