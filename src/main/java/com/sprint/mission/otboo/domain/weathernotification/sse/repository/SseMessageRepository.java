@@ -41,8 +41,9 @@ public class SseMessageRepository {
   }
 
   public List<SseMessage> findAllAfter(UUID lastEventId, UUID userId) {
-    lock.readLock().lock();
+    lock.writeLock().lock();
     try {
+      evictExpired();
       if (lastEventId == null || !messages.containsKey(lastEventId)) {
         return List.of();
       }
@@ -54,13 +55,14 @@ public class SseMessageRepository {
           .filter(message -> message.isTargetedTo(userId))
           .toList();
     } finally {
-      lock.readLock().unlock();
+      lock.writeLock().unlock();
     }
   }
 
   public Instant getLatestCreatedAt() {
-    lock.readLock().lock();
+    lock.writeLock().lock();
     try {
+      evictExpired();
       UUID latestId = eventIdQueue.peekLast();
       if (latestId == null) {
         return null;
@@ -68,11 +70,13 @@ public class SseMessageRepository {
       SseMessage latest = messages.get(latestId);
       return latest != null ? latest.createdAt() : null;
     } finally {
-      lock.readLock().unlock();
+      lock.writeLock().unlock();
     }
   }
 
-  // save()의 writeLock 안에서만 호출된다 — 별도 락 없이 eventIdQueue/messages를 직접 조작
+  // save()/findAllAfter()/getLatestCreatedAt()의 writeLock 안에서만 호출된다 —
+  // 별도 락 없이 eventIdQueue/messages를 직접 조작. 유휴 상태(추가 save 없이 조회만 반복)에서도
+  // 보관 기간이 지난 메시지가 남아있지 않도록 조회 메서드도 readLock이 아닌 writeLock을 잡고 호출한다.
   private void evictExpired() {
     Instant threshold = Instant.now(clock).minus(retention);
     UUID oldestId;
