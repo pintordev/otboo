@@ -27,8 +27,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "weathers", uniqueConstraints = @UniqueConstraint(
-    name = "UQ_weathers_weather_grid_id_forecast_at_forecasted_at",
-    columnNames = {"weather_grid_id", "forecast_at", "forecasted_at"}))
+    name = "UQ_weathers_weather_grid_id_forecast_at",
+    columnNames = {"weather_grid_id", "forecast_at"}))
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
