@@ -48,17 +48,27 @@ public class KmaForecastParser {
     return result;
   }
 
+  // TMN(일 최저기온)/TMX(일 최고기온)이 응답에 있으면 그 값을 우선하고, 없는 값만 그 날의
+  // TMP(시간별 기온) 극값으로 대체한다.
   private DailyTemperatureRange temperatureRange(List<Item> dayItems) {
-    double tempMin = Double.MAX_VALUE;
-    double tempMax = -Double.MAX_VALUE;
+    double tmpMin = Double.MAX_VALUE;
+    double tmpMax = -Double.MAX_VALUE;
+    Double tmn = null;
+    Double tmx = null;
     for (Item item : dayItems) {
-      if ("TMP".equals(item.category())) {
-        double value = Double.parseDouble(item.fcstValue());
-        tempMin = Math.min(tempMin, value);
-        tempMax = Math.max(tempMax, value);
+      switch (item.category()) {
+        case "TMP" -> {
+          double value = Double.parseDouble(item.fcstValue());
+          tmpMin = Math.min(tmpMin, value);
+          tmpMax = Math.max(tmpMax, value);
+        }
+        case "TMN" -> tmn = Double.parseDouble(item.fcstValue());
+        case "TMX" -> tmx = Double.parseDouble(item.fcstValue());
+        default -> {
+        }
       }
     }
-    return new DailyTemperatureRange(tempMin, tempMax);
+    return new DailyTemperatureRange(tmn != null ? tmn : tmpMin, tmx != null ? tmx : tmpMax);
   }
 
   private Optional<WeatherForecastSlotDto> toSlotForecast(LocalDate date, String slotTime,
