@@ -82,8 +82,12 @@ class KmaForecastParserTest {
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(15.0);
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(38.0);
 
+      ZoneId kst = ZoneId.of("Asia/Seoul");
+      LocalDate date = LocalDate.of(2026, 7, 29);
       WeatherForecastSlotDto hour0 = result.stream()
-          .filter(dto -> dto.temperatureCurrent() == 15.0).findFirst().orElseThrow();
+          .filter(dto -> dto.slotAt().equals(date.atTime(0, 0).atZone(kst).toInstant()))
+          .findFirst().orElseThrow();
+      assertThat(hour0.temperatureCurrent()).isEqualTo(15.0);
       assertThat(hour0.skyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(hour0.precipitationType()).isEqualTo(PrecipitationType.RAIN);
       assertThat(hour0.precipitationProbability()).isEqualTo(60.0);
@@ -92,7 +96,9 @@ class KmaForecastParserTest {
       assertThat(hour0.windSpeed()).isEqualTo(4.0);
 
       WeatherForecastSlotDto hour1 = result.stream()
-          .filter(dto -> dto.temperatureCurrent() == 16.0).findFirst().orElseThrow();
+          .filter(dto -> dto.slotAt().equals(date.atTime(1, 0).atZone(kst).toInstant()))
+          .findFirst().orElseThrow();
+      assertThat(hour1.temperatureCurrent()).isEqualTo(16.0);
       assertThat(hour1.skyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(hour1.precipitationType()).isEqualTo(PrecipitationType.NONE);
       assertThat(hour1.precipitationProbability()).isEqualTo(0.0);
@@ -206,8 +212,10 @@ class KmaForecastParserTest {
       List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
 
       // then
+      Instant slotAt0000 = LocalDate.of(2026, 8, 3).atStartOfDay(ZoneId.of("Asia/Seoul"))
+          .toInstant();
       WeatherForecastSlotDto slot0000 = result.stream()
-          .filter(dto -> dto.temperatureCurrent() == 17.0).findFirst().orElseThrow();
+          .filter(dto -> dto.slotAt().equals(slotAt0000)).findFirst().orElseThrow();
       assertThat(slot0000.skyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(appender.list)
           .anySatisfy(logEvent -> {
@@ -233,8 +241,10 @@ class KmaForecastParserTest {
       List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
 
       // then
+      Instant slotAt0000 = LocalDate.of(2026, 8, 3).atStartOfDay(ZoneId.of("Asia/Seoul"))
+          .toInstant();
       WeatherForecastSlotDto slot0000 = result.stream()
-          .filter(dto -> dto.temperatureCurrent() == 17.0).findFirst().orElseThrow();
+          .filter(dto -> dto.slotAt().equals(slotAt0000)).findFirst().orElseThrow();
       assertThat(slot0000.precipitationType()).isEqualTo(PrecipitationType.NONE);
       assertThat(appender.list)
           .anySatisfy(logEvent -> {
