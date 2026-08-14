@@ -41,8 +41,7 @@ public class WeatherRefresher {
     FetchedSlots fetched = fetchSlots(weatherGrid, grid, baseTime);
     List<Weather> saved = weatherWriter.saveSlots(weatherGrid, baseTime.toInstant(),
         fetched.slotForecasts(), fetched.existingBySlot());
-    log.info("기상청 라이브 재조회 저장 완료(슬롯): nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(),
-        saved.size());
+    log.info("기상청 라이브 재조회 저장 완료(슬롯): 저장 건수={}", saved.size());
     return saved;
   }
 
@@ -64,8 +63,8 @@ public class WeatherRefresher {
         .collect(Collectors.toMap(Weather::getForecastAt, w -> w,
             (existing, replacement) -> existing));
 
-    log.info("기상청 라이브 재조회(슬롯): nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
-        baseTime.baseDate(), baseTime.baseTime());
+    log.info("기상청 라이브 재조회(슬롯): baseDate={}, baseTime={}", baseTime.baseDate(),
+        baseTime.baseTime());
     List<WeatherForecastSlotDto> slotForecasts = kmaForecastFetcher.fetchSlots(grid, baseTime);
     return new FetchedSlots(slotForecasts, existingBySlot);
   }
