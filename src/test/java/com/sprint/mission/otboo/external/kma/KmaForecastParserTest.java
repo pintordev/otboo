@@ -20,6 +20,7 @@ import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
 import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -362,6 +363,29 @@ class KmaForecastParserTest {
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(28.0);
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureCurrent)
           .containsExactlyInAnyOrder(18.0, 17.0, 19.0, 23.0, 27.0, 28.0, 25.0, 21.0);
+    }
+
+    @Test
+    @DisplayName("TMP가_없는_슬롯은_다른_슬롯이_충분해도_결과에서_제외된다")
+    void TMP가_없는_슬롯은_다른_슬롯이_충분해도_결과에서_제외된다() {
+      // given - TMP는 4개 슬롯뿐이라 날짜 게이트는 통과하지만, 0600엔 SKY만 있고 TMP가 없다
+      List<Item> items = List.of(
+          item("TMP", "20260802", "0000", "18"),
+          item("TMP", "20260802", "0300", "17"),
+          item("TMP", "20260802", "0900", "23"),
+          item("TMP", "20260802", "1200", "27"),
+          item("SKY", "20260802", "0600", "1")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).hasSize(4);
+      assertThat(result).extracting(WeatherForecastSlotDto::slotAt)
+          .noneMatch(slotAt -> slotAt.equals(
+              LocalDate.of(2026, 8, 2).atTime(6, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant()));
     }
   }
 
