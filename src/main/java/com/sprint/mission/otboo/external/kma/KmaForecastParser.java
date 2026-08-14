@@ -5,6 +5,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Item;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,90 @@ public class KmaForecastParser {
       result.add(toDailyForecast(date, dayItems, representativeTime));
     }
     return result;
+  }
+
+  // parseDailyForecast()의 슬롯 단위 대체 - 날짜별 대표시각 1개로 압축하지 않고, distinct
+  // fcstTime마다 슬롯 DTO를 그대로 만든다. now 파라미터가 없다 - 어느 슬롯도 "지금과 가장
+  // 가까운 슬롯"으로 선별되지 않고 응답에 있는 슬롯을 전부 반환하기 때문이다.
+  public List<WeatherForecastSlotDto> parseSlotForecast(KmaWeatherResponse response) {
+    Map<String, List<Item>> itemsByDate = response.response().body().items().item().stream()
+        .collect(Collectors.groupingBy(Item::fcstDate, TreeMap::new, Collectors.toList()));
+
+    List<WeatherForecastSlotDto> result = new ArrayList<>();
+    for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
+      List<Item> dayItems = entry.getValue();
+      if (!hasEnoughSlots(dayItems) || !hasTemperatureData(dayItems)) {
+        continue;
+      }
+      LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
+      DailyTemperatureRange range = temperatureRange(dayItems);
+      for (String slotTime : dayItems.stream().map(Item::fcstTime).distinct().toList()) {
+        toSlotForecast(date, slotTime, dayItems, range).ifPresent(result::add);
+      }
+    }
+    return result;
+  }
+
+  private DailyTemperatureRange temperatureRange(List<Item> dayItems) {
+    double tempMin = Double.MAX_VALUE;
+    double tempMax = -Double.MAX_VALUE;
+    for (Item item : dayItems) {
+      if ("TMP".equals(item.category())) {
+        double value = Double.parseDouble(item.fcstValue());
+        tempMin = Math.min(tempMin, value);
+        tempMax = Math.max(tempMax, value);
+      }
+    }
+    return new DailyTemperatureRange(tempMin, tempMax);
+  }
+
+  private Optional<WeatherForecastSlotDto> toSlotForecast(LocalDate date, String slotTime,
+      List<Item> dayItems, DailyTemperatureRange range) {
+    Double tempCurrent = null;
+    double humidityCurrent = 0.0;
+    double windSpeed = 0.0;
+    SkyStatus skyStatus = SkyStatus.CLEAR;
+    PrecipitationType precipitationType = PrecipitationType.NONE;
+    double precipitationAmount = 0.0;
+    double precipitationProbability = 0.0;
+
+    for (Item item : dayItems) {
+      if (!slotTime.equals(item.fcstTime())) {
+        continue;
+      }
+      switch (item.category()) {
+        case "TMP" -> tempCurrent = Double.parseDouble(item.fcstValue());
+        case "SKY" -> skyStatus = toSkyStatus(item.fcstValue());
+        case "REH" -> humidityCurrent = Double.parseDouble(item.fcstValue());
+        case "WSD" -> windSpeed = Double.parseDouble(item.fcstValue());
+        case "POP" -> precipitationProbability = Double.parseDouble(item.fcstValue());
+        case "PCP" -> precipitationAmount = parsePrecipitationAmount(item.fcstValue());
+        case "PTY" -> {
+          if (!"0".equals(item.fcstValue())) {
+            precipitationType = toPrecipitationType(item.fcstValue());
+          }
+        }
+        default -> {
+        }
+      }
+    }
+
+    if (tempCurrent == null) {
+      return Optional.empty();
+    }
+    return Optional.of(new WeatherForecastSlotDto(date, toInstant(date, slotTime), skyStatus,
+        precipitationType, precipitationAmount, precipitationProbability, humidityCurrent,
+        tempCurrent, range.min(), range.max(), windSpeed));
+  }
+
+  private Instant toInstant(LocalDate date, String slotTime) {
+    int hour = Integer.parseInt(slotTime.substring(0, 2));
+    int minute = Integer.parseInt(slotTime.substring(2, 4));
+    return date.atTime(hour, minute).atZone(KST).toInstant();
+  }
+
+  private record DailyTemperatureRange(double min, double max) {
+
   }
 
   private boolean hasEnoughSlots(List<Item> dayItems) {
