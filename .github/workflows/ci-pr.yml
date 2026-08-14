@@ -2,10 +2,10 @@ name: CI (PR)
 
 on:
   pull_request_target:
-    branches: [dev, main]
-    types: [opened, synchronize, reopened]
+    branches: [ dev, main ]
+    types: [ opened, synchronize, reopened ]
 
-permissions: {}
+permissions: { }
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -81,6 +81,22 @@ jobs:
           aws s3 cp s3://${{ secrets.AWS_S3_BUCKET }}/config/test/application.yaml src/main/resources/application.yaml
           aws s3 cp s3://${{ secrets.AWS_S3_BUCKET }}/config/test/application-test.yaml src/test/resources/application-test.yaml
 
+      - name: Start Elasticsearch
+        run: |
+          docker build -t otboo-es docker/elasticsearch
+          docker run -d --name otboo-es -p 9200:9200 \
+            -e "discovery.type=single-node" \
+            -e "xpack.security.enabled=false" \
+            -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+            otboo-es
+          timeout 180 sh -c '
+            until curl --silent --show-error --fail \
+                "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s" \
+                | jq -e ".timed_out == false" >/dev/null; do
+              sleep 3
+            done
+          '
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -103,17 +119,17 @@ jobs:
     needs: filter
     if: needs.filter.outputs.src != 'true'
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions: { }
     steps:
       - name: CI skipped
         run: echo "CI skipped — no code changes"
 
   result:
     name: CI Result
-    needs: [filter, test, skip]
+    needs: [ filter, test, skip ]
     if: always()
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions: { }
     steps:
       - name: Check CI result
         run: |
