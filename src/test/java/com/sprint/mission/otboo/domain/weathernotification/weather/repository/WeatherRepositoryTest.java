@@ -91,18 +91,19 @@ class WeatherRepositoryTest {
     }
 
     @Test
-    @DisplayName("같은_weather_grid_id_forecast_at_forecasted_at_조합은_유니크_제약_위반으로_저장할_수_없다")
-    void 같은_weather_grid_id_forecast_at_forecasted_at_조합은_유니크_제약_위반으로_저장할_수_없다() {
+    @DisplayName("같은_weather_grid_id_forecast_at_조합은_forecasted_at이_달라도_유니크_제약_위반으로_저장할_수_없다")
+    void 같은_weather_grid_id_forecast_at_조합은_forecasted_at이_달라도_유니크_제약_위반으로_저장할_수_없다() {
       WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
       testEntityManager.flush();
 
-      Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
       Instant forecastAt = Instant.parse("2026-07-27T00:00:00Z");
 
-      weatherRepository.save(weatherOf(weatherGrid, forecastedAt, forecastAt, 28.0));
+      weatherRepository.save(
+          weatherOf(weatherGrid, Instant.parse("2026-07-27T08:00:00Z"), forecastAt, 28.0));
       testEntityManager.flush();
 
-      Weather duplicate = weatherOf(weatherGrid, forecastedAt, forecastAt, 29.0);
+      Weather duplicate = weatherOf(weatherGrid, Instant.parse("2026-07-27T11:00:00Z"),
+          forecastAt, 29.0);
 
       assertThatThrownBy(() -> weatherRepository.saveAndFlush(duplicate))
           .isInstanceOf(DataIntegrityViolationException.class);
