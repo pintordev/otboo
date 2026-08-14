@@ -17,8 +17,10 @@ import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Header;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Item;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Items;
 import com.sprint.mission.otboo.external.kma.dto.KmaWeatherResponse.Response;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -289,6 +291,54 @@ class KmaForecastParserTest {
             assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
             assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
           });
+    }
+  }
+
+  @Nested
+  @DisplayName("ParseSlotForecast")
+  class ParseSlotForecast {
+
+    @Test
+    @DisplayName("근접일_1시간_간격_24개_슬롯_응답이_슬롯마다_1개씩_24개_DTO로_분해된다")
+    void 근접일_1시간_간격_24개_슬롯_응답이_슬롯마다_1개씩_24개_DTO로_분해된다() {
+      // given - 0시~23시 매시 TMP, 0시 슬롯에만 다른 카테고리도 함께 포함
+      List<Item> items = new ArrayList<>();
+      for (int hour = 0; hour < 24; hour++) {
+        items.add(item("TMP", "20260729", "%02d00".formatted(hour), String.valueOf(15 + hour)));
+      }
+      items.add(item("SKY", "20260729", "0000", "1"));
+      items.add(item("PTY", "20260729", "0000", "1"));
+      items.add(item("POP", "20260729", "0000", "60"));
+      items.add(item("PCP", "20260729", "0000", "5.0mm"));
+      items.add(item("REH", "20260729", "0000", "70"));
+      items.add(item("WSD", "20260729", "0000", "4.0"));
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).hasSize(24);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(15.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(38.0);
+
+      WeatherForecastSlotDto hour0 = result.stream()
+          .filter(dto -> dto.temperatureCurrent() == 15.0).findFirst().orElseThrow();
+      assertThat(hour0.skyStatus()).isEqualTo(SkyStatus.CLEAR);
+      assertThat(hour0.precipitationType()).isEqualTo(PrecipitationType.RAIN);
+      assertThat(hour0.precipitationProbability()).isEqualTo(60.0);
+      assertThat(hour0.precipitationAmount()).isEqualTo(5.0);
+      assertThat(hour0.humidityCurrent()).isEqualTo(70.0);
+      assertThat(hour0.windSpeed()).isEqualTo(4.0);
+
+      WeatherForecastSlotDto hour1 = result.stream()
+          .filter(dto -> dto.temperatureCurrent() == 16.0).findFirst().orElseThrow();
+      assertThat(hour1.skyStatus()).isEqualTo(SkyStatus.CLEAR);
+      assertThat(hour1.precipitationType()).isEqualTo(PrecipitationType.NONE);
+      assertThat(hour1.precipitationProbability()).isEqualTo(0.0);
+      assertThat(hour1.precipitationAmount()).isEqualTo(0.0);
+      assertThat(hour1.humidityCurrent()).isEqualTo(0.0);
+      assertThat(hour1.windSpeed()).isEqualTo(0.0);
     }
   }
 
