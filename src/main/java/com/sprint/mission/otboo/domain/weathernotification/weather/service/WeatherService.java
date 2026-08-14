@@ -15,6 +15,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,7 +68,7 @@ public class WeatherService {
       if (refreshed.isEmpty()) {
         log.warn("슬롯 재조회 결과가 비어 기존 슬롯을 사용합니다: 저장 격자 ID={}", weatherGrid.getId());
       } else {
-        fetched = refreshed;
+        fetched = mergeByForecastAt(slots, refreshed);
       }
     }
 
@@ -85,6 +87,15 @@ public class WeatherService {
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
         locationNames);
+  }
+
+  // 재조회 결과가 일부 forecastAt만 담고 있어도(파서 게이트 등으로 일부 날짜가 빠질 수 있음)
+  // 그 forecastAt만 갱신되도록 병합한다 - 재조회에 없는 forecastAt은 기존 DB 슬롯을 그대로 쓴다.
+  private List<Weather> mergeByForecastAt(List<Weather> slots, List<Weather> refreshed) {
+    Map<Instant, Weather> byForecastAt = new LinkedHashMap<>();
+    slots.forEach(slot -> byForecastAt.put(slot.getForecastAt(), slot));
+    refreshed.forEach(slot -> byForecastAt.put(slot.getForecastAt(), slot));
+    return new ArrayList<>(byForecastAt.values());
   }
 
   // 오늘 이전 날짜는 제외하고, 날짜별로 대표 슬롯 1건씩만 남긴다 - 오늘은 조회 시각과 가장
