@@ -8,9 +8,16 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -150,6 +157,69 @@ class SseMessageRepositoryTest {
       assertThat(repository.findAllAfter(expired.id(), userId)).isEmpty();
       // 보관 기간 내 메시지는 그대로 남아 정상 조회된다
       assertThat(repository.findAllAfter(anchor.id(), userId)).containsExactly(kept);
+    }
+  }
+
+  @Nested
+  @DisplayName("동시성")
+  class Concurrency {
+
+    private ExecutorService executor;
+
+    @BeforeEach
+    void setUpExecutor() {
+      executor = Executors.newFixedThreadPool(20);
+    }
+
+    @AfterEach
+    void tearDownExecutor() {
+      executor.shutdown();
+    }
+
+    @Test
+    @DisplayName("save가_동시에_들어와도_messages와_eventIdQueue가_어긋나지_않아_유실_없이_전부_조회된다")
+    void save가_동시에_들어와도_messages와_eventIdQueue가_어긋나지_않아_유실_없이_전부_조회된다()
+        throws Exception {
+      int trials = 30;
+      int concurrency = 20;
+
+      for (int trial = 0; trial < trials; trial++) {
+        // given
+        UUID userId = UUID.randomUUID();
+        SseMessage seed = new SseMessage(Set.of(userId), "notifications", "seed");
+        sseMessageRepository.save(seed);
+
+        CountDownLatch ready = new CountDownLatch(concurrency);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int i = 0; i < concurrency; i++) {
+          int index = i;
+          tasks.add(() -> {
+            ready.countDown();
+            start.await();
+            sseMessageRepository.save(
+                new SseMessage(Set.of(userId), "notifications", "payload-" + index));
+            return null;
+          });
+        }
+
+        // when
+        List<Future<Void>> futures = new ArrayList<>();
+        for (Callable<Void> task : tasks) {
+          futures.add(executor.submit(task));
+        }
+        ready.await();
+        start.countDown();
+        for (Future<Void> future : futures) {
+          future.get();
+        }
+
+        // then — messages.put()과 eventIdQueue.addLast() 사이의 창에서 유실되는 메시지가 없어야 한다
+        List<SseMessage> result = sseMessageRepository.findAllAfter(seed.id(), userId);
+        assertThat(result)
+            .as("trial %d: 동시에 저장된 %d건이 하나도 유실되지 않아야 한다", trial, concurrency)
+            .hasSize(concurrency);
+      }
     }
   }
 }
