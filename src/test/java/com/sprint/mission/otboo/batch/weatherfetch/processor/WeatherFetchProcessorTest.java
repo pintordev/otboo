@@ -79,8 +79,8 @@ class WeatherFetchProcessorTest {
       // given
       WeatherGrid weatherGrid = weatherGrid(60, 127);
       List<Weather> saved = List.of();
-      given(weatherRefresher.build(eq(weatherGrid), eq(new KmaGridPoint(60, 127)), eq(BASE_TIME)))
-          .willReturn(saved);
+      given(weatherRefresher.buildSlots(eq(weatherGrid), eq(new KmaGridPoint(60, 127)),
+          eq(BASE_TIME))).willReturn(saved);
 
       // when
       List<Weather> result = processor.process(weatherGrid);
@@ -102,7 +102,7 @@ class WeatherFetchProcessorTest {
 
       // then
       ArgumentCaptor<BaseTime> baseTimeCaptor = ArgumentCaptor.forClass(BaseTime.class);
-      verify(weatherRefresher, times(2)).build(any(), any(), baseTimeCaptor.capture());
+      verify(weatherRefresher, times(2)).buildSlots(any(), any(), baseTimeCaptor.capture());
       List<BaseTime> capturedBaseTimes = baseTimeCaptor.getAllValues();
       assertThat(capturedBaseTimes.get(0)).isEqualTo(BASE_TIME);
       assertThat(capturedBaseTimes.get(1)).isEqualTo(BASE_TIME);
