@@ -176,8 +176,8 @@ class SseServiceTest {
   }
 
   @Nested
-  @DisplayName("disconnectAll")
-  class DisconnectAll {
+  @DisplayName("disconnect")
+  class Disconnect {
 
     @Test
     @DisplayName("해당_유저의_emitter가_있으면_complete를_호출한다")
@@ -188,7 +188,7 @@ class SseServiceTest {
       given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
 
       // when
-      sseService.disconnectAll(userId);
+      sseService.disconnect(userId);
 
       // then
       verify(emitter).complete();
@@ -202,7 +202,7 @@ class SseServiceTest {
       given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.empty());
 
       // when & then — 예외 없이 정상 종료
-      sseService.disconnectAll(userId);
+      sseService.disconnect(userId);
     }
 
     @Test
@@ -216,7 +216,7 @@ class SseServiceTest {
       given(sseEmitterRepository.findByUserId(targetUserId)).willReturn(Optional.of(targetEmitter));
 
       // when
-      sseService.disconnectAll(targetUserId);
+      sseService.disconnect(targetUserId);
 
       // then
       verify(targetEmitter).complete();

@@ -91,7 +91,7 @@ public class AuthService {
 
     // 같은 계정으로 이미 로그인된 세션이 있으면 기존 SSE 연결을 강제
     // TODO: 단일 기기 로그인이라는 정책에 묶여있음 (추후 수정 필요)
-    sseService.disconnectAll(principal.getUserDto().id());
+    sseService.disconnect(principal.getUserDto().id());
 
     return authMapper.signInDtoFrom(userDto, accessToken, refreshToken);
   }

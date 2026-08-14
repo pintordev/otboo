@@ -197,7 +197,7 @@ class AuthServiceTest {
       authService.signIn(request);
 
       // then
-      verify(sseService).disconnectAll(userId);
+      verify(sseService).disconnect(userId);
     }
 
     @Test

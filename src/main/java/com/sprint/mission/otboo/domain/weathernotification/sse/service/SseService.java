@@ -60,7 +60,7 @@ public class SseService {
     });
   }
 
-  public void disconnectAll(UUID userId) {
+  public void disconnect(UUID userId) {
     sseEmitterRepository.findByUserId(userId)
         .ifPresent(SseEmitter::complete);
   }
