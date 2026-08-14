@@ -51,11 +51,13 @@ public class WeatherService {
     boolean stale = todayWeather == null
         || todayWeather.getForecastedAt().isBefore(latestBaseTime.toInstant());
 
-    List<Weather> result = stale
+    List<Weather> fetched = stale
         ? weatherRefresher.refresh(weatherGrid, grid, latestBaseTime)
-        : latestRevisions.stream()
-            .filter(w -> !toForecastDate(w).isBefore(today))
-            .toList();
+        : latestRevisions;
+
+    List<Weather> result = fetched.stream()
+        .filter(w -> !toForecastDate(w).isBefore(today))
+        .toList();
 
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return result.stream()
