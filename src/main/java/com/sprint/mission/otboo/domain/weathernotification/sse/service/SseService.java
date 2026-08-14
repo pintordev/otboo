@@ -21,6 +21,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class SseService {
 
+  // SSE 연결 유지 시간(TIMEOUT)과 cleanUp() ping 주기(sse.clean-up.fixed-delay)는 함께
+  // 조정돼야 한다. nginx proxy_read_timeout/ALB idle timeout 기본값은 60초라, 프록시가
+  // 먼저 끊으면 TIMEOUT(30분) 설정은 의미가 없고 클라이언트는 1분마다 재연결하며 매번
+  // 재생 로직을 태운다. 배포 환경의 프록시 idle timeout보다 ping 주기가 짧아야 한다.
+  // (X-Accel-Buffering: no 헤더 필요 여부도 nginx 경유 시 함께 확인)
   private static final long TIMEOUT = Duration.ofMinutes(30).toMillis();
   private static final String PING_EVENT_NAME = "ping";
 
