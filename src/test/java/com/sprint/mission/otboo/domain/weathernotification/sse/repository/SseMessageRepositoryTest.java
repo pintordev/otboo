@@ -21,8 +21,8 @@ class SseMessageRepositoryTest {
   }
 
   @Nested
-  @DisplayName("저장 / 최신 이벤트 id 조회")
-  class SaveAndGetLatestEventId {
+  @DisplayName("저장 / 최신 이벤트 생성 시각 조회")
+  class SaveAndGetLatestCreatedAt {
 
     @Test
     @DisplayName("저장하면_메시지의_id를_반환한다")
@@ -38,14 +38,14 @@ class SseMessageRepositoryTest {
     }
 
     @Test
-    @DisplayName("저장한_메시지가_없으면_getLatestEventId는_null을_반환한다")
-    void 저장한_메시지가_없으면_getLatestEventId는_null을_반환한다() {
-      assertThat(sseMessageRepository.getLatestEventId()).isNull();
+    @DisplayName("저장한_메시지가_없으면_getLatestCreatedAt은_null을_반환한다")
+    void 저장한_메시지가_없으면_getLatestCreatedAt은_null을_반환한다() {
+      assertThat(sseMessageRepository.getLatestCreatedAt()).isNull();
     }
 
     @Test
-    @DisplayName("저장할_때마다_getLatestEventId는_가장_최근_메시지의_id를_반환한다")
-    void 저장할_때마다_getLatestEventId는_가장_최근_메시지의_id를_반환한다() {
+    @DisplayName("저장할_때마다_getLatestCreatedAt은_가장_최근_메시지의_생성_시각을_반환한다")
+    void 저장할_때마다_getLatestCreatedAt은_가장_최근_메시지의_생성_시각을_반환한다() {
       // given
       SseMessage first = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload1");
       SseMessage second = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload2");
@@ -55,7 +55,7 @@ class SseMessageRepositoryTest {
       sseMessageRepository.save(second);
 
       // then
-      assertThat(sseMessageRepository.getLatestEventId()).isEqualTo(second.id());
+      assertThat(sseMessageRepository.getLatestCreatedAt()).isEqualTo(second.createdAt());
     }
   }
 

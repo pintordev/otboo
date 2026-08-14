@@ -58,7 +58,7 @@ class SseServiceTest {
     void emitter를_생성해_repository에_등록하고_생성한_emitter를_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
-      given(sseMessageRepository.getLatestEventId()).willReturn(null);
+      given(sseMessageRepository.getLatestCreatedAt()).willReturn(null);
       given(sseMessageRepository.findAllAfter(isNull(), eq(userId))).willReturn(List.of());
 
       try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
@@ -78,7 +78,7 @@ class SseServiceTest {
       // given
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      given(sseMessageRepository.getLatestEventId()).willReturn(null);
+      given(sseMessageRepository.getLatestCreatedAt()).willReturn(null);
 
       try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class,
           (mock, context) -> doThrow(new IOException("dead"))
@@ -97,9 +97,13 @@ class SseServiceTest {
       // given
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1");
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2");
-      given(sseMessageRepository.getLatestEventId()).willReturn(message2.id());
+      Instant t1 = Instant.parse("2026-01-01T00:00:01Z");
+      Instant t2 = Instant.parse("2026-01-01T00:00:02Z");
+      SseMessage message1 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload1", t1);
+      SseMessage message2 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload2", t2);
+      given(sseMessageRepository.getLatestCreatedAt()).willReturn(t2);
       given(sseMessageRepository.findAllAfter(lastEventId, userId)).willReturn(
           List.of(message1, message2));
 
@@ -114,15 +118,21 @@ class SseServiceTest {
     }
 
     @Test
-    @DisplayName("재생_중_연결_시점_최신_이벤트_id에_도달하면_그_이후는_재생하지_않는다")
-    void 재생_중_연결_시점_최신_이벤트_id에_도달하면_그_이후는_재생하지_않는다() throws IOException {
+    @DisplayName("재생_중_연결_시점_스냅샷_이후에_생성된_이벤트는_재생하지_않는다")
+    void 재생_중_연결_시점_스냅샷_이후에_생성된_이벤트는_재생하지_않는다() throws IOException {
       // given
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1");
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2");
-      SseMessage message3 = new SseMessage(Set.of(userId), "notifications", "payload3");
-      given(sseMessageRepository.getLatestEventId()).willReturn(message2.id());
+      Instant t1 = Instant.parse("2026-01-01T00:00:01Z");
+      Instant snapshotAt = Instant.parse("2026-01-01T00:00:02Z");
+      Instant t3 = Instant.parse("2026-01-01T00:00:03Z");
+      SseMessage message1 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload1", t1);
+      SseMessage message2 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload2", snapshotAt);
+      SseMessage message3 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload3", t3);
+      given(sseMessageRepository.getLatestCreatedAt()).willReturn(snapshotAt);
       given(sseMessageRepository.findAllAfter(lastEventId, userId))
           .willReturn(List.of(message1, message2, message3));
 
@@ -133,6 +143,34 @@ class SseServiceTest {
         // then — ping 1회 + message1, message2까지만 재생(message3은 재생하지 않음)
         SseEmitter createdEmitter = mocked.constructed().get(0);
         verify(createdEmitter, times(3)).send(any(SseEmitter.SseEventBuilder.class));
+      }
+    }
+
+    @Test
+    @DisplayName("연결_시점_전역_최신_이벤트가_다른_사용자_대상이라_missed_목록에_없어도_스냅샷_이후_생성된_이_사용자_이벤트는_재생하지_않는다")
+    void 연결_시점_전역_최신_이벤트가_다른_사용자_대상이라_missed_목록에_없어도_스냅샷_이후_생성된_이_사용자_이벤트는_재생하지_않는다()
+        throws IOException {
+      // given — 전역 최신 이벤트(스냅샷 시각의 근거)는 다른 사용자 대상이라 이 사용자의 missed 목록엔 존재하지 않는다
+      UUID userId = UUID.randomUUID();
+      UUID lastEventId = UUID.randomUUID();
+      Instant beforeSnapshot = Instant.parse("2026-01-01T00:00:01Z");
+      Instant snapshotAt = Instant.parse("2026-01-01T00:00:02Z");
+      Instant afterSnapshot = Instant.parse("2026-01-01T00:00:03Z");
+      SseMessage message1 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload1", beforeSnapshot);
+      SseMessage message2 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload2", afterSnapshot);
+      given(sseMessageRepository.getLatestCreatedAt()).willReturn(snapshotAt);
+      given(sseMessageRepository.findAllAfter(lastEventId, userId))
+          .willReturn(List.of(message1, message2));
+
+      try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
+        // when
+        sseService.connect(userId, lastEventId);
+
+        // then — ping 1회 + message1만 재생(message2는 이미 실시간 push된 것으로 간주해 재생 제외, 중복 없음)
+        SseEmitter createdEmitter = mocked.constructed().get(0);
+        verify(createdEmitter, times(2)).send(any(SseEmitter.SseEventBuilder.class));
       }
     }
   }
