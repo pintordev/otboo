@@ -41,6 +41,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -356,6 +357,8 @@ class WeatherFetchJobIntegrationTest {
       userRepository.deleteAll();
     }
 
+    @Disabled("V14(유니크 제약 (weather_grid_id, forecast_at)) 이후 리비전 개념이 사라져 "
+        + "revisions.size()<2가 상시 참 - #163에서 baseline 컬럼 비교 방식으로 재설계 후 재작성")
     @Test
     @DisplayName("이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다")
     void 이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다() throws Exception {

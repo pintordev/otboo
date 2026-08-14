@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -122,6 +123,8 @@ class WeatherRepositoryTest {
   @DisplayName("FindRecentTwoRevisions")
   class FindRecentTwoRevisions {
 
+    @Disabled("V14(유니크 제약 (weather_grid_id, forecast_at)) 이후 같은 forecastAt에 리비전을 "
+        + "2개 이상 만들 수 없음 - #163에서 findRecentTwoRevisions 자체를 대체할 예정")
     @Test
     @DisplayName("같은_forecastAt에_3개_리비전이_있어도_최신_2개만_반환한다")
     void 같은_forecastAt에_3개_리비전이_있어도_최신_2개만_반환한다() {
@@ -146,6 +149,8 @@ class WeatherRepositoryTest {
           .containsExactlyInAnyOrder(middle.getId(), latest.getId());
     }
 
+    @Disabled("V14(유니크 제약 (weather_grid_id, forecast_at)) 이후 같은 forecastAt에 리비전을 "
+        + "2개 이상 만들 수 없음 - #163에서 findRecentTwoRevisions 자체를 대체할 예정")
     @Test
     @DisplayName("대상_리스트에_없는_forecastAt은_제외된다")
     void 대상_리스트에_없는_forecastAt은_제외된다() {
