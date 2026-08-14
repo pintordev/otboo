@@ -58,9 +58,15 @@ public class WeatherService {
     boolean stale = todayRepresentative == null
         || todayRepresentative.getForecastedAt().isBefore(latestBaseTime.toInstant());
 
-    List<Weather> fetched = stale
-        ? weatherRefresher.refreshSlots(weatherGrid, grid, latestBaseTime)
-        : slots;
+    List<Weather> fetched = slots;
+    if (stale) {
+      List<Weather> refreshed = weatherRefresher.refreshSlots(weatherGrid, grid, latestBaseTime);
+      if (refreshed.isEmpty()) {
+        log.warn("슬롯 재조회 결과가 비어 기존 슬롯을 사용합니다: 저장 격자 ID={}", weatherGrid.getId());
+      } else {
+        fetched = refreshed;
+      }
+    }
 
     List<Weather> result = representativesFrom(fetched, today);
 
