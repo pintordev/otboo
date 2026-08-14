@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,6 +30,8 @@ import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
+import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
+import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent.IndexAction;
 import com.sprint.mission.otboo.domain.social.feed.exception.AuthorNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
@@ -420,7 +423,7 @@ class FeedServiceTest {
       feedService.create(request, currentUserId);
 
       // then
-      verify(eventPublisher, never()).publishEvent(any());
+      verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
     }
 
     @Test
@@ -441,6 +444,36 @@ class FeedServiceTest {
       // when & then
       assertThatThrownBy(() -> feedService.create(request, currentUserId))
           .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("피드를 등록하면 검색 인덱싱 이벤트를 발행한다")
+    void 피드를_등록하면_검색_인덱싱_이벤트를_발행한다() {
+      // given
+      UUID currentUserId = UUID.randomUUID();
+      UUID savedFeedId = UUID.randomUUID();
+      FeedCreateRequest request = fm.giveMeBuilder(FeedCreateRequest.class)
+          .set("authorId", currentUserId)
+          .sample();
+
+      UserSummary author = new UserSummary(currentUserId, "테스터", null);
+      when(weatherSnapshotProvider.readSnapshot(any())).thenReturn(DUMMY_SNAPSHOT);
+      when(userSummaryQueryRepository.findByUserId(currentUserId)).thenReturn(author);
+      when(feedRepository.save(any(Feed.class))).thenAnswer(inv -> {
+        Feed saved = inv.getArgument(0);
+        setFeedId(saved, savedFeedId);
+        return saved;
+      });
+
+      // when
+      feedService.create(request, currentUserId);
+
+      // then
+      ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+      verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
+      assertThat(captor.getAllValues())
+          .filteredOn(FeedIndexRequestedEvent.class::isInstance)
+          .containsExactly(FeedIndexRequestedEvent.upsert(savedFeedId));
     }
   }
 
@@ -999,6 +1032,33 @@ class FeedServiceTest {
       // then
       assertThat(feed.getContent()).isEqualTo("수정된 내용");
     }
+
+    @Test
+    @DisplayName("피드를 수정하면 검색 인덱싱 이벤트를 발행한다")
+    void 피드를_수정하면_검색_인덱싱_이벤트를_발행한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "원래 내용",
+          DUMMY_SNAPSHOT, List.of());
+      setFeedId(feed, feedId);
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      UserSummary author = new UserSummary(currentUserId, "경신", null);
+      given(userSummaryQueryRepository.findByUserId(currentUserId)).willReturn(author);
+
+      FeedUpdateRequest request = new FeedUpdateRequest("수정된 내용");
+
+      // when
+      feedService.update(feedId, request, currentUserId);
+
+      // then
+      ArgumentCaptor<FeedIndexRequestedEvent> captor =
+          ArgumentCaptor.forClass(FeedIndexRequestedEvent.class);
+      verify(eventPublisher).publishEvent(captor.capture());
+      assertThat(captor.getValue().feedId()).isEqualTo(feedId);
+      assertThat(captor.getValue().action()).isEqualTo(IndexAction.UPSERT);
+    }
   }
 
   @Nested
@@ -1083,6 +1143,28 @@ class FeedServiceTest {
 
       // then
       assertThat(feed.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("피드를 삭제하면 검색 인덱스 제거 이벤트를 발행한다")
+    void 피드를_삭제하면_검색_인덱스_제거_이벤트를_발행한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      UUID currentUserId = UUID.randomUUID();
+      Feed feed = Feed.create(currentUserId, UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of());
+      setFeedId(feed, feedId);
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when
+      feedService.delete(feedId, currentUserId);
+
+      // then
+      ArgumentCaptor<FeedIndexRequestedEvent> captor =
+          ArgumentCaptor.forClass(FeedIndexRequestedEvent.class);
+      verify(eventPublisher).publishEvent(captor.capture());
+      assertThat(captor.getValue().feedId()).isEqualTo(feedId);
+      assertThat(captor.getValue().action()).isEqualTo(IndexAction.DELETE);
     }
   }
 }

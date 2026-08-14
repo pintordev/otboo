@@ -1,0 +1,20 @@
+{
+  "analysis": {
+    "tokenizer": {
+      "nori_mixed": {
+        "type": "nori_tokenizer",
+        "decompound_mode": "mixed"
+      }
+    },
+    "analyzer": {
+      "korean": {
+        "type": "custom",
+        "tokenizer": "nori_mixed",
+        "filter": [
+          "nori_part_of_speech",
+          "lowercase"
+        ]
+      }
+    }
+  }
+}

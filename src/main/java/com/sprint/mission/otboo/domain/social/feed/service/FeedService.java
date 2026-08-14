@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
+import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.exception.AuthorNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
@@ -61,6 +62,7 @@ public class FeedService {
 
     UserSummary author = userSummaryQueryRepository.findByUserId(feed.getAuthorId());
     publishFeedCreatedNotification(feed.getAuthorId(), author.name(), feed.getContent());
+    eventPublisher.publishEvent(FeedIndexRequestedEvent.upsert(feed.getId()));
 
     return feedMapper.toDto(feed, author, false);
   }
@@ -103,6 +105,9 @@ public class FeedService {
 
     UserSummary author = userSummaryQueryRepository.findByUserId(feed.getAuthorId());
     boolean likedByMe = feedLikeRepository.existsByFeedIdAndUserId(feedId, currentUserId);
+
+    eventPublisher.publishEvent(FeedIndexRequestedEvent.upsert(feedId));
+
     return feedMapper.toDto(feed, author, likedByMe);
   }
 
@@ -112,6 +117,8 @@ public class FeedService {
 
     feed.delete();
     log.info("피드 삭제 완료: feedId={}", feedId);
+
+    eventPublisher.publishEvent(FeedIndexRequestedEvent.delete(feedId));
   }
 
   private Feed findActiveFeedOwnedBy(UUID feedId, UUID currentUserId) {
