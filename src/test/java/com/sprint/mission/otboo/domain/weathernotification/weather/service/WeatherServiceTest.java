@@ -210,6 +210,54 @@ class WeatherServiceTest {
     }
 
     @Test
+    @DisplayName("재조회_결과가_일부_날짜만_있어도_DB에_있던_다른_날짜_대표_슬롯은_유지된다")
+    void 재조회_결과가_일부_날짜만_있어도_DB에_있던_다른_날짜_대표_슬롯은_유지된다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+
+      // DB에 오늘(stale) 슬롯 + 내일 슬롯이 있다
+      Instant staleForecastedAt = Instant.parse("2026-07-27T05:00:00Z");
+      Weather staleTodaySlot = Weather.create(weatherGrid, staleForecastedAt,
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
+      Weather tomorrowSlot = Weather.create(weatherGrid, staleForecastedAt,
+          Instant.parse("2026-07-28T06:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 24.0, 0.0, 20.0, 26.0, 2.0, WindStrength.WEAK, null, null, null, null);
+      given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
+          any())).willReturn(List.of(staleTodaySlot, tomorrowSlot));
+
+      // 라이브 재조회는 오늘 슬롯만 갱신해서 돌아온다(내일 날짜는 파서 게이트 등으로 빠짐)
+      Weather refreshedTodaySlot = Weather.create(weatherGrid, LATEST_BASE_TIME.toInstant(),
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 29.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
+      given(weatherRefresher.refreshSlots(weatherGrid, new KmaGridPoint(60, 127),
+          LATEST_BASE_TIME)).willReturn(List.of(refreshedTodaySlot));
+      given(locationResolver.resolveLocationNames(latitude, longitude))
+          .willReturn(List.of("서울특별시", "중구", "명동"));
+
+      WeatherDto todayDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      WeatherDto tomorrowDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(refreshedTodaySlot, weatherGrid, latitude, longitude,
+          List.of("서울특별시", "중구", "명동"))).willReturn(todayDto);
+      given(weatherMapper.toDto(tomorrowSlot, weatherGrid, latitude, longitude,
+          List.of("서울특별시", "중구", "명동"))).willReturn(tomorrowDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
+
+      // then - 오늘은 재조회 값, 내일은 DB에 있던 값이 그대로 유지되어 둘 다 반환된다
+      assertThat(result).containsExactlyInAnyOrder(todayDto, tomorrowDto);
+    }
+
+    @Test
     @DisplayName("stale해서_WeatherRefresher가_반환한_결과에도_오늘_이전_슬롯은_필터링되고_날짜별_대표_슬롯만_반환된다")
     void stale해서_WeatherRefresher가_반환한_결과에도_오늘_이전_슬롯은_필터링되고_날짜별_대표_슬롯만_반환된다() {
       // given
