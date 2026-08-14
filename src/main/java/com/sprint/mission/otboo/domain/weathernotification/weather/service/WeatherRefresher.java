@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -66,12 +67,52 @@ public class WeatherRefresher {
     return new Fetched(dailyForecasts, existingByDate);
   }
 
+  // refresh()의 슬롯 단위 대체 - fetch()가 fetchSlots(), save()가 saveSlots()로 바뀐다.
+  public List<Weather> refreshSlots(WeatherGrid weatherGrid, KmaGridPoint grid,
+      BaseTime baseTime) {
+    FetchedSlots fetched = fetchSlots(weatherGrid, grid, baseTime);
+    List<Weather> saved = weatherWriter.saveSlots(weatherGrid, baseTime.toInstant(),
+        fetched.slotForecasts(), fetched.existingBySlot());
+    log.info("기상청 라이브 재조회 저장 완료(슬롯): nx={}, ny={}, 저장 건수={}", grid.nx(), grid.ny(),
+        saved.size());
+    return saved;
+  }
+
+  // build()의 슬롯 단위 대체
+  public List<Weather> buildSlots(WeatherGrid weatherGrid, KmaGridPoint grid, BaseTime baseTime) {
+    FetchedSlots fetched = fetchSlots(weatherGrid, grid, baseTime);
+    return weatherWriter.buildSlots(weatherGrid, baseTime.toInstant(), fetched.slotForecasts(),
+        fetched.existingBySlot());
+  }
+
+  private FetchedSlots fetchSlots(WeatherGrid weatherGrid, KmaGridPoint grid, BaseTime baseTime) {
+    LocalDate yesterday = LocalDate.now(clock.withZone(KST)).minusDays(1);
+    Instant from = yesterday.atStartOfDay(KST).toInstant();
+    // existingByDate(LocalDate 키)와 달리 슬롯은 forecastAt(Instant)이 이미 유일 키다 -
+    // 날짜로 뭉뚱그려 대표 1건만 남길 필요가 없다.
+    Map<Instant, Weather> existingBySlot = weatherRepository
+        .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from)
+        .stream()
+        .collect(Collectors.toMap(Weather::getForecastAt, w -> w,
+            (existing, replacement) -> existing));
+
+    log.info("기상청 라이브 재조회(슬롯): nx={}, ny={}, baseDate={}, baseTime={}", grid.nx(), grid.ny(),
+        baseTime.baseDate(), baseTime.baseTime());
+    List<WeatherForecastSlotDto> slotForecasts = kmaForecastFetcher.fetchSlots(grid, baseTime);
+    return new FetchedSlots(slotForecasts, existingBySlot);
+  }
+
   private LocalDate toForecastDate(Weather weather) {
     return weather.getForecastAt().atZone(KST).toLocalDate();
   }
 
   private record Fetched(List<DailyWeatherForecastDto> dailyForecasts,
       Map<LocalDate, Weather> existingByDate) {
+
+  }
+
+  private record FetchedSlots(List<WeatherForecastSlotDto> slotForecasts,
+      Map<Instant, Weather> existingBySlot) {
 
   }
 }
