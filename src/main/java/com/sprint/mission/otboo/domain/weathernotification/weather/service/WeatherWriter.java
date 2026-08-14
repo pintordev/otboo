@@ -5,6 +5,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.dto.DailyWeatherForecastDto;
+import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -12,6 +13,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +77,32 @@ public class WeatherWriter {
 
       previousTemp = dto.temperatureCurrent();
       previousHumidity = dto.humidityCurrent();
+    }
+    return built;
+  }
+
+  // build()의 슬롯 단위 대체 - 날짜별 하루 1건이 아니라 슬롯(날짜+시각)마다 1건을 만든다.
+  // "어제 대비"도 날짜 단위 누적이 아니라 슬롯 단위로 정확히 24시간 전 같은 슬롯과 비교한다.
+  public List<Weather> buildSlots(WeatherGrid weatherGrid, Instant forecastedAt,
+      List<WeatherForecastSlotDto> slotForecasts, Map<Instant, Weather> existingBySlot) {
+    List<Weather> built = new ArrayList<>();
+    for (WeatherForecastSlotDto dto : slotForecasts) {
+      Weather sameSlotYesterday = existingBySlot.get(dto.slotAt().minus(1, ChronoUnit.DAYS));
+      Double temperatureCompared = sameSlotYesterday != null
+          ? dto.temperatureCurrent() - sameSlotYesterday.getTemperatureCurrent() : null;
+      Double humidityCompared = sameSlotYesterday != null
+          ? dto.humidityCurrent() - sameSlotYesterday.getHumidityCurrent() : null;
+
+      built.add(Weather.create(weatherGrid, forecastedAt, dto.slotAt(), dto.skyStatus(),
+          dto.precipitationType(), dto.precipitationAmount(), dto.precipitationProbability(),
+          dto.humidityCurrent(), humidityCompared, dto.temperatureCurrent(), temperatureCompared,
+          dto.temperatureMin(), dto.temperatureMax(), dto.windSpeed(),
+          toWindStrength(dto.windSpeed()),
+          // baseline_* - 매번 현재 값 그대로 전달. saveSlots()의 upsert SQL이 baseline_*을
+          // SET 목록에서 뺀 뒤부터는 이미 존재하는 슬롯 갱신 시 이 인자가 무시되고 기존
+          // baseline이 유지된다 - 최초 삽입일 때만 실제로 반영된다.
+          dto.temperatureCurrent(), dto.precipitationType(), dto.precipitationProbability(),
+          dto.precipitationAmount()));
     }
     return built;
   }
