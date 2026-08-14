@@ -19,7 +19,7 @@ public class SseController implements SseApi {
   private final SseService sseService;
 
   @Override
-  @GetMapping(path = "api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @GetMapping(path = "/api/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter subscribe(
       @CurrentUser UserPrincipal principal,
       @RequestParam(value = "LastEventId", required = false) UUID lastEventId

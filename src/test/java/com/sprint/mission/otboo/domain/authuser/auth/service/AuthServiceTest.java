@@ -24,7 +24,7 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.enums.LockReason;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Role;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
-import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
+import com.sprint.mission.otboo.domain.weathernotification.sse.event.UserSignedInEvent;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
@@ -75,9 +75,6 @@ class AuthServiceTest {
 
   @Mock
   private UserRepository userRepository;
-
-  @Mock
-  private SseService sseService;
 
   @Mock
   private TempPasswordRegistry tempPasswordRegistry;
@@ -181,8 +178,8 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("로그인에 성공하면 기존 SSE 연결을 강제 종료한다")
-    void 로그인에_성공하면_기존_SSE_연결을_강제_종료한다() {
+    @DisplayName("로그인에 성공하면 UserSignedInEvent를 발행한다")
+    void 로그인에_성공하면_UserSignedInEvent를_발행한다() {
       // given
       UUID userId = UUID.randomUUID();
       UserDto userDto = userDtoOf(userId, Role.USER);
@@ -197,7 +194,7 @@ class AuthServiceTest {
       authService.signIn(request);
 
       // then
-      verify(sseService).disconnectAll(userId);
+      verify(eventPublisher).publishEvent(new UserSignedInEvent(userId));
     }
 
     @Test

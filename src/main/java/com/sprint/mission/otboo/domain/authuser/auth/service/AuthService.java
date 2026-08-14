@@ -12,7 +12,7 @@ import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundException;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
-import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
+import com.sprint.mission.otboo.domain.weathernotification.sse.event.UserSignedInEvent;
 import com.sprint.mission.otboo.global.temppassword.registry.TempPasswordRegistry;
 import com.sprint.mission.otboo.security.details.CustomUserDetails;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
@@ -43,7 +43,6 @@ public class AuthService {
   private final AuthenticationManager authenticationManager;
   private final AuthMapper authMapper;
   private final UserRepository userRepository;
-  private final SseService sseService;
   private final TempPasswordRegistry tempPasswordRegistry;
   private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
@@ -91,7 +90,7 @@ public class AuthService {
 
     // 같은 계정으로 이미 로그인된 세션이 있으면 기존 SSE 연결을 강제
     // TODO: 단일 기기 로그인이라는 정책에 묶여있음 (추후 수정 필요)
-    sseService.disconnectAll(principal.getUserDto().id());
+    eventPublisher.publishEvent(new UserSignedInEvent(principal.getUserDto().id()));
 
     return authMapper.signInDtoFrom(userDto, accessToken, refreshToken);
   }

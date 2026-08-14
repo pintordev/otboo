@@ -13,7 +13,10 @@ public class SseEmitterRepository {
   private final Map<UUID, SseEmitter> emitters = new ConcurrentHashMap<>();
 
   public void save(UUID userId, SseEmitter emitter) {
-    emitters.put(userId, emitter);
+    SseEmitter previous = emitters.put(userId, emitter);
+    if (previous != null) {
+      previous.complete();
+    }
   }
 
   public Optional<SseEmitter> findByUserId(UUID userId) {
