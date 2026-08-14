@@ -1,6 +1,9 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -61,6 +64,41 @@ class SseEmitterRepositoryTest {
 
       // then
       assertThat(sseEmitterRepository.findByUserId(userId)).contains(next);
+    }
+  }
+
+  @Nested
+  @DisplayName("재연결 시 이전 emitter 정리")
+  class ReplaceOnReconnect {
+
+    @Test
+    @DisplayName("같은_userId로_새_emitter를_저장하면_이전_emitter를_complete로_종료한다")
+    void 같은_userId로_새_emitter를_저장하면_이전_emitter를_complete로_종료한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseEmitter previous = mock(SseEmitter.class);
+      SseEmitter next = new SseEmitter();
+      sseEmitterRepository.save(userId, previous);
+
+      // when
+      sseEmitterRepository.save(userId, next);
+
+      // then
+      verify(previous).complete();
+    }
+
+    @Test
+    @DisplayName("최초_저장이면_기존_emitter가_없어_complete를_호출하지_않는다")
+    void 최초_저장이면_기존_emitter가_없어_complete를_호출하지_않는다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseEmitter emitter = mock(SseEmitter.class);
+
+      // when
+      sseEmitterRepository.save(userId, emitter);
+
+      // then
+      verify(emitter, never()).complete();
     }
   }
 
