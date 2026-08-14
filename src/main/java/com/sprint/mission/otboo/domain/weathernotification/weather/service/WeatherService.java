@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WeatherService {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-  // D1 이후(내일부터) 날짜의 대표 슬롯 기준 시각 - KmaForecastParser의 기존 FUTURE_REPRESENTATIVE_TIME과 동일
+  // D1 이후(내일부터) 날짜의 대표 슬롯 기준 시각(KST) - referenceInstant()에서 사용
   private static final int FUTURE_REPRESENTATIVE_HOUR = 15;
 
   private final WeatherRepository weatherRepository;
