@@ -25,6 +25,12 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   Optional<Weather> findByWeatherGridAndForecastAtAndForecastedAt(WeatherGrid weatherGrid,
       Instant forecastAt, Instant forecastedAt);
 
+  // findLatestRevisions()의 슬롯 단위 대체 - V14(유니크 제약 (weather_grid_id, forecast_at))
+  // 이후로는 forecast_at당 row가 정확히 1개라 "최신 리비전 골라내기"(DISTINCT ON) 자체가 필요
+  // 없다. WeatherService/WeatherRefresher가 이걸로 갈아탄 뒤 findLatestRevisions는 삭제한다.
+  List<Weather> findAllByWeatherGridAndForecastAtGreaterThanEqual(WeatherGrid weatherGrid,
+      Instant from);
+
   List<Weather> findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
       WeatherGrid weatherGrid, Instant forecastedAt, List<Instant> forecastAts);
 
