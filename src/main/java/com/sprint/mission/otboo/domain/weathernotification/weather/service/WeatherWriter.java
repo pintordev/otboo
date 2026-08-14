@@ -45,6 +45,33 @@ public class WeatherWriter {
       ON CONFLICT (weather_grid_id, forecast_at, forecasted_at) DO NOTHING
       """;
 
+  // saveSlots()가 쓰는 upsert - baseline_*은 DO UPDATE SET 목록에 없다. PostgreSQL은
+  // 명시 안 된 컬럼을 건드리지 않으므로, 슬롯이 최초 INSERT될 때 넣은 baseline이 이후 몇 번을
+  // 갱신하든 그대로 남는다.
+  private static final String UPSERT_SQL = """
+      INSERT INTO weathers (id, weather_grid_id, forecasted_at, forecast_at, sky_status,
+          precipitation_type, precipitation_amount, precipitation_probability,
+          humidity_current, humidity_compared, temperature_current, temperature_compared,
+          temperature_min, temperature_max, wind_speed, wind_as_word,
+          baseline_temperature_current, baseline_precipitation_type,
+          baseline_precipitation_probability, baseline_precipitation_amount, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+      ON CONFLICT (weather_grid_id, forecast_at) DO UPDATE SET
+          forecasted_at = EXCLUDED.forecasted_at,
+          sky_status = EXCLUDED.sky_status,
+          precipitation_type = EXCLUDED.precipitation_type,
+          precipitation_amount = EXCLUDED.precipitation_amount,
+          precipitation_probability = EXCLUDED.precipitation_probability,
+          humidity_current = EXCLUDED.humidity_current,
+          humidity_compared = EXCLUDED.humidity_compared,
+          temperature_current = EXCLUDED.temperature_current,
+          temperature_compared = EXCLUDED.temperature_compared,
+          temperature_min = EXCLUDED.temperature_min,
+          temperature_max = EXCLUDED.temperature_max,
+          wind_speed = EXCLUDED.wind_speed,
+          wind_as_word = EXCLUDED.wind_as_word
+      """;
+
   private final WeatherRepository weatherRepository;
   private final JdbcTemplate jdbcTemplate;
 
@@ -135,6 +162,52 @@ public class WeatherWriter {
         ps.setDouble(14, weather.getTemperatureMax());
         ps.setDouble(15, weather.getWindSpeed());
         ps.setString(16, weather.getWindAsWord().name());
+      }
+
+      @Override
+      public int getBatchSize() {
+        return built.size();
+      }
+    });
+
+    List<Instant> forecastAts = built.stream().map(Weather::getForecastAt).toList();
+    return weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
+        weatherGrid, forecastedAt, forecastAts);
+  }
+
+  // save()의 슬롯 단위 대체 - INSERT_SQL(ON CONFLICT DO NOTHING) 대신 UPSERT_SQL을 쓴다.
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public List<Weather> saveSlots(WeatherGrid weatherGrid, Instant forecastedAt,
+      List<WeatherForecastSlotDto> slotForecasts, Map<Instant, Weather> existingBySlot) {
+    List<Weather> built = buildSlots(weatherGrid, forecastedAt, slotForecasts, existingBySlot);
+    if (built.isEmpty()) {
+      return built;
+    }
+
+    jdbcTemplate.batchUpdate(UPSERT_SQL, new BatchPreparedStatementSetter() {
+      @Override
+      public void setValues(PreparedStatement ps, int i) throws SQLException {
+        Weather weather = built.get(i);
+        ps.setObject(1, UUID.randomUUID());
+        ps.setObject(2, weatherGrid.getId());
+        ps.setTimestamp(3, Timestamp.from(forecastedAt));
+        ps.setTimestamp(4, Timestamp.from(weather.getForecastAt()));
+        ps.setString(5, weather.getSkyStatus().name());
+        ps.setString(6, weather.getPrecipitationType().name());
+        ps.setDouble(7, weather.getPrecipitationAmount());
+        ps.setDouble(8, weather.getPrecipitationProbability());
+        ps.setDouble(9, weather.getHumidityCurrent());
+        ps.setObject(10, weather.getHumidityCompared(), Types.DOUBLE);
+        ps.setDouble(11, weather.getTemperatureCurrent());
+        ps.setObject(12, weather.getTemperatureCompared(), Types.DOUBLE);
+        ps.setDouble(13, weather.getTemperatureMin());
+        ps.setDouble(14, weather.getTemperatureMax());
+        ps.setDouble(15, weather.getWindSpeed());
+        ps.setString(16, weather.getWindAsWord().name());
+        ps.setObject(17, weather.getBaselineTemperatureCurrent(), Types.DOUBLE);
+        ps.setString(18, weather.getBaselinePrecipitationType().name());
+        ps.setObject(19, weather.getBaselinePrecipitationProbability(), Types.DOUBLE);
+        ps.setObject(20, weather.getBaselinePrecipitationAmount(), Types.DOUBLE);
       }
 
       @Override
