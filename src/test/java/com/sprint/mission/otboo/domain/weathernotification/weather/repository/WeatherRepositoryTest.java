@@ -46,7 +46,7 @@ class WeatherRepositoryTest {
       double temperatureCurrent) {
     return Weather.create(weatherGrid, forecastedAt, forecastAt, SkyStatus.CLEAR,
         PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, temperatureCurrent, 0.0, 25.0, 31.0, 2.5,
-        WindStrength.WEAK);
+        WindStrength.WEAK, temperatureCurrent, PrecipitationType.NONE, 0.0, 0.0);
   }
 
   @Nested
@@ -74,7 +74,11 @@ class WeatherRepositoryTest {
           25.0,
           31.0,
           2.5,
-          WindStrength.WEAK
+          WindStrength.WEAK,
+          28.0,
+          PrecipitationType.NONE,
+          0.0,
+          0.0
       );
 
       Weather saved = weatherRepository.save(weather);
@@ -88,6 +92,10 @@ class WeatherRepositoryTest {
       assertThat(found.get().getSkyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(found.get().getTemperatureCurrent()).isEqualTo(28.0);
       assertThat(found.get().getCreatedAt()).isNotNull();
+      assertThat(found.get().getBaselineTemperatureCurrent()).isEqualTo(28.0);
+      assertThat(found.get().getBaselinePrecipitationType()).isEqualTo(PrecipitationType.NONE);
+      assertThat(found.get().getBaselinePrecipitationProbability()).isEqualTo(0.0);
+      assertThat(found.get().getBaselinePrecipitationAmount()).isEqualTo(0.0);
     }
 
     @Test
