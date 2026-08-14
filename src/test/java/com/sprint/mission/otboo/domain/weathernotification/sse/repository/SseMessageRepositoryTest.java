@@ -1,6 +1,8 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
@@ -157,6 +159,38 @@ class SseMessageRepositoryTest {
       assertThat(repository.findAllAfter(expired.id(), userId)).isEmpty();
       // 보관 기간 내 메시지는 그대로 남아 정상 조회된다
       assertThat(repository.findAllAfter(anchor.id(), userId)).containsExactly(kept);
+    }
+  }
+
+  @Nested
+  @DisplayName("유휴 상태 만료 처리")
+  class IdleExpiration {
+
+    @Test
+    @DisplayName("저장_없이_유휴_상태로_보관_기간이_지나면_조회_시점에_만료된_메시지가_제거된다")
+    void 저장_없이_유휴_상태로_보관_기간이_지나면_조회_시점에_만료된_메시지가_제거된다() {
+      // given — save() 시점(t1, t2)엔 둘 다 보관 기간 내라 제거되지 않고, 이후 추가 save 없이
+      // 유휴 상태로 보관 기간(10분)을 넘긴 시점(idleNow)에 조회한다
+      UUID userId = UUID.randomUUID();
+      Instant t1 = Instant.parse("2026-01-01T00:00:01Z");
+      Instant t2 = Instant.parse("2026-01-01T00:00:02Z");
+      Instant idleNow = t2.plus(Duration.ofMinutes(11));
+      Clock clock = mock(Clock.class);
+      given(clock.instant()).willReturn(t1, t2, idleNow);
+      SseMessageRepository repository = new SseMessageRepository(
+          clock, new SseReplayBufferProperties(10));
+      SseMessage message1 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload1", t1);
+      SseMessage message2 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "payload2", t2);
+
+      // when
+      repository.save(message1);
+      repository.save(message2);
+
+      // then — 유휴 상태로 만료된 뒤라 추가 save 없이도 조회 시점에 제거돼 빈 리스트가 반환된다
+      assertThat(repository.findAllAfter(message1.id(), userId)).isEmpty();
+      assertThat(repository.getLatestCreatedAt()).isNull();
     }
   }
 
