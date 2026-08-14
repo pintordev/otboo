@@ -10,6 +10,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,14 +34,27 @@ public class SseService {
   private final SseEmitterRepository sseEmitterRepository;
   private final SseMessageRepository sseMessageRepository;
 
+  // 유저별 "emitter 등록 + 재생 스냅샷 확정"(connect)과 "메시지 저장 + 실시간 전송"(send)을
+  // 하나의 상태 전이로 묶기 위한 락. 이 락 없이 두 작업이 같은 유저에 대해 겹치면, 그 경계에
+  // 걸친 메시지가 실시간 전송과 재생에 모두 잡혀 중복 전송될 수 있다.
+  private final ConcurrentHashMap<UUID, ReentrantLock> connectionLocks = new ConcurrentHashMap<>();
+
   public SseEmitter connect(UUID userId, UUID lastEventId) {
     SseEmitter emitter = new SseEmitter(TIMEOUT);
     emitter.onCompletion(() -> sseEmitterRepository.remove(userId, emitter));
     emitter.onTimeout(() -> sseEmitterRepository.remove(userId, emitter));
     emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
-    sseEmitterRepository.save(userId, emitter);
-    Instant snapshotAt = sseMessageRepository.getLatestCreatedAt();
+    Instant snapshotAt;
+    ReentrantLock lock = lockFor(userId);
+    lock.lock();
+    try {
+      sseEmitterRepository.save(userId, emitter);
+      snapshotAt = sseMessageRepository.getLatestCreatedAt();
+    } finally {
+      lock.unlock();
+    }
+
     if (!ping(emitter)) {
       return emitter;
     }
@@ -59,10 +74,20 @@ public class SseService {
   public void send(List<NotificationDto> notificationDtos, String eventName) {
     notificationDtos.forEach(dto -> {
       SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
-      sseMessageRepository.save(message);
-      sseEmitterRepository.findByUserId(dto.receiverId())
-          .ifPresent(emitter -> sendToEmitter(emitter, message));
+      ReentrantLock lock = lockFor(dto.receiverId());
+      lock.lock();
+      try {
+        sseMessageRepository.save(message);
+        sseEmitterRepository.findByUserId(dto.receiverId())
+            .ifPresent(emitter -> sendToEmitter(emitter, message));
+      } finally {
+        lock.unlock();
+      }
     });
+  }
+
+  private ReentrantLock lockFor(UUID userId) {
+    return connectionLocks.computeIfAbsent(userId, id -> new ReentrantLock());
   }
 
   public void disconnect(UUID userId) {
