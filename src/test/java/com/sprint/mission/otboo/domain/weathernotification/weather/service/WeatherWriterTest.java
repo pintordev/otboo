@@ -170,6 +170,8 @@ class WeatherWriterTest {
       Instant forecastedAt = Instant.parse("2026-07-27T08:00:00Z");
       DailyWeatherForecastDto day1 = FIXTURE_MONKEY.giveMeBuilder(DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
           .sample();
       Instant forecastAt1 = day1.date().atStartOfDay(KST).toInstant();
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
