@@ -3,6 +3,10 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -17,7 +21,7 @@ class SseMessageRepositoryTest {
 
   @BeforeEach
   void setUp() {
-    sseMessageRepository = new SseMessageRepository();
+    sseMessageRepository = new SseMessageRepository(Clock.systemUTC(), 10);
   }
 
   @Nested
@@ -99,39 +103,50 @@ class SseMessageRepositoryTest {
     }
 
     @Test
-    @DisplayName("lastEventId가_큐에_없으면_저장된_메시지_전체를_해당_유저_기준으로_반환한다")
-    void lastEventId가_큐에_없으면_저장된_메시지_전체를_해당_유저_기준으로_반환한다() {
+    @DisplayName("lastEventId가_evict되어_큐에_없으면_빈_리스트를_반환한다")
+    void lastEventId가_evict되어_큐에_없으면_빈_리스트를_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
       SseMessage message = new SseMessage(Set.of(userId), "notifications", "payload");
       sseMessageRepository.save(message);
 
-      // when
+      // when — 존재하지 않는(=evict된) lastEventId로 조회
       List<SseMessage> result = sseMessageRepository.findAllAfter(UUID.randomUUID(), userId);
 
-      // then
-      assertThat(result).containsExactly(message);
+      // then — 못 받은 게 있을 수 있으니 가진 걸 다 돌려주는 대신 빈 리스트로 재전송을 막는다
+      assertThat(result).isEmpty();
     }
   }
 
   @Nested
-  @DisplayName("최대 크기 초과 시 eviction")
+  @DisplayName("보관 기간 초과 시 eviction")
   class Eviction {
 
     @Test
-    @DisplayName("최대_크기를_초과하면_가장_오래된_메시지부터_제거해_최대_1000건만_유지한다")
-    void 최대_크기를_초과하면_가장_오래된_메시지부터_제거해_최대_1000건만_유지한다() {
+    @DisplayName("보관_기간이_지난_메시지는_저장_시점에_제거되고_그_이후_메시지는_유지된다")
+    void 보관_기간이_지난_메시지는_저장_시점에_제거되고_그_이후_메시지는_유지된다() {
       // given
       UUID userId = UUID.randomUUID();
-      for (int i = 0; i < 1001; i++) {
-        sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "payload-" + i));
-      }
+      Instant now = Instant.parse("2026-01-01T00:20:00Z");
+      Clock fixedClock = Clock.fixed(now, ZoneOffset.UTC);
+      SseMessageRepository repository = new SseMessageRepository(fixedClock, 10);
 
-      // when — 존재하지 않는 lastEventId를 넘겨 큐 전체를 재생 대상으로 조회
-      List<SseMessage> result = sseMessageRepository.findAllAfter(UUID.randomUUID(), userId);
+      SseMessage expired = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "old", now.minus(Duration.ofMinutes(11)));
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", now.minus(Duration.ofMinutes(6)));
+      SseMessage kept = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "kept", now.minus(Duration.ofMinutes(1)));
 
-      // then
-      assertThat(result).hasSize(1000);
+      // when
+      repository.save(expired);
+      repository.save(anchor);
+      repository.save(kept);
+
+      // then — 보관 기간(10분)이 지난 메시지는 제거돼 그 id로 더 이상 조회할 수 없다
+      assertThat(repository.findAllAfter(expired.id(), userId)).isEmpty();
+      // 보관 기간 내 메시지는 그대로 남아 정상 조회된다
+      assertThat(repository.findAllAfter(anchor.id(), userId)).containsExactly(kept);
     }
   }
 }
