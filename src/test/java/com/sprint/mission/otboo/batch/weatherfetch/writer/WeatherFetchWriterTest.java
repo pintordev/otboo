@@ -96,6 +96,57 @@ class WeatherFetchWriterTest {
     }
 
     @Test
+    @DisplayName("upsert_SQL은_forecast_at만으로_충돌을_판정하고_baseline_컬럼을_DO_UPDATE_SET에서_제외한다")
+    void upsert_SQL은_forecast_at만으로_충돌을_판정하고_baseline_컬럼을_DO_UPDATE_SET에서_제외한다() {
+      // given
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weather(grid))));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+
+      // when
+      writer.write(chunk);
+
+      // then
+      ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+      verify(jdbcTemplate).batchUpdate(sqlCaptor.capture(), any(BatchPreparedStatementSetter.class));
+      assertThat(sqlCaptor.getValue())
+          .contains("ON CONFLICT (weather_grid_id, forecast_at) DO UPDATE SET")
+          .doesNotContain("baseline_temperature_current = EXCLUDED")
+          .doesNotContain("baseline_precipitation_type = EXCLUDED")
+          .doesNotContain("baseline_precipitation_probability = EXCLUDED")
+          .doesNotContain("baseline_precipitation_amount = EXCLUDED");
+    }
+
+    @Test
+    @DisplayName("baseline_파라미터를_PreparedStatement에_바인딩한다")
+    void baseline_파라미터를_PreparedStatement에_바인딩한다() throws Exception {
+      // given
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Weather weatherWithBaseline = Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
+          60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, 26.0, PrecipitationType.RAIN,
+          40.0, 1.5);
+      Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weatherWithBaseline)));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+
+      // when
+      writer.write(chunk);
+
+      // then
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate).batchUpdate(anyString(), setterCaptor.capture());
+      PreparedStatement preparedStatement = mock(PreparedStatement.class);
+      setterCaptor.getValue().setValues(preparedStatement, 0);
+      verify(preparedStatement).setObject(17, 26.0, Types.DOUBLE);
+      verify(preparedStatement).setString(18, "RAIN");
+      verify(preparedStatement).setObject(19, 40.0, Types.DOUBLE);
+      verify(preparedStatement).setObject(20, 1.5, Types.DOUBLE);
+    }
+
+    @Test
     @DisplayName("비교값이_null인_Weather는_JDBC에도_NULL로_바인딩한다")
     void 비교값이_null인_Weather는_JDBC에도_NULL로_바인딩한다() throws Exception {
       // given
