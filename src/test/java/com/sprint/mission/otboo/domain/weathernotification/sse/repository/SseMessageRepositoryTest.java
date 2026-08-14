@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,7 +22,8 @@ class SseMessageRepositoryTest {
 
   @BeforeEach
   void setUp() {
-    sseMessageRepository = new SseMessageRepository(Clock.systemUTC(), 10);
+    sseMessageRepository = new SseMessageRepository(
+        Clock.systemUTC(), new SseReplayBufferProperties(10));
   }
 
   @Nested
@@ -129,7 +131,8 @@ class SseMessageRepositoryTest {
       UUID userId = UUID.randomUUID();
       Instant now = Instant.parse("2026-01-01T00:20:00Z");
       Clock fixedClock = Clock.fixed(now, ZoneOffset.UTC);
-      SseMessageRepository repository = new SseMessageRepository(fixedClock, 10);
+      SseMessageRepository repository = new SseMessageRepository(
+          fixedClock, new SseReplayBufferProperties(10));
 
       SseMessage expired = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
           "old", now.minus(Duration.ofMinutes(11)));

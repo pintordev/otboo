@@ -1,6 +1,9 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
+import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -8,42 +11,36 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class SseMessageRepository {
 
-  private static final int MAX_SIZE = 1_000;
-
   private final ConcurrentLinkedDeque<UUID> eventIdQueue = new ConcurrentLinkedDeque<>();
   private final Map<UUID, SseMessage> messages = new ConcurrentHashMap<>();
-  private final AtomicInteger size = new AtomicInteger();
+  private final Clock clock;
+  private final Duration retention;
+
+  public SseMessageRepository(Clock clock, SseReplayBufferProperties replayBufferProperties) {
+    this.clock = clock;
+    this.retention = Duration.ofMinutes(replayBufferProperties.retentionMinutes());
+  }
 
   public UUID save(SseMessage message) {
     messages.put(message.id(), message);
     eventIdQueue.addLast(message.id());
-    if (size.incrementAndGet() > MAX_SIZE) {
-      UUID evicted = eventIdQueue.pollFirst();
-      if (evicted != null) {
-        messages.remove(evicted);
-        size.decrementAndGet();
-      }
-    }
+    evictExpired();
     return message.id();
   }
 
   public List<SseMessage> findAllAfter(UUID lastEventId, UUID userId) {
-    if (lastEventId == null) {
+    if (lastEventId == null || !messages.containsKey(lastEventId)) {
       return List.of();
     }
-    boolean found = messages.containsKey(lastEventId);
-    Stream<UUID> ids = eventIdQueue.stream();
-    if (found) {
-      ids = ids.dropWhile(id -> !id.equals(lastEventId)).skip(1);
-    }
-    return ids.map(messages::get)
+    return eventIdQueue.stream()
+        .dropWhile(id -> !id.equals(lastEventId))
+        .skip(1)
+        .map(messages::get)
         .filter(Objects::nonNull)
         .filter(message -> message.isTargetedTo(userId))
         .toList();
@@ -56,5 +53,19 @@ public class SseMessageRepository {
     }
     SseMessage latest = messages.get(latestId);
     return latest != null ? latest.createdAt() : null;
+  }
+
+  private void evictExpired() {
+    Instant threshold = Instant.now(clock).minus(retention);
+    UUID oldestId;
+    while ((oldestId = eventIdQueue.peekFirst()) != null) {
+      SseMessage oldest = messages.get(oldestId);
+      if (oldest == null || oldest.createdAt().isBefore(threshold)) {
+        eventIdQueue.pollFirst();
+        messages.remove(oldestId);
+      } else {
+        break;
+      }
+    }
   }
 }
