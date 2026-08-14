@@ -188,6 +188,60 @@ class KmaForecastParserTest {
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureMin).containsOnly(17.0);
       assertThat(result).extracting(WeatherForecastSlotDto::temperatureMax).containsOnly(19.0);
     }
+
+    @Test
+    @DisplayName("SKY_미상_코드는_CLEAR로_대체하고_경고_로그를_남긴다")
+    void SKY_미상_코드는_CLEAR로_대체하고_경고_로그를_남긴다() {
+      // given
+      List<Item> items = List.of(
+          item("TMP", "20260803", "0000", "17.0"),
+          item("TMP", "20260803", "0300", "18.0"),
+          item("TMP", "20260803", "0600", "19.0"),
+          item("TMP", "20260803", "0900", "18.5"),
+          item("SKY", "20260803", "0000", "9")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      WeatherForecastSlotDto slot0000 = result.stream()
+          .filter(dto -> dto.temperatureCurrent() == 17.0).findFirst().orElseThrow();
+      assertThat(slot0000.skyStatus()).isEqualTo(SkyStatus.CLEAR);
+      assertThat(appender.list)
+          .anySatisfy(logEvent -> {
+            assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
+            assertThat(logEvent.getFormattedMessage()).contains("SKY").contains("9");
+          });
+    }
+
+    @Test
+    @DisplayName("PTY_미상_코드는_NONE으로_대체하고_경고_로그를_남긴다")
+    void PTY_미상_코드는_NONE으로_대체하고_경고_로그를_남긴다() {
+      // given
+      List<Item> items = List.of(
+          item("TMP", "20260803", "0000", "17.0"),
+          item("TMP", "20260803", "0300", "18.0"),
+          item("TMP", "20260803", "0600", "19.0"),
+          item("TMP", "20260803", "0900", "18.5"),
+          item("PTY", "20260803", "0000", "9")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      WeatherForecastSlotDto slot0000 = result.stream()
+          .filter(dto -> dto.temperatureCurrent() == 17.0).findFirst().orElseThrow();
+      assertThat(slot0000.precipitationType()).isEqualTo(PrecipitationType.NONE);
+      assertThat(appender.list)
+          .anySatisfy(logEvent -> {
+            assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
+            assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
+          });
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
