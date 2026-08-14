@@ -94,7 +94,7 @@ class WeatherWriterTest {
       Weather yesterdayWeather = Weather.create(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK);
+          WindStrength.WEAK, null, null, null, null);
       DailyWeatherForecastDto todayForecast = FIXTURE_MONKEY.giveMeBuilder(
               DailyWeatherForecastDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
@@ -137,10 +137,10 @@ class WeatherWriterTest {
       Instant forecastAt2 = day2.date().atStartOfDay(KST).toInstant();
       Weather persisted1 = Weather.create(weatherGrid, forecastedAt, forecastAt1,
           day1.skyStatus(), day1.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-          WindStrength.WEAK);
+          WindStrength.WEAK, null, null, null, null);
       Weather persisted2 = Weather.create(weatherGrid, forecastedAt, forecastAt2,
           day2.skyStatus(), day2.precipitationType(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-          WindStrength.WEAK);
+          WindStrength.WEAK, null, null, null, null);
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willReturn(new int[]{1, 1});
       given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(

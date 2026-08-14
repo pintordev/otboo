@@ -85,7 +85,7 @@ class WeatherRefresherTest {
 
       Weather savedWeather = Weather.create(weatherGrid, BASE_TIME.toInstant(),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherWriter.save(weatherGrid, BASE_TIME.toInstant(), List.of(todayForecast),
           Map.of())).willReturn(List.of(savedWeather));
 
@@ -104,7 +104,7 @@ class WeatherRefresherTest {
       Weather yesterdayWeather = Weather.create(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK);
+          WindStrength.WEAK, null, null, null, null);
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 
@@ -151,7 +151,7 @@ class WeatherRefresherTest {
 
       Weather builtWeather = Weather.create(weatherGrid, BASE_TIME.toInstant(),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherWriter.build(weatherGrid, BASE_TIME.toInstant(), List.of(todayForecast),
           Map.of())).willReturn(List.of(builtWeather));
 
@@ -170,7 +170,7 @@ class WeatherRefresherTest {
       Weather yesterdayWeather = Weather.create(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK);
+          WindStrength.WEAK, null, null, null, null);
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 

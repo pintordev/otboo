@@ -81,7 +81,7 @@ class WeatherServiceTest {
       Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
       Weather todayWeather = Weather.create(weatherGrid, freshForecastedAt,
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE,
-          0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+          0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(todayWeather));
 
@@ -121,7 +121,7 @@ class WeatherServiceTest {
 
       Weather savedWeather = Weather.create(createdWeatherGrid, LATEST_BASE_TIME.toInstant(),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherRefresher.refresh(createdWeatherGrid, new KmaGridPoint(60, 127),
           LATEST_BASE_TIME)).willReturn(List.of(savedWeather));
 
@@ -154,7 +154,7 @@ class WeatherServiceTest {
       // 어제(D-1) 데이터만 존재, 오늘 데이터는 없음(stale)
       Weather yesterdayWeather = Weather.create(weatherGrid, Instant.parse("2026-07-26T08:00:00Z"),
           Instant.parse("2026-07-26T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK);
+          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 
@@ -183,17 +183,17 @@ class WeatherServiceTest {
       // 어제(D-1) 데이터만 존재, 오늘 데이터는 없음(stale)
       Weather yesterdayWeather = Weather.create(weatherGrid, Instant.parse("2026-07-26T08:00:00Z"),
           Instant.parse("2026-07-26T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK);
+          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherRepository.findLatestRevisions(eq(weatherGrid), any()))
           .willReturn(List.of(yesterdayWeather));
 
       // WeatherRefresher가 라이브 재조회 결과에 어제 데이터를 포함해 반환해도
       Weather pastWeather = Weather.create(weatherGrid, LATEST_BASE_TIME.toInstant(),
           Instant.parse("2026-07-26T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK);
+          0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
       Weather todayWeather = Weather.create(weatherGrid, LATEST_BASE_TIME.toInstant(),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK);
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
       given(weatherRefresher.refresh(weatherGrid, new KmaGridPoint(60, 127), LATEST_BASE_TIME))
           .willReturn(List.of(pastWeather, todayWeather));
 

@@ -87,7 +87,7 @@ class WeatherSuddenChangeNotifierTest {
       double temperature) {
     return Weather.create(grid, forecastedAt, forecastAt, SkyStatus.CLEAR,
         PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, temperature, 0.0, 25.0, 31.0, 2.5,
-        WindStrength.WEAK);
+        WindStrength.WEAK, null, null, null, null);
   }
 
   private Profile profileWithLocation(List<String> locationNames) {

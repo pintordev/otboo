@@ -66,7 +66,12 @@ public class WeatherWriter {
           dto.date().atStartOfDay(KST).toInstant(), dto.skyStatus(), dto.precipitationType(),
           dto.precipitationAmount(), dto.precipitationProbability(), dto.humidityCurrent(),
           humidityCompared, dto.temperatureCurrent(), temperatureCompared, dto.temperatureMin(),
-          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed())));
+          dto.temperatureMax(), dto.windSpeed(), toWindStrength(dto.windSpeed()),
+          // baseline_* - 매번 현재 값 그대로 전달. upsert 전환 전까지는 INSERT뿐이라
+          // baseline이 곧 최초값이지만, upsert SQL이 baseline_*을 SET 목록에서 뺀 뒤부터는
+          // 이미 존재하는 슬롯 갱신 시 이 인자가 무시되고 기존 baseline이 유지된다.
+          dto.temperatureCurrent(), dto.precipitationType(), dto.precipitationProbability(),
+          dto.precipitationAmount()));
 
       previousTemp = dto.temperatureCurrent();
       previousHumidity = dto.humidityCurrent();
