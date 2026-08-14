@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmi
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,17 +34,17 @@ public class SseService {
     emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
     sseEmitterRepository.save(userId, emitter);
-    UUID connectionTimeLatestId = sseMessageRepository.getLatestEventId();
+    Instant snapshotAt = sseMessageRepository.getLatestCreatedAt();
     if (!ping(emitter)) {
       return emitter;
     }
 
     List<SseMessage> missed = sseMessageRepository.findAllAfter(lastEventId, userId);
     for (SseMessage message : missed) {
-      if (!sendToEmitter(emitter, message)) {
+      if (snapshotAt != null && message.createdAt().isAfter(snapshotAt)) {
         break;
       }
-      if (message.id().equals(connectionTimeLatestId)) {
+      if (!sendToEmitter(emitter, message)) {
         break;
       }
     }

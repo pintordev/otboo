@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,7 +49,12 @@ public class SseMessageRepository {
         .toList();
   }
 
-  public UUID getLatestEventId() {
-    return eventIdQueue.peekLast();
+  public Instant getLatestCreatedAt() {
+    UUID latestId = eventIdQueue.peekLast();
+    if (latestId == null) {
+      return null;
+    }
+    SseMessage latest = messages.get(latestId);
+    return latest != null ? latest.createdAt() : null;
   }
 }
