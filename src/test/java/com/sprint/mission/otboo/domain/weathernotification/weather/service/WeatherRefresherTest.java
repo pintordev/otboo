@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -24,6 +27,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherRefresherTest {
@@ -50,6 +55,8 @@ class WeatherRefresherTest {
   private WeatherWriter weatherWriter;
 
   private WeatherRefresher weatherRefresher;
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
 
   @BeforeEach
   void setUp() {
@@ -57,6 +64,16 @@ class WeatherRefresherTest {
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
     weatherRefresher = new WeatherRefresher(weatherRepository, kmaForecastFetcher, weatherWriter,
         clock);
+    logger = (Logger) LoggerFactory.getLogger(WeatherRefresher.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    logger.detachAppender(appender);
+    appender.stop();
   }
 
 
@@ -123,6 +140,25 @@ class WeatherRefresherTest {
           eq(List.of(todaySlot)), existingBySlotCaptor.capture());
       assertThat(existingBySlotCaptor.getValue())
           .containsEntry(Instant.parse("2026-07-26T00:00:00Z"), yesterdaySlot);
+    }
+
+    @Test
+    @DisplayName("호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다")
+    void 호출_로그에_격자_좌표_등_위치_정보를_남기지_않는다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
+          any())).willReturn(List.of());
+      given(kmaForecastFetcher.fetchSlots(GRID, BASE_TIME)).willReturn(List.of());
+      given(weatherWriter.saveSlots(any(), any(), any(), any())).willReturn(List.of());
+
+      // when
+      weatherRefresher.refreshSlots(weatherGrid, GRID, BASE_TIME);
+
+      // then - conventions.md 11번: 위치 정보(위·경도 등)는 로그에 그대로 남기지 않는다
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .noneMatch(message -> message.contains("nx=") || message.contains("ny="));
     }
   }
 
