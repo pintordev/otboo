@@ -67,11 +67,25 @@ public class WeatherSuddenChangeChunkProcessor {
 
     int notified = 0;
     for (Weather target : targets) {
+      if (!hasCompleteBaseline(target)) {
+        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.getId());
+        continue;
+      }
       if (evaluateD0(target)) {
         notified++;
       }
     }
     return notified;
+  }
+
+  // 정상 쓰기 경로(WeatherWriter.buildSlots())에서는 baseline_*이 첫 insert 때 항상 함께
+  // 채워지므로 실제로는 도달하지 않지만, WeatherChangeSnapshot.baselineOf()의 언박싱
+  // NPE를 방어한다.
+  private boolean hasCompleteBaseline(Weather weather) {
+    return weather.getBaselineTemperatureCurrent() != null
+        && weather.getBaselinePrecipitationType() != null
+        && weather.getBaselinePrecipitationProbability() != null
+        && weather.getBaselinePrecipitationAmount() != null;
   }
 
   // baseTime과 forecastAt이 정확히 일치해 이 슬롯은 하루에 한 번만 D0 평가된다 - 리셋 여부가
