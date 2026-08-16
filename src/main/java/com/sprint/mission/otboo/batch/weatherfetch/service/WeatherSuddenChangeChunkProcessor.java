@@ -165,9 +165,10 @@ public class WeatherSuddenChangeChunkProcessor {
     List<WeatherD1Baseline> baselineRows = weatherD1BaselineRepository
         .findAllByWeatherGridIdInAndTargetDate(gridIds, d1Date);
     if (baselineRows.isEmpty()) {
-      chunk.forEach(grid -> log.warn(
-          "D1 baseline 스냅샷 없음: grid={}, date={} - 어제 20시 캡처가 안 됐거나 슬롯 결측",
-          grid.getId(), d1Date));
+      // 원인은 하나(어제 20시 캡처 누락)인데 그리드 수만큼 반복 로그를 남기면 안 되므로
+      // 청크당 집계 로그 1줄로 남긴다.
+      log.warn("D1 baseline 스냅샷 없음: 청크 내 격자 {}건 전체, date={} - 어제 20시 캡처가 "
+          + "안 됐거나 슬롯 결측", chunk.size(), d1Date);
       return 0;
     }
     Map<UUID, WeatherD1Baseline> baselineByGridId = baselineRows.stream()
