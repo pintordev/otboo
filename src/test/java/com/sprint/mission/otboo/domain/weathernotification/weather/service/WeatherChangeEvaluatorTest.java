@@ -122,6 +122,20 @@ class WeatherChangeEvaluatorTest {
     }
 
     @Test
+    @DisplayName("부동소수점_오차로_정확히_임계값만큼_변해도_미감지되지_않는다")
+    void 부동소수점_오차로_정확히_임계값만큼_변해도_미감지되지_않는다() {
+      // 1.1 -> 4.1은 사람 눈엔 정확히 3.0도 차이지만, double 뺄셈은 2.9999999999999996을
+      // 낸다(PR #131 리뷰) - 정밀도 정규화 없이 그대로 >=로 비교하면 미감지된다
+      WeatherChangeSnapshot previous = snapshotOf(1.1, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherChangeSnapshot latest = snapshotOf(4.1, PrecipitationType.NONE, 0.0, 0.0);
+
+      Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
+
+      assertThat(result).isPresent();
+      assertThat(result.get().reasons()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("어느_조건도_넘지_않으면_감지되지_않는다")
     void 어느_조건도_넘지_않으면_감지되지_않는다() {
       WeatherChangeSnapshot previous = snapshotOf(20.0, PrecipitationType.RAIN, 50.0, 5.0);
