@@ -251,6 +251,39 @@ class WeatherRepositoryTest {
   }
 
   @Nested
+  @DisplayName("FindAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan")
+  class FindAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan {
+
+    @Test
+    @DisplayName("여러_격자의_from_이상_to_미만_구간_슬롯을_한_번에_반환한다")
+    void 여러_격자의_from_이상_to_미만_구간_슬롯을_한_번에_반환한다() {
+      WeatherGrid targetGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid otherTargetGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      WeatherGrid excludedGrid = weatherGridRepository.save(WeatherGrid.create(62, 129));
+      testEntityManager.flush();
+
+      Instant from = Instant.parse("2026-07-29T00:00:00Z");
+      Instant to = Instant.parse("2026-07-30T00:00:00Z");
+      Instant within = Instant.parse("2026-07-29T03:00:00Z");
+      Weather matched1 = weatherRepository.save(
+          weatherOf(targetGrid, Instant.parse("2026-07-27T08:00:00Z"), within, 20.0));
+      Weather matched2 = weatherRepository.save(
+          weatherOf(otherTargetGrid, Instant.parse("2026-07-27T08:00:00Z"), within, 21.0));
+      weatherRepository.save(
+          weatherOf(excludedGrid, Instant.parse("2026-07-27T08:00:00Z"), within, 22.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<Weather> result = weatherRepository
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+              List.of(targetGrid.getId(), otherTargetGrid.getId()), from, to);
+
+      assertThat(result).extracting(Weather::getId)
+          .containsExactlyInAnyOrder(matched1.getId(), matched2.getId());
+    }
+  }
+
+  @Nested
   @DisplayName("FindGridsUpdatedAt")
   class FindGridsUpdatedAt {
 
