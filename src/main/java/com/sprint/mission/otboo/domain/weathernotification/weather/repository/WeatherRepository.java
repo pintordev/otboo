@@ -2,12 +2,14 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.querydsl.WeatherCustomRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -44,4 +46,16 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
 
   @Query("SELECT DISTINCT w.weatherGrid FROM Weather w WHERE w.forecastedAt = :forecastedAt")
   List<WeatherGrid> findGridsUpdatedAt(@Param("forecastedAt") Instant forecastedAt);
+
+  // 급변 알림 D0 발행 후 baseline 리셋 전용(#163) - baseline_* 컬럼만 갱신, current 컬럼은 건드리지 않는다.
+  @Modifying
+  @Query("UPDATE Weather w SET w.baselineTemperatureCurrent = :temperatureCurrent, "
+      + "w.baselinePrecipitationType = :precipitationType, "
+      + "w.baselinePrecipitationProbability = :precipitationProbability, "
+      + "w.baselinePrecipitationAmount = :precipitationAmount WHERE w.id = :id")
+  void updateBaseline(@Param("id") UUID id,
+      @Param("temperatureCurrent") double temperatureCurrent,
+      @Param("precipitationType") PrecipitationType precipitationType,
+      @Param("precipitationProbability") double precipitationProbability,
+      @Param("precipitationAmount") double precipitationAmount);
 }
