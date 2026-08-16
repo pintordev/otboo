@@ -153,7 +153,7 @@ class WeatherD1BaselineRepositoryTest {
       testEntityManager.clear();
 
       List<WeatherD1BaselineRetentionItem> result = weatherD1BaselineRepository
-          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 10);
+          .findForRetention(cutoff, LocalDate.EPOCH, new UUID(0L, 0L), 10);
 
       assertThat(result).extracting(WeatherD1BaselineRetentionItem::id)
           .containsExactly(overdue.getId());
@@ -176,13 +176,13 @@ class WeatherD1BaselineRepositoryTest {
       testEntityManager.clear();
 
       List<WeatherD1BaselineRetentionItem> both = weatherD1BaselineRepository
-          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 2);
+          .findForRetention(cutoff, LocalDate.EPOCH, new UUID(0L, 0L), 2);
       assertThat(both).hasSize(2);
       UUID expectedFirstId = both.get(0).id();
       UUID expectedSecondId = both.get(1).id();
 
       List<WeatherD1BaselineRetentionItem> firstPage = weatherD1BaselineRepository
-          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 1);
+          .findForRetention(cutoff, LocalDate.EPOCH, new UUID(0L, 0L), 1);
 
       assertThat(firstPage).extracting(WeatherD1BaselineRetentionItem::id)
           .containsExactly(expectedFirstId);
@@ -198,7 +198,7 @@ class WeatherD1BaselineRepositoryTest {
     @DisplayName("limit이_0_이하이면_예외가_발생한다")
     void limit이_0_이하이면_예외가_발생한다() {
       assertThatThrownBy(() -> weatherD1BaselineRepository.findForRetention(
-          LocalDate.MIN, LocalDate.MIN, new UUID(0L, 0L), 0))
+          LocalDate.EPOCH, LocalDate.EPOCH, new UUID(0L, 0L), 0))
           .isInstanceOf(InvalidDataAccessApiUsageException.class)
           .hasCauseInstanceOf(IllegalArgumentException.class);
     }
