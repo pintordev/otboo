@@ -68,11 +68,12 @@ class WeatherD1BaselineRepositoryTest {
       Optional<WeatherD1Baseline> found = weatherD1BaselineRepository.findById(saved.getId());
 
       assertThat(found).isPresent();
-      assertThat(found.get().getWeatherGrid().getId()).isEqualTo(weatherGrid.getId());
-      assertThat(found.get().getTargetDate()).isEqualTo(LocalDate.parse("2026-07-29"));
-      assertThat(found.get().getHourlySnapshot()).isEqualTo(hourlySnapshot);
-      assertThat(found.get().getCreatedAt()).isNotNull();
-      assertThat(found.get().getUpdatedAt()).isNotNull();
+      WeatherD1Baseline actual = found.orElseThrow();
+      assertThat(actual.getWeatherGrid().getId()).isEqualTo(weatherGrid.getId());
+      assertThat(actual.getTargetDate()).isEqualTo(LocalDate.parse("2026-07-29"));
+      assertThat(actual.getHourlySnapshot()).isEqualTo(hourlySnapshot);
+      assertThat(actual.getCreatedAt()).isNotNull();
+      assertThat(actual.getUpdatedAt()).isNotNull();
     }
 
     @Test
@@ -120,7 +121,7 @@ class WeatherD1BaselineRepositoryTest {
           .findByWeatherGridAndTargetDate(targetGrid, targetDate);
 
       assertThat(found).isPresent();
-      assertThat(found.get().getId()).isEqualTo(matched.getId());
+      assertThat(found.orElseThrow().getId()).isEqualTo(matched.getId());
     }
 
     @Test

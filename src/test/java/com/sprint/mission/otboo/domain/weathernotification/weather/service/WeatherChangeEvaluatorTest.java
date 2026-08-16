@@ -47,7 +47,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -59,7 +59,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -71,7 +71,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -83,7 +83,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).containsExactly("강수 형태가 없음에서 비 상태로 바뀌었어요.");
+      assertThat(result.orElseThrow().reasons()).containsExactly("강수 형태가 없음에서 비 상태로 바뀌었어요.");
     }
 
     @Test
@@ -95,7 +95,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -107,7 +107,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -119,7 +119,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
@@ -133,7 +133,7 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isPresent();
-      assertThat(result.get().reasons()).hasSize(1);
+      assertThat(result.orElseThrow().reasons()).hasSize(1);
     }
 
     @Test
