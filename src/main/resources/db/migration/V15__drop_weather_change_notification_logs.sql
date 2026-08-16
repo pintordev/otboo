@@ -1,1 +1,0 @@
-DROP TABLE weather_change_notification_logs;
