@@ -106,6 +106,13 @@ class WeatherSuddenChangeNotifierTest {
   @DisplayName("HandleD0")
   class HandleD0 {
 
+    private WeatherGrid gridWithId(int x, int y) {
+      return ENTITY_FIXTURE_MONKEY.giveMeBuilder(WeatherGrid.class)
+          .set("x", x)
+          .set("y", y)
+          .sample();
+    }
+
     private Weather weatherWithBaseline(WeatherGrid grid, Instant forecastAt,
         double baselineTemperature, double currentTemperature) {
       return Weather.create(grid, D0, forecastAt, SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
@@ -117,8 +124,8 @@ class WeatherSuddenChangeNotifierTest {
     @DisplayName("그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다")
     void 그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다() {
       BaseTime baseTime = new BaseTime("20260727", "0800");
-      WeatherGrid gridA = gridOf(60, 127);
-      WeatherGrid gridB = gridOf(61, 128);
+      WeatherGrid gridA = gridWithId(60, 127);
+      WeatherGrid gridB = gridWithId(61, 128);
 
       notifier.handleD0(List.of(gridA, gridB), baseTime);
 
@@ -130,7 +137,7 @@ class WeatherSuddenChangeNotifierTest {
     @DisplayName("baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다")
     void baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다() {
       BaseTime baseTime = new BaseTime("20260727", "0800");
-      WeatherGrid grid = gridOf(60, 127);
+      WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
           baseTime.toInstant())).willReturn(List.of(target));
@@ -153,7 +160,7 @@ class WeatherSuddenChangeNotifierTest {
     @DisplayName("임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다")
     void 임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다() {
       BaseTime baseTime = new BaseTime("20260727", "0800");
-      WeatherGrid grid = gridOf(60, 127);
+      WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 20.5);
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
           baseTime.toInstant())).willReturn(List.of(target));

@@ -61,6 +61,64 @@ public class WeatherSuddenChangeNotifier {
     log.info("날씨 급변 감지 완료: 평가 격자 수={}, 알림 발행 격자 수={}", updatedGrids.size(), notifiedCount);
   }
 
+  // baseTime과 정확히 일치하는 슬롯만 그리드 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
+  // 따로 조회하지 않으므로 N+1이 없다(#163). RepresentativeSlotSelector는 여기서 필요 없다 -
+  // baseTime은 근접일 그리드와 항상 거리 0으로 정확히 일치한다.
+  int handleD0(List<WeatherGrid> updatedGrids, BaseTime baseTime) {
+    List<UUID> gridIds = updatedGrids.stream().map(WeatherGrid::getId).toList();
+    List<Weather> targets = weatherRepository
+        .findAllByWeatherGridIdInAndForecastAt(gridIds, baseTime.toInstant());
+
+    int notified = 0;
+    for (Weather target : targets) {
+      if (evaluateD0(target)) {
+        notified++;
+      }
+    }
+    return notified;
+  }
+
+  private boolean evaluateD0(Weather weather) {
+    Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
+        WeatherChangeSnapshot.baselineOf(weather), WeatherChangeSnapshot.currentOf(weather));
+
+    if (result.isPresent() && publish(weather.getWeatherGrid(), result.get())) {
+      resetBaseline(weather);
+      return true;
+    }
+    return false;
+  }
+
+  // 급변 알림을 발행하면 baseline을 지금 값으로 리셋한다 - 이후 이 슬롯을 다시 보는 일이 있어도
+  // 델타가 0부터 다시 시작한다.
+  private void resetBaseline(Weather weather) {
+    weatherRepository.updateBaseline(weather.getId(), weather.getTemperatureCurrent(),
+        weather.getPrecipitationType(), weather.getPrecipitationProbability(),
+        weather.getPrecipitationAmount());
+  }
+
+  // D0/D1이 공유하는 단순화된 발행 - notificationLog 없이 이벤트 발행만 한다.
+  private boolean publish(WeatherGrid grid, WeatherChangeEvaluator.ChangeResult result) {
+    List<Profile> profiles = profileRepository.findByLocation(grid.getX(), grid.getY());
+    if (profiles.isEmpty()) {
+      return false;
+    }
+    Map<List<String>, List<UUID>> receiverIdsByRegion = profiles.stream()
+        .collect(Collectors.groupingBy(
+            profile -> normalizedLocationNames(profile.getLocation().getLocationNames()),
+            Collectors.mapping(Profile::getId, Collectors.toList())));
+
+    for (Map.Entry<List<String>, List<UUID>> entry : receiverIdsByRegion.entrySet()) {
+      List<String> locationNames = entry.getKey();
+      String regionName = locationNames.isEmpty() ? ""
+          : locationNames.get(locationNames.size() - 1) + " ";
+      String content = regionName + String.join(" ", result.reasons());
+      eventPublisher.publishEvent(new NotificationRequestedEvent(
+          Set.copyOf(entry.getValue()), "날씨 급변", content, NotificationLevel.WARNING));
+    }
+    return true;
+  }
+
   // 23:30 회차는 D0/D1 둘 다 빠져 빈 리스트가 될 수 있다 - evaluateAndNotify()가 이를 처리한다.
   private List<Instant> resolveTargetForecastAts(BaseTime baseTime, LocalDate today) {
     List<Instant> targets = new ArrayList<>();
