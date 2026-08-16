@@ -138,4 +138,35 @@ public class WeatherSuddenChangeNotifier {
             () -> weatherD1BaselineRepository.save(
                 WeatherD1Baseline.create(grid, d2Date, hourlySnapshot, clock.instant())));
   }
+
+  // 어제 20시에 captureD2Snapshot()이 캡처해둔 D1 baseline과 오늘 24개 시각을 각각 독립적으로
+  // 비교한다 - 평균/최댓값 요약 없이 시각별로 그대로 비교(#163).
+  int compareD1AndNotify(WeatherGrid grid, LocalDate d1Date) {
+    Optional<WeatherD1Baseline> baselineRow =
+        weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d1Date);
+    if (baselineRow.isEmpty()) {
+      log.warn("D1 baseline 스냅샷 없음: grid={}, date={} - 어제 20시 캡처가 안 됐거나 슬롯 결측",
+          grid.getId(), d1Date);
+      return 0;
+    }
+    Map<Instant, WeatherChangeSnapshot> baselineByHour = baselineRow.get().getHourlySnapshot();
+    List<Weather> currentSlots = weatherRepository
+        .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(grid,
+            d1Date.atStartOfDay(KST).toInstant(), d1Date.plusDays(1).atStartOfDay(KST).toInstant());
+
+    int notified = 0;
+    for (Weather current : currentSlots) {
+      WeatherChangeSnapshot baseline = baselineByHour.get(current.getForecastAt());
+      if (baseline == null) {
+        continue; // 어제는 없었던 슬롯(경계 케이스) - 비교 스킵
+      }
+      Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
+          baseline, WeatherChangeSnapshot.currentOf(current));
+      if (result.isPresent() && publish(grid, result.get())) {
+        notified++;
+      }
+    }
+    weatherD1BaselineRepository.delete(baselineRow.get());
+    return notified;
+  }
 }
