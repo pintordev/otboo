@@ -25,6 +25,11 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   List<Weather> findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
       WeatherGrid weatherGrid, Instant forecastedAt, List<Instant> forecastAts);
 
+  // 급변 알림 D0 전용(#163) - baseTime과 forecast_at이 항상 거리 0으로 정확히 일치하므로
+  // RepresentativeSlotSelector 없이 그리드 목록 전체를 IN 절 하나로 묶어 쿼리 1번에 끝낸다.
+  List<Weather> findAllByWeatherGridIdInAndForecastAt(List<UUID> weatherGridIds,
+      Instant forecastAt);
+
   @Query(value = """
       SELECT * FROM (
         SELECT *, ROW_NUMBER() OVER (PARTITION BY forecast_at ORDER BY forecasted_at DESC) AS rn
