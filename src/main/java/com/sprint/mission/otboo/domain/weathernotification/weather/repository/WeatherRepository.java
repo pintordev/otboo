@@ -36,17 +36,10 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   List<Weather> findAllByWeatherGridIdInAndForecastAt(List<UUID> weatherGridIds,
       Instant forecastAt);
 
-  @Query(value = """
-      SELECT * FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY forecast_at ORDER BY forecasted_at DESC) AS rn
-        FROM weathers
-        WHERE weather_grid_id = :#{#weatherGrid.id} AND forecast_at IN (:forecastAts)
-      ) ranked
-      WHERE rn <= 2
-      ORDER BY forecast_at, forecasted_at DESC
-      """, nativeQuery = true)
-  List<Weather> findRecentTwoRevisions(@Param("weatherGrid") WeatherGrid weatherGrid,
-      @Param("forecastAts") List<Instant> forecastAts);
+  // D1 급변 알림 청크 배치 전용(#163) - 청크 안 그리드 전체의 D0/D1 대상 날짜 24시간 슬롯을
+  // 그리드별 개별 조회 대신 IN 절 하나로 묶어 쿼리 1번에 끝낸다.
+  List<Weather> findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      List<UUID> weatherGridIds, Instant from, Instant to);
 
   @Query("SELECT DISTINCT w.weatherGrid FROM Weather w WHERE w.forecastedAt = :forecastedAt")
   List<WeatherGrid> findGridsUpdatedAt(@Param("forecastedAt") Instant forecastedAt);
