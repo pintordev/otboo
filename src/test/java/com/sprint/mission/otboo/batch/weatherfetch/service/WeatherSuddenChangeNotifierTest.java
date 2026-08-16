@@ -402,6 +402,70 @@ class WeatherSuddenChangeNotifierTest {
 
       verify(weatherD1BaselineRepository).delete(baselineRow);
     }
+
+    @Test
+    @DisplayName("오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다")
+    void 오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate today = LocalDate.parse("2026-07-27");
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+      given(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
+          .willReturn(Optional.empty());
+      given(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d1Date))
+          .willReturn(Optional.empty());
+      given(weatherRepository
+          .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(), any(),
+              any()))
+          .willReturn(List.of());
+
+      notifier.handleD1(List.of(grid), today);
+
+      verify(weatherRepository).findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          grid, d2Date.atStartOfDay(KST).toInstant(), d2Date.plusDays(1).atStartOfDay(KST).toInstant());
+      verify(weatherD1BaselineRepository).findByWeatherGridAndTargetDate(grid, d1Date);
+    }
+
+    @Test
+    @DisplayName("여러_그리드의_알림_건수를_합산해서_반환한다")
+    void 여러_그리드의_알림_건수를_합산해서_반환한다() {
+      WeatherGrid notifiedGrid = gridWithId(60, 127);
+      WeatherGrid quietGrid = gridWithId(61, 128);
+      LocalDate today = LocalDate.parse("2026-07-27");
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+      given(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(any(), eq(d2Date)))
+          .willReturn(Optional.empty());
+      given(weatherRepository
+          .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(),
+              eq(d2Date.atStartOfDay(KST).toInstant()), any()))
+          .willReturn(List.of());
+
+      Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
+      WeatherChangeSnapshot baselineHour0 =
+          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherD1Baseline baselineRow = WeatherD1Baseline.create(notifiedGrid, d1Date,
+          Map.of(hour0, baselineHour0), Instant.parse("2026-07-27T11:10:00Z"));
+      given(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(notifiedGrid, d1Date))
+          .willReturn(Optional.of(baselineRow));
+      given(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(quietGrid, d1Date))
+          .willReturn(Optional.empty());
+      Weather currentHour0 = weatherWithBaseline(notifiedGrid, hour0, 20.0, 25.0);
+      given(weatherRepository
+          .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(notifiedGrid,
+              hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
+          .willReturn(List.of(currentHour0));
+      given(weatherChangeEvaluator.evaluate(baselineHour0,
+          WeatherChangeSnapshot.currentOf(currentHour0)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(notifiedGrid.getX(), notifiedGrid.getY()))
+          .willReturn(List.of(profile));
+
+      int notified = notifier.handleD1(List.of(notifiedGrid, quietGrid), today);
+
+      assertThat(notified).isEqualTo(1);
+    }
   }
 
   @Nested
