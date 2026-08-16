@@ -3,16 +3,19 @@ package com.sprint.mission.otboo.batch.weatherretention;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +52,12 @@ class WeatherRetentionJobIntegrationTest {
   @Autowired
   private WeatherGridRepository weatherGridRepository;
 
+  @Autowired
+  private WeatherD1BaselineRepository weatherD1BaselineRepository;
+
   @BeforeEach
   void setUp() {
-    weatherRepository.deleteAll();
-    weatherGridRepository.deleteAll();
+    cleanUpWeatherTables();
     jobOperatorTestUtils.setJob(weatherRetentionJob);
   }
 
@@ -61,6 +66,11 @@ class WeatherRetentionJobIntegrationTest {
     // @SpringBootTest는 @DataJpaTest와 달리 트랜잭션이 자동 롤백되지 않고 실제 커밋되므로,
     // 같은 Testcontainers DB를 공유하는 다른 테스트 클래스가 이 테스트의 잔여 데이터와
     // 충돌하지 않도록 종료 시점에도 정리한다
+    cleanUpWeatherTables();
+  }
+
+  private void cleanUpWeatherTables() {
+    weatherD1BaselineRepository.deleteAll();
     weatherRepository.deleteAll();
     weatherGridRepository.deleteAll();
   }
@@ -131,6 +141,33 @@ class WeatherRetentionJobIntegrationTest {
       // then
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       assertThat(weatherRepository.findById(recent.getId())).isPresent();
+    }
+  }
+
+  @Nested
+  @DisplayName("WeatherD1BaselineRetention")
+  class WeatherD1BaselineRetention {
+
+    @Test
+    @DisplayName("target_date가_오늘_이하인_고아_baseline만_삭제하고_이후_날짜는_보존한다")
+    void target_date가_오늘_이하인_고아_baseline만_삭제하고_이후_날짜는_보존한다() throws Exception {
+      // given - 그리드가 중간에 배치 대상에서 빠져 소비되지 못한 고아 baseline을 흉내낸다
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      LocalDate today = LocalDate.now(KST);
+
+      WeatherD1Baseline overdue = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid, today.minusDays(1), Map.of(), Instant.now()));
+      WeatherD1Baseline pending = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid, today.plusDays(1), Map.of(), Instant.now()));
+
+      // when
+      JobExecution execution = jobOperatorTestUtils.startJob(
+          jobOperatorTestUtils.getUniqueJobParameters());
+
+      // then
+      assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+      assertThat(weatherD1BaselineRepository.findById(overdue.getId())).isEmpty();
+      assertThat(weatherD1BaselineRepository.findById(pending.getId())).isPresent();
     }
   }
 }
