@@ -13,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "otboo.file")
 public record FileProperties(
-    @NotBlank String impl,
+    FileImplType impl,
     @NotBlank String publicBaseUrl,
     @Positive long maxSizeBytes,
     @NotEmpty Set<String> allowedExtensions,
@@ -23,16 +23,16 @@ public record FileProperties(
 
   public FileProperties {
     if (impl == null) {
-      impl = "local";
+      impl = FileImplType.LOCAL;
     }
   }
 
   @AssertTrue(message = "impl이 local이면 local.upload-dir이, s3면 s3.bucket과 s3.region이 필요합니다.")
   private boolean isModeConfigValid() {
-    if ("local".equals(impl)) {
+    if (impl == FileImplType.LOCAL) {
       return local != null && StringUtils.hasText(local.uploadDir());
     }
-    if ("s3".equals(impl)) {
+    if (impl == FileImplType.S3) {
       return s3 != null && StringUtils.hasText(s3.bucket()) && StringUtils.hasText(s3.region());
     }
     return true;

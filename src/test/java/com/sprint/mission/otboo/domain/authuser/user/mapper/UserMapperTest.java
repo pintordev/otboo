@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.entity.enums.Gender;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
 import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.time.LocalDate;
@@ -23,7 +24,7 @@ import org.junit.jupiter.api.Test;
 class UserMapperTest {
 
   private final FileProperties fileProperties = new FileProperties(
-      "local", "http://localhost:8080/uploads", 5242880, Set.of("jpg"), null, null);
+      FileImplType.LOCAL, "http://localhost:8080/uploads", 5242880, Set.of("jpg"), null, null);
 
   private final UserMapper userMapper = new UserMapper(new FileUrlResolver(fileProperties));
 

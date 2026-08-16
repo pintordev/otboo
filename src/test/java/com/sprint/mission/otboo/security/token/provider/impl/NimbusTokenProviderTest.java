@@ -12,6 +12,7 @@ import com.nimbusds.jwt.SignedJWT;
 import com.sprint.mission.otboo.security.token.exception.business.InvalidAccessTokenException;
 import com.sprint.mission.otboo.security.token.exception.business.InvalidRefreshTokenException;
 import com.sprint.mission.otboo.security.token.properties.TokenProperties;
+import com.sprint.mission.otboo.security.token.properties.enums.TokenImplType;
 import com.sprint.mission.otboo.security.token.provider.AbstractTokenProviderContractTest;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import java.time.Clock;
@@ -68,7 +69,8 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
     void 실패_HS256이_아닌_알고리즘으로_서명된_토큰이면_InvalidAccessTokenException이_발생한다() throws JOSEException {
       // given
       TokenProvider provider = createProvider(
-          new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET),
+          new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET,
+              TokenImplType.NIMBUS),
           Clock.fixed(NOW, ZoneOffset.UTC));
       String token = signWithHs384(UUID.randomUUID().toString(), UUID.randomUUID().toString(),
           "ROLE_USER", null);
@@ -82,7 +84,8 @@ class NimbusTokenProviderTest extends AbstractTokenProviderContractTest {
     void 실패_HS256이_아닌_알고리즘으로_서명된_토큰이면_InvalidRefreshTokenException이_발생한다() throws JOSEException {
       // given
       TokenProvider provider = createProvider(
-          new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET),
+          new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET,
+              TokenImplType.NIMBUS),
           Clock.fixed(NOW, ZoneOffset.UTC));
       String token = signWithHs384(UUID.randomUUID().toString(), UUID.randomUUID().toString(), null,
           UUID.randomUUID().toString());

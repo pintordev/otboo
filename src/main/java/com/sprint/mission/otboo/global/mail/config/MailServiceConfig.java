@@ -1,20 +1,23 @@
 package com.sprint.mission.otboo.global.mail.config;
 
+import com.sprint.mission.otboo.global.mail.properties.MailProperties;
 import com.sprint.mission.otboo.global.mail.service.MailService;
 import com.sprint.mission.otboo.global.mail.service.impl.GoogleSmtpMailService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.thymeleaf.TemplateEngine;
 
 @Configuration
+@EnableConfigurationProperties(MailProperties.class)
 public class MailServiceConfig {
 
   @Bean
-  @ConditionalOnProperty(name = "otboo.mail.impl", havingValue = "google", matchIfMissing = true)
-  public MailService googleSmtpMailService(JavaMailSender mailSender,
+  public MailService mailService(MailProperties mailProperties, JavaMailSender mailSender,
       TemplateEngine templateEngine) {
-    return new GoogleSmtpMailService(mailSender, templateEngine);
+    return switch (mailProperties.impl()) {
+      case GOOGLE -> new GoogleSmtpMailService(mailSender, templateEngine);
+    };
   }
 }

@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.security.token.properties;
 
+import com.sprint.mission.otboo.security.token.properties.enums.TokenImplType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -47,7 +48,14 @@ public record TokenProperties(
         min = 44,
         message = "refreshSecret은 최소 32바이트(HS256 최소 키 길이)를 base64로 인코딩한 값이어야 합니다."
     )
-    String refreshSecret
+    String refreshSecret,
+
+    TokenImplType impl
 ) {
 
+  public TokenProperties {
+    if (impl == null) {
+      impl = TokenImplType.NIMBUS;
+    }
+  }
 }

@@ -2,14 +2,19 @@ package com.sprint.mission.otboo.security.token.properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.security.token.properties.enums.TokenImplType;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
 
 class TokenPropertiesTest {
 
@@ -19,7 +24,42 @@ class TokenPropertiesTest {
 
   private static TokenProperties properties(Duration accessExpiration, Duration refreshExpiration,
       String accessSecret, String refreshSecret) {
-    return new TokenProperties(accessExpiration, refreshExpiration, accessSecret, refreshSecret);
+    return new TokenProperties(accessExpiration, refreshExpiration, accessSecret, refreshSecret,
+        TokenImplType.NIMBUS);
+  }
+
+  @Configuration
+  @EnableConfigurationProperties(TokenProperties.class)
+  static class TestConfig {
+
+  }
+
+  @Nested
+  @DisplayName("impl 값 검증")
+  class Impl {
+
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+        .withUserConfiguration(TestConfig.class)
+        .withPropertyValues(
+            "otboo.security.token.access-token-expiration=30m",
+            "otboo.security.token.refresh-token-expiration=14d",
+            "otboo.security.token.access-secret=" + VALID_SECRET,
+            "otboo.security.token.refresh-secret=" + VALID_SECRET);
+
+    @Test
+    @DisplayName("값이 없으면 정상적으로 바인딩된다")
+    void 성공_값이_없으면_정상적으로_바인딩된다() {
+      // when & then
+      contextRunner.run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 값이면 컨텍스트 기동에 실패한다")
+    void 실패_지원하지_않는_값이면_컨텍스트_기동에_실패한다() {
+      // when & then
+      contextRunner.withPropertyValues("otboo.security.token.impl=unknown")
+          .run(context -> assertThat(context).hasFailed());
+    }
   }
 
   @Nested

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import software.amazon.awssdk.services.s3.S3Client;
 
 @DisplayName("FileStorageConfig")
 class FileStorageConfigTest {
@@ -36,13 +35,12 @@ class FileStorageConfigTest {
             assertThat(context).hasSingleBean(FileStorageService.class);
             assertThat(context.getBean(FileStorageService.class))
                 .isInstanceOf(LocalFileStorageService.class);
-            assertThat(context).doesNotHaveBean(S3Client.class);
           });
     }
 
     @Test
-    @DisplayName("impl이 s3면 S3FileStorageService와 S3Client 빈이 등록된다")
-    void impl이_s3면_S3FileStorageService와_S3Client_빈이_등록된다() {
+    @DisplayName("impl이 s3면 S3FileStorageService 빈이 등록된다")
+    void impl이_s3면_S3FileStorageService_빈이_등록된다() {
       // when & then
       contextRunner.withPropertyValues(
               "otboo.file.impl=s3",
@@ -52,7 +50,6 @@ class FileStorageConfigTest {
             assertThat(context).hasSingleBean(FileStorageService.class);
             assertThat(context.getBean(FileStorageService.class))
                 .isInstanceOf(S3FileStorageService.class);
-            assertThat(context).hasSingleBean(S3Client.class);
           });
     }
   }

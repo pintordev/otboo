@@ -5,7 +5,6 @@ import com.sprint.mission.otboo.security.usersession.policy.impl.MaxDeviceConcur
 import com.sprint.mission.otboo.security.usersession.policy.impl.MultiDeviceConcurrentUserSessionPolicy;
 import com.sprint.mission.otboo.security.usersession.policy.impl.SingleDeviceConcurrentUserSessionPolicy;
 import com.sprint.mission.otboo.security.usersession.properties.UserSessionProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,20 +12,11 @@ import org.springframework.context.annotation.Configuration;
 public class ConcurrentSessionPolicyConfig {
 
   @Bean
-  @ConditionalOnProperty(name = "otboo.security.user-session.concurrent-policy", havingValue = "single", matchIfMissing = true)
-  public ConcurrentUserSessionPolicy singleDeviceConcurrentUserSession() {
-    return new SingleDeviceConcurrentUserSessionPolicy();
-  }
-
-  @Bean
-  @ConditionalOnProperty(name = "otboo.security.user-session.concurrent-policy", havingValue = "multi")
-  public ConcurrentUserSessionPolicy multiDeviceConcurrentUserSessionPolicy() {
-    return new MultiDeviceConcurrentUserSessionPolicy();
-  }
-
-  @Bean
-  @ConditionalOnProperty(name = "otboo.security.user-session.concurrent-policy", havingValue = "max")
-  public ConcurrentUserSessionPolicy maxDeviceConcurrentUserSessionPolicy(UserSessionProperties properties) {
-    return new MaxDeviceConcurrentUserSessionPolicy(properties.maxDevice());
+  public ConcurrentUserSessionPolicy concurrentPolicy(UserSessionProperties properties) {
+    return switch (properties.concurrentPolicy()) {
+      case MULTI -> new MultiDeviceConcurrentUserSessionPolicy();
+      case SINGLE -> new SingleDeviceConcurrentUserSessionPolicy();
+      case MAX -> new MaxDeviceConcurrentUserSessionPolicy(properties.maxDevices());
+    };
   }
 }

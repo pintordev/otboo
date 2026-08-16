@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.global.file.exception.InvalidFilePathException;
 import com.sprint.mission.otboo.global.file.exception.InvalidFileTypeException;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
 import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import com.sprint.mission.otboo.global.file.validator.FileValidator;
 import java.nio.file.Files;
@@ -26,7 +27,7 @@ class LocalFileStorageServiceTest {
 
   private LocalFileStorageService buildService() {
     FileProperties fileProperties = new FileProperties(
-        "local", "http://localhost:8080/uploads", 1024 * 1024, Set.of("jpg", "png"),
+        FileImplType.LOCAL, "http://localhost:8080/uploads", 1024 * 1024, Set.of("jpg", "png"),
         new FileProperties.Local(tempDir.toString()), null);
     return new LocalFileStorageService(fileProperties, new FileValidator(fileProperties));
   }

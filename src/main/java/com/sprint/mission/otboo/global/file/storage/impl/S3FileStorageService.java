@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import com.sprint.mission.otboo.global.file.util.FileExtensionUtils;
 import com.sprint.mission.otboo.global.file.validator.FileValidator;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -77,5 +78,10 @@ public class S3FileStorageService implements FileStorageService {
     } catch (SdkException e) {
       log.warn("S3 파일 삭제 실패(무시하고 진행): {}", key, e);
     }
+  }
+
+  @PreDestroy
+  public void close() {
+    s3Client.close();
   }
 }

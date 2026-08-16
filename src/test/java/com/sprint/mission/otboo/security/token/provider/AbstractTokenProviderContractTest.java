@@ -11,6 +11,7 @@ import com.sprint.mission.otboo.security.token.exception.business.InvalidAccessT
 import com.sprint.mission.otboo.security.token.exception.business.InvalidRefreshTokenException;
 import com.sprint.mission.otboo.security.token.exception.system.TokenProviderException;
 import com.sprint.mission.otboo.security.token.properties.TokenProperties;
+import com.sprint.mission.otboo.security.token.properties.enums.TokenImplType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,7 +48,8 @@ public abstract class AbstractTokenProviderContractTest {
   }
 
   private TokenProperties validProperties() {
-    return new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET);
+    return new TokenProperties(ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, REFRESH_SECRET,
+        TokenImplType.NIMBUS);
   }
 
   private TokenProvider providerAt(Instant now) {
@@ -55,7 +57,7 @@ public abstract class AbstractTokenProviderContractTest {
   }
 
   @Nested
-  class 생성자 {
+  class Constructor {
 
     @Test
     void 성공_유효한_시크릿이면_정상적으로_생성된다() {
@@ -71,7 +73,8 @@ public abstract class AbstractTokenProviderContractTest {
     void 실패_accessSecret이_base64형식이_아니면_TokenProviderException이_발생한다() {
       // given
       TokenProperties properties = new TokenProperties(
-          ACCESS_EXPIRATION, REFRESH_EXPIRATION, "not!!valid==base64", REFRESH_SECRET);
+          ACCESS_EXPIRATION, REFRESH_EXPIRATION, "not!!valid==base64", REFRESH_SECRET,
+          TokenImplType.NIMBUS);
 
       // when & then
       assertThatThrownBy(() -> createProvider(properties, Clock.fixed(NOW, ZoneOffset.UTC)))
@@ -82,7 +85,8 @@ public abstract class AbstractTokenProviderContractTest {
     void 실패_refreshSecret이_base64형식이_아니면_TokenProviderException이_발생한다() {
       // given
       TokenProperties properties = new TokenProperties(
-          ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, "not!!valid==base64");
+          ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, "not!!valid==base64",
+          TokenImplType.NIMBUS);
 
       // when & then
       assertThatThrownBy(() -> createProvider(properties, Clock.fixed(NOW, ZoneOffset.UTC)))
@@ -93,7 +97,8 @@ public abstract class AbstractTokenProviderContractTest {
     void 실패_accessSecret길이가_HS256_최소_길이보다_짧으면_TokenProviderException이_발생한다() {
       // given
       TokenProperties properties = new TokenProperties(
-          ACCESS_EXPIRATION, REFRESH_EXPIRATION, WEAK_SECRET, REFRESH_SECRET);
+          ACCESS_EXPIRATION, REFRESH_EXPIRATION, WEAK_SECRET, REFRESH_SECRET,
+          TokenImplType.NIMBUS);
 
       // when & then
       assertThatThrownBy(() -> createProvider(properties, Clock.fixed(NOW, ZoneOffset.UTC)))
@@ -104,7 +109,8 @@ public abstract class AbstractTokenProviderContractTest {
     void 실패_refreshSecret길이가_HS256_최소_길이보다_짧으면_TokenProviderException이_발생한다() {
       // given
       TokenProperties properties = new TokenProperties(
-          ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, WEAK_SECRET);
+          ACCESS_EXPIRATION, REFRESH_EXPIRATION, ACCESS_SECRET, WEAK_SECRET,
+          TokenImplType.NIMBUS);
 
       // when & then
       assertThatThrownBy(() -> createProvider(properties, Clock.fixed(NOW, ZoneOffset.UTC)))

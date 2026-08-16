@@ -111,5 +111,17 @@ class FilePropertiesTest {
               "otboo.file.max-size-bytes=5242880")
           .run(context -> assertThat(context).hasFailed());
     }
+
+    @Test
+    @DisplayName("지원하지 않는 impl 값이면 컨텍스트 기동에 실패한다")
+    void 지원하지_않는_impl_값이면_컨텍스트_기동에_실패한다() {
+      // when & then
+      contextRunner.withPropertyValues(
+              "otboo.file.impl=unknown",
+              "otboo.file.public-base-url=http://localhost:8080/uploads",
+              "otboo.file.max-size-bytes=5242880",
+              "otboo.file.allowed-extensions=jpg,png")
+          .run(context -> assertThat(context).hasFailed());
+    }
   }
 }

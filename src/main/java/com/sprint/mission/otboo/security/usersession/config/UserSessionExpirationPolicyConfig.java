@@ -4,7 +4,6 @@ import com.sprint.mission.otboo.security.usersession.policy.UserSessionExpiratio
 import com.sprint.mission.otboo.security.usersession.policy.impl.AbsoluteExpirationPolicy;
 import com.sprint.mission.otboo.security.usersession.policy.impl.SlidingExpirationPolicy;
 import com.sprint.mission.otboo.security.usersession.properties.UserSessionProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,16 +11,10 @@ import org.springframework.context.annotation.Configuration;
 public class UserSessionExpirationPolicyConfig {
 
   @Bean
-  @ConditionalOnProperty(name = "otboo.security.user-session.expiration-policy", havingValue = "absolute", matchIfMissing = true)
-  public UserSessionExpirationPolicy absoluteUserSessionExpirationPolicy(
-      UserSessionProperties userSessionProperties) {
-    return new AbsoluteExpirationPolicy(userSessionProperties.userSessionExpiration());
-  }
-
-  @Bean
-  @ConditionalOnProperty(name = "otboo.security.user-session.expiration-policy", havingValue = "sliding")
-  public UserSessionExpirationPolicy slidingUserSessionExpirationPolicy(
-      UserSessionProperties userSessionProperties) {
-    return new SlidingExpirationPolicy(userSessionProperties.userSessionExpiration());
+  public UserSessionExpirationPolicy expirationPolicy(UserSessionProperties properties) {
+    return switch (properties.expirationPolicy()) {
+      case ABSOLUTE -> new AbsoluteExpirationPolicy(properties.userSessionExpiration());
+      case SLIDING -> new SlidingExpirationPolicy(properties.userSessionExpiration());
+    };
   }
 }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.global.file.exception.FileTooLargeException;
 import com.sprint.mission.otboo.global.file.exception.InvalidFileTypeException;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
 import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 class FileValidatorTest {
 
   private final FileProperties fileProperties = new FileProperties(
-      "local", "http://localhost:8080/uploads", 1024, Set.of("jpg", "png"), null, null);
+      FileImplType.LOCAL, "http://localhost:8080/uploads", 1024, Set.of("jpg", "png"), null, null);
 
   private final FileValidator fileValidator = new FileValidator(fileProperties);
 

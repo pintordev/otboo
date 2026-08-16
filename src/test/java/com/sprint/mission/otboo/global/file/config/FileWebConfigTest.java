@@ -1,41 +1,59 @@
 package com.sprint.mission.otboo.global.file.config;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistration;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 
 @DisplayName("FileWebConfig")
 class FileWebConfigTest {
 
-  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-      .withUserConfiguration(FileWebConfig.class)
-      .withPropertyValues(
-          "otboo.file.public-base-url=http://localhost:8080/uploads",
-          "otboo.file.max-size-bytes=5242880",
-          "otboo.file.allowed-extensions=jpg,png",
-          "otboo.file.local.upload-dir=./uploads");
+  private FileProperties propertiesOf(FileImplType impl) {
+    return new FileProperties(impl, "http://localhost:8080/uploads", 5242880, Set.of("jpg"),
+        new FileProperties.Local("./uploads"), null);
+  }
 
   @Nested
-  @DisplayName("impl 값에 따른 빈 등록")
-  class BeanRegistration {
+  @DisplayName("정적 리소스 등록 (addResourceHandlers)")
+  class AddResourceHandlers {
 
     @Test
-    @DisplayName("impl이 local이면 FileWebConfig 빈이 등록된다")
-    void impl이_local이면_FileWebConfig_빈이_등록된다() {
-      // when & then
-      contextRunner.withPropertyValues("otboo.file.impl=local")
-          .run(context -> assertThat(context).hasSingleBean(FileWebConfig.class));
+    @DisplayName("impl이 local이면 uploads 리소스 핸들러를 등록한다")
+    void impl이_local이면_uploads_리소스_핸들러를_등록한다() {
+      // given
+      FileWebConfig fileWebConfig = new FileWebConfig(propertiesOf(FileImplType.LOCAL));
+      ResourceHandlerRegistry registry = mock(ResourceHandlerRegistry.class);
+      given(registry.addResourceHandler("/uploads/**"))
+          .willReturn(mock(ResourceHandlerRegistration.class));
+
+      // when
+      fileWebConfig.addResourceHandlers(registry);
+
+      // then
+      verify(registry).addResourceHandler("/uploads/**");
     }
 
     @Test
-    @DisplayName("impl이 s3면 FileWebConfig 빈이 등록되지 않는다")
-    void impl이_s3면_FileWebConfig_빈이_등록되지_않는다() {
-      // when & then
-      contextRunner.withPropertyValues("otboo.file.impl=s3")
-          .run(context -> assertThat(context).doesNotHaveBean(FileWebConfig.class));
+    @DisplayName("impl이 s3면 리소스 핸들러를 등록하지 않는다")
+    void impl이_s3면_리소스_핸들러를_등록하지_않는다() {
+      // given
+      FileWebConfig fileWebConfig = new FileWebConfig(propertiesOf(FileImplType.S3));
+      ResourceHandlerRegistry registry = mock(ResourceHandlerRegistry.class);
+
+      // when
+      fileWebConfig.addResourceHandlers(registry);
+
+      // then
+      verify(registry, never()).addResourceHandler(org.mockito.ArgumentMatchers.any());
     }
   }
 }
