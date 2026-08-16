@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.batch.weatherfetch.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.BDDMockito.given;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -154,6 +156,87 @@ class WeatherSuddenChangeChunkProcessorTest {
       verify(eventPublisher, never()).publishEvent(any());
       verify(weatherRepository, never()).updateBaseline(any(), anyDouble(), any(), anyDouble(),
           anyDouble());
+    }
+  }
+
+  @Nested
+  @DisplayName("Publish")
+  class Publish {
+
+    @Test
+    @DisplayName("locationNames가_null이어도_예외_없이_발행한다")
+    void locationNames가_null이어도_예외_없이_발행한다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridWithId(60, 127);
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
+          WeatherChangeSnapshot.currentOf(target)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(null);
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      assertThatCode(() -> processor.handleD0(List.of(grid), baseTime))
+          .doesNotThrowAnyException();
+      ArgumentCaptor<NotificationRequestedEvent> captor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(captor.capture());
+      assertThat(captor.getValue().content()).isEqualTo("기온이 5.0도 올랐어요.");
+    }
+
+    @Test
+    @DisplayName("같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다")
+    void 같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridWithId(60, 127);
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
+          WeatherChangeSnapshot.currentOf(target)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile gangnamProfile = profileWithLocation(List.of("서울특별시", "강남구"));
+      Profile seochoProfile = profileWithLocation(List.of("서울특별시", "서초구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(gangnamProfile, seochoProfile));
+
+      processor.handleD0(List.of(grid), baseTime);
+
+      ArgumentCaptor<NotificationRequestedEvent> captor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher, times(2)).publishEvent(captor.capture());
+      assertThat(captor.getAllValues())
+          .anySatisfy(event -> {
+            assertThat(event.receiverIds()).containsExactly(gangnamProfile.getId());
+            assertThat(event.content()).startsWith("강남구 ");
+          })
+          .anySatisfy(event -> {
+            assertThat(event.receiverIds()).containsExactly(seochoProfile.getId());
+            assertThat(event.content()).startsWith("서초구 ");
+          });
+    }
+
+    @Test
+    @DisplayName("수신자가_없어도_baseline은_리셋하고_이벤트는_발행하지_않는다")
+    void 수신자가_없어도_baseline은_리셋하고_이벤트는_발행하지_않는다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridWithId(60, 127);
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
+          WeatherChangeSnapshot.currentOf(target)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY())).willReturn(List.of());
+
+      int notified = processor.handleD0(List.of(grid), baseTime);
+
+      assertThat(notified).isZero();
+      verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
+      verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
+          0.0);
     }
   }
 }
