@@ -55,7 +55,13 @@ public class WeatherSuddenChangeNotifier {
     if (!baseTime.baseTime().equals(LAST_BASE_TIME)) {
       d0Notified = handleD0(updatedGrids, baseTime);
     }
-    log.info("날씨 급변 감지 완료: 평가 격자 수={}, D0 알림={}", updatedGrids.size(), d0Notified);
+    int d1Notified = 0;
+    if (baseTime.baseTime().equals(EVENING_BASE_TIME)) {
+      LocalDate today = LocalDate.now(clock.withZone(KST));
+      d1Notified = handleD1(updatedGrids, today);
+    }
+    log.info("날씨 급변 감지 완료: 평가 격자 수={}, D0 알림={}, D1 알림={}", updatedGrids.size(),
+        d0Notified, d1Notified);
   }
 
   // baseTime과 정확히 일치하는 슬롯만 그리드 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
