@@ -134,12 +134,15 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다")
     void 그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다() {
+      // given
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid gridA = gridWithId(60, 127);
       WeatherGrid gridB = gridWithId(61, 128);
 
+      // when
       processor.handleD0(List.of(gridA, gridB), baseTime);
 
+      // then
       verify(weatherRepository, times(1)).findAllByWeatherGridIdInAndForecastAt(
           List.of(gridA.getId(), gridB.getId()), baseTime.toInstant());
     }
@@ -147,6 +150,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다")
     void baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다() {
+      // given
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
@@ -159,8 +163,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
           .willReturn(List.of(profile));
 
+      // when
       int notified = processor.handleD0(List.of(grid), baseTime);
 
+      // then
       assertThat(notified).isEqualTo(1);
       verify(eventPublisher).publishEvent(any(NotificationRequestedEvent.class));
       verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
@@ -170,15 +176,18 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다")
     void 임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다() {
+      // given - weatherChangeEvaluator는 mock이라 별도 stub 없으면 Optional.empty()를
+      // 기본 반환한다
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 20.5);
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
           baseTime.toInstant())).willReturn(List.of(target));
-      // weatherChangeEvaluator는 mock이라 별도 stub 없으면 Optional.empty()를 기본 반환한다
 
+      // when
       int notified = processor.handleD0(List.of(grid), baseTime);
 
+      // then
       assertThat(notified).isZero();
       verify(eventPublisher, never()).publishEvent(any());
       verify(weatherRepository, never()).updateBaseline(any(), anyDouble(), any(), anyDouble(),
@@ -213,6 +222,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("locationNames가_null이어도_예외_없이_발행한다")
     void locationNames가_null이어도_예외_없이_발행한다() {
+      // given
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
@@ -225,8 +235,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
           .willReturn(List.of(profile));
 
+      // when
       assertThatCode(() -> processor.handleD0(List.of(grid), baseTime))
           .doesNotThrowAnyException();
+
+      // then
       ArgumentCaptor<NotificationRequestedEvent> captor =
           ArgumentCaptor.forClass(NotificationRequestedEvent.class);
       verify(eventPublisher).publishEvent(captor.capture());
@@ -236,6 +249,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다")
     void 같은_격자여도_locationNames가_다르면_그룹별로_별도_이벤트를_발행한다() {
+      // given
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
@@ -249,8 +263,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
           .willReturn(List.of(gangnamProfile, seochoProfile));
 
+      // when
       processor.handleD0(List.of(grid), baseTime);
 
+      // then
       ArgumentCaptor<NotificationRequestedEvent> captor =
           ArgumentCaptor.forClass(NotificationRequestedEvent.class);
       verify(eventPublisher, times(2)).publishEvent(captor.capture());
@@ -268,6 +284,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("수신자가_없어도_baseline은_리셋하고_이벤트는_발행하지_않는다")
     void 수신자가_없어도_baseline은_리셋하고_이벤트는_발행하지_않는다() {
+      // given
       BaseTime baseTime = new BaseTime("20260727", "0800");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
@@ -278,8 +295,10 @@ class WeatherSuddenChangeChunkProcessorTest {
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
       given(profileRepository.findByLocation(grid.getX(), grid.getY())).willReturn(List.of());
 
+      // when
       int notified = processor.handleD0(List.of(grid), baseTime);
 
+      // then
       assertThat(notified).isZero();
       verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
       verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
@@ -294,6 +313,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다")
     void 기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다() {
+      // given
       WeatherGrid gridA = gridWithId(60, 127);
       WeatherGrid gridB = gridWithId(61, 128);
       LocalDate d2Date = LocalDate.parse("2026-07-29");
@@ -305,8 +325,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(gridA.getId(), gridB.getId()), d2Date)).willReturn(List.of());
 
+      // when
       processor.captureD2Snapshot(List.of(gridA, gridB), d2Date);
 
+      // then
       ArgumentCaptor<List<WeatherD1Baseline>> captor = ArgumentCaptor.forClass(List.class);
       verify(weatherD1BaselineRepository).saveAll(captor.capture());
       assertThat(captor.getValue()).hasSize(2);
@@ -325,6 +347,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("기존_baseline이_있는_그리드는_hourly_snapshot만_갱신하고_다시_저장하지_않는다")
     void 기존_baseline이_있는_그리드는_hourly_snapshot만_갱신하고_다시_저장하지_않는다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate d2Date = LocalDate.parse("2026-07-29");
       Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
@@ -337,8 +360,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(grid.getId()), d2Date)).willReturn(List.of(existing));
 
+      // when
       processor.captureD2Snapshot(List.of(grid), d2Date);
 
+      // then
       assertThat(existing.getHourlySnapshot())
           .containsExactlyEntriesOf(Map.of(hour0, WeatherChangeSnapshot.currentOf(slot0)));
       assertThat(existing.getCapturedAt()).isEqualTo(CLOCK.instant());
@@ -373,6 +398,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("baseline과_다른_시각만_개별적으로_비교해_발행한다")
     void baseline과_다른_시각만_개별적으로_비교해_발행한다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
       Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
@@ -403,8 +429,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
           .willReturn(List.of(profile));
 
+      // when
       int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
 
+      // then
       assertThat(notified).isEqualTo(1);
       verify(eventPublisher, times(1)).publishEvent(any(NotificationRequestedEvent.class));
     }
@@ -461,6 +489,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("어제는_없었던_슬롯은_비교를_건너뛴다")
     void 어제는_없었던_슬롯은_비교를_건너뛴다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
       Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
@@ -477,8 +506,10 @@ class WeatherSuddenChangeChunkProcessorTest {
           List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
           .willReturn(List.of(currentHour0, currentHour3));
 
+      // when
       processor.compareD1AndNotify(List.of(grid), d1Date);
 
+      // then
       verify(weatherChangeEvaluator, never()).evaluate(any(),
           eq(WeatherChangeSnapshot.currentOf(currentHour3)));
     }
@@ -486,6 +517,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("여러_그리드의_알림_건수를_합산해서_반환한다")
     void 여러_그리드의_알림_건수를_합산해서_반환한다() {
+      // given
       WeatherGrid notifiedGrid = gridWithId(60, 127);
       WeatherGrid quietGrid = gridWithId(61, 128);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
@@ -509,14 +541,17 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(notifiedGrid.getX(), notifiedGrid.getY()))
           .willReturn(List.of(profile));
 
+      // when
       int notified = processor.compareD1AndNotify(List.of(notifiedGrid, quietGrid), d1Date);
 
+      // then
       assertThat(notified).isEqualTo(1);
     }
 
     @Test
     @DisplayName("오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다")
     void 오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate today = LocalDate.parse("2026-07-27");
       LocalDate d1Date = LocalDate.parse("2026-07-28");
@@ -528,8 +563,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
           any(), any(), any())).willReturn(List.of());
 
+      // when
       processor.handleD1(List.of(grid), today);
 
+      // then
       verify(weatherRepository).findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
           List.of(grid.getId()), d2Date.atStartOfDay(KST).toInstant(),
           d2Date.plusDays(1).atStartOfDay(KST).toInstant());
@@ -545,13 +582,16 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("shouldHandleD0와_shouldHandleD1이_모두_false면_아무것도_조회하지_않고_0을_반환한다")
     void shouldHandleD0와_shouldHandleD1이_모두_false면_아무것도_조회하지_않고_0을_반환한다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       BaseTime baseTime = new BaseTime("20260727", "0800");
       LocalDate today = LocalDate.parse("2026-07-27");
 
+      // when
       WeatherSuddenChangeChunkProcessor.ChunkResult result =
           processor.process(List.of(grid), baseTime, today, false, false);
 
+      // then
       assertThat(result.d0Notified()).isZero();
       assertThat(result.d1Notified()).isZero();
       verify(weatherRepository, never()).findAllByWeatherGridIdInAndForecastAt(any(), any());
@@ -562,6 +602,7 @@ class WeatherSuddenChangeChunkProcessorTest {
     @Test
     @DisplayName("shouldHandleD0와_shouldHandleD1이_모두_true면_각각_평가하고_결과를_합산한다")
     void shouldHandleD0와_shouldHandleD1이_모두_true면_각각_평가하고_결과를_합산한다() {
+      // given
       WeatherGrid grid = gridWithId(60, 127);
       BaseTime baseTime = new BaseTime("20260727", "0800");
       LocalDate today = LocalDate.parse("2026-07-27");
@@ -586,9 +627,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(grid.getId()), d1Date)).willReturn(List.of());
 
+      // when
       WeatherSuddenChangeChunkProcessor.ChunkResult result =
           processor.process(List.of(grid), baseTime, today, true, true);
 
+      // then
       assertThat(result.d0Notified()).isEqualTo(1);
       assertThat(result.d1Notified()).isZero();
     }
