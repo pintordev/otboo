@@ -4,9 +4,8 @@ import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangePropertie
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,14 +21,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeatherSuddenChangeNotifier {
 
-  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final String EVENING_BASE_TIME = "2000";
   private static final String LAST_BASE_TIME = "2300";
+  private static final DateTimeFormatter BASE_DATE_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyyMMdd");
 
   private final WeatherRepository weatherRepository;
   private final WeatherSuddenChangeChunkProcessor chunkProcessor;
   private final WeatherChangeProperties weatherChangeProperties;
-  private final Clock clock;
 
   public void detectAndNotify(BaseTime baseTime) {
     List<WeatherGrid> updatedGrids = weatherRepository.findGridsUpdatedAt(baseTime.toInstant());
@@ -40,7 +39,9 @@ public class WeatherSuddenChangeNotifier {
 
     boolean shouldHandleD0 = !baseTime.baseTime().equals(LAST_BASE_TIME);
     boolean shouldHandleD1 = baseTime.baseTime().equals(EVENING_BASE_TIME);
-    LocalDate today = LocalDate.now(clock.withZone(KST));
+    // 배치가 지연되어 자정을 넘겨 실행돼도 baseTime이 가리키는 날짜를 써야 한다 - 시스템
+    // 시각(Clock)을 쓰면 지연 실행 시 today가 하루 밀릴 수 있다.
+    LocalDate today = LocalDate.parse(baseTime.baseDate(), BASE_DATE_FORMATTER);
 
     int d0Notified = 0;
     int d1Notified = 0;
