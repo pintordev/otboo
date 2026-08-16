@@ -436,4 +436,60 @@ class WeatherSuddenChangeChunkProcessorTest {
           List.of(grid.getId()), d1Date);
     }
   }
+
+  @Nested
+  @DisplayName("Process")
+  class Process {
+
+    @Test
+    @DisplayName("shouldHandleD0와_shouldHandleD1이_모두_false면_아무것도_조회하지_않고_0을_반환한다")
+    void shouldHandleD0와_shouldHandleD1이_모두_false면_아무것도_조회하지_않고_0을_반환한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      LocalDate today = LocalDate.parse("2026-07-27");
+
+      WeatherSuddenChangeChunkProcessor.ChunkResult result =
+          processor.process(List.of(grid), baseTime, today, false, false);
+
+      assertThat(result.d0Notified()).isZero();
+      assertThat(result.d1Notified()).isZero();
+      verify(weatherRepository, never()).findAllByWeatherGridIdInAndForecastAt(any(), any());
+      verify(weatherD1BaselineRepository, never())
+          .findAllByWeatherGridIdInAndTargetDate(any(), any());
+    }
+
+    @Test
+    @DisplayName("shouldHandleD0와_shouldHandleD1이_모두_true면_각각_평가하고_결과를_합산한다")
+    void shouldHandleD0와_shouldHandleD1이_모두_true면_각각_평가하고_결과를_합산한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      LocalDate today = LocalDate.parse("2026-07-27");
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
+          WeatherChangeSnapshot.currentOf(target)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), d2Date.atStartOfDay(KST).toInstant(),
+          d2Date.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of());
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d2Date)).willReturn(List.of());
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date)).willReturn(List.of());
+
+      WeatherSuddenChangeChunkProcessor.ChunkResult result =
+          processor.process(List.of(grid), baseTime, today, true, true);
+
+      assertThat(result.d0Notified()).isEqualTo(1);
+      assertThat(result.d1Notified()).isZero();
+    }
+  }
 }
