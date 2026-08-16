@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,6 +17,7 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
@@ -29,8 +31,10 @@ import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -237,6 +241,199 @@ class WeatherSuddenChangeChunkProcessorTest {
       verify(eventPublisher, never()).publishEvent(any(NotificationRequestedEvent.class));
       verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
           0.0);
+    }
+  }
+
+  @Nested
+  @DisplayName("HandleD1")
+  class HandleD1 {
+
+    @Test
+    @DisplayName("기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다")
+    void 기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다() {
+      WeatherGrid gridA = gridWithId(60, 127);
+      WeatherGrid gridB = gridWithId(61, 128);
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+      Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
+      Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
+      Weather slotA = weatherWithBaseline(gridA, hour0, 20.0, 20.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(gridA.getId(), gridB.getId()), hour0, to)).willReturn(List.of(slotA));
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(gridA.getId(), gridB.getId()), d2Date)).willReturn(List.of());
+
+      processor.captureD2Snapshot(List.of(gridA, gridB), d2Date);
+
+      ArgumentCaptor<List<WeatherD1Baseline>> captor = ArgumentCaptor.forClass(List.class);
+      verify(weatherD1BaselineRepository).saveAll(captor.capture());
+      assertThat(captor.getValue()).hasSize(2);
+      assertThat(captor.getValue())
+          .anySatisfy(baseline -> {
+            assertThat(baseline.getWeatherGrid()).isEqualTo(gridA);
+            assertThat(baseline.getHourlySnapshot())
+                .containsExactlyEntriesOf(Map.of(hour0, WeatherChangeSnapshot.currentOf(slotA)));
+          })
+          .anySatisfy(baseline -> {
+            assertThat(baseline.getWeatherGrid()).isEqualTo(gridB);
+            assertThat(baseline.getHourlySnapshot()).isEmpty();
+          });
+    }
+
+    @Test
+    @DisplayName("기존_baseline이_있는_그리드는_hourly_snapshot만_갱신하고_다시_저장하지_않는다")
+    void 기존_baseline이_있는_그리드는_hourly_snapshot만_갱신하고_다시_저장하지_않는다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+      Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
+      Weather slot0 = weatherWithBaseline(grid, hour0, 20.0, 20.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), hour0, d2Date.plusDays(1).atStartOfDay(KST).toInstant()))
+          .willReturn(List.of(slot0));
+      WeatherD1Baseline existing = WeatherD1Baseline.create(grid, d2Date, Map.of(),
+          Instant.parse("2026-07-26T11:10:00Z"));
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d2Date)).willReturn(List.of(existing));
+
+      processor.captureD2Snapshot(List.of(grid), d2Date);
+
+      assertThat(existing.getHourlySnapshot())
+          .containsExactlyEntriesOf(Map.of(hour0, WeatherChangeSnapshot.currentOf(slot0)));
+      assertThat(existing.getCapturedAt()).isEqualTo(CLOCK.instant());
+      verify(weatherD1BaselineRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("baseline이_전혀_없으면_비교_쿼리_없이_경고_로그만_남기고_0을_반환한다")
+    void baseline이_전혀_없으면_비교_쿼리_없이_경고_로그만_남기고_0을_반환한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date)).willReturn(List.of());
+
+      int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
+
+      assertThat(notified).isZero();
+      verify(weatherRepository, never())
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(),
+              any(), any());
+    }
+
+    @Test
+    @DisplayName("baseline과_다른_시각만_개별적으로_비교해_발행한다")
+    void baseline과_다른_시각만_개별적으로_비교해_발행한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
+      Instant hour3 = hour0.plusSeconds(3 * 3600);
+      WeatherChangeSnapshot baselineHour0 =
+          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherChangeSnapshot baselineHour3 =
+          new WeatherChangeSnapshot(18.0, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherD1Baseline baselineRow = WeatherD1Baseline.create(grid, d1Date,
+          Map.of(hour0, baselineHour0, hour3, baselineHour3),
+          Instant.parse("2026-07-27T11:10:00Z"));
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date)).willReturn(List.of(baselineRow));
+
+      Weather currentHour0 = weatherWithBaseline(grid, hour0, 20.0, 25.0);
+      Weather currentHour3 = weatherWithBaseline(grid, hour3, 18.0, 18.5);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
+          .willReturn(List.of(currentHour0, currentHour3));
+
+      given(weatherChangeEvaluator.evaluate(baselineHour0,
+          WeatherChangeSnapshot.currentOf(currentHour0)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(baselineHour3,
+          WeatherChangeSnapshot.currentOf(currentHour3)))
+          .willReturn(Optional.empty());
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
+
+      assertThat(notified).isEqualTo(1);
+      verify(eventPublisher, times(1)).publishEvent(any(NotificationRequestedEvent.class));
+    }
+
+    @Test
+    @DisplayName("어제는_없었던_슬롯은_비교를_건너뛴다")
+    void 어제는_없었던_슬롯은_비교를_건너뛴다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
+      Instant hour3 = hour0.plusSeconds(3 * 3600);
+      WeatherD1Baseline baselineRow = WeatherD1Baseline.create(grid, d1Date,
+          Map.of(hour0, new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0)),
+          Instant.parse("2026-07-27T11:10:00Z"));
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date)).willReturn(List.of(baselineRow));
+
+      Weather currentHour0 = weatherWithBaseline(grid, hour0, 20.0, 20.0);
+      Weather currentHour3 = weatherWithBaseline(grid, hour3, 18.0, 18.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
+          .willReturn(List.of(currentHour0, currentHour3));
+
+      processor.compareD1AndNotify(List.of(grid), d1Date);
+
+      verify(weatherChangeEvaluator, never()).evaluate(any(),
+          eq(WeatherChangeSnapshot.currentOf(currentHour3)));
+    }
+
+    @Test
+    @DisplayName("여러_그리드의_알림_건수를_합산해서_반환한다")
+    void 여러_그리드의_알림_건수를_합산해서_반환한다() {
+      WeatherGrid notifiedGrid = gridWithId(60, 127);
+      WeatherGrid quietGrid = gridWithId(61, 128);
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
+      WeatherChangeSnapshot baselineHour0 =
+          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0);
+      WeatherD1Baseline baselineRow = WeatherD1Baseline.create(notifiedGrid, d1Date,
+          Map.of(hour0, baselineHour0), Instant.parse("2026-07-27T11:10:00Z"));
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(notifiedGrid.getId(), quietGrid.getId()), d1Date))
+          .willReturn(List.of(baselineRow));
+
+      Weather currentHour0 = weatherWithBaseline(notifiedGrid, hour0, 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(notifiedGrid.getId(), quietGrid.getId()), hour0,
+          d1Date.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(currentHour0));
+      given(weatherChangeEvaluator.evaluate(baselineHour0,
+          WeatherChangeSnapshot.currentOf(currentHour0)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(notifiedGrid.getX(), notifiedGrid.getY()))
+          .willReturn(List.of(profile));
+
+      int notified = processor.compareD1AndNotify(List.of(notifiedGrid, quietGrid), d1Date);
+
+      assertThat(notified).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다")
+    void 오늘_기준으로_D2는_모레_D1은_내일_날짜로_처리한다() {
+      WeatherGrid grid = gridWithId(60, 127);
+      LocalDate today = LocalDate.parse("2026-07-27");
+      LocalDate d1Date = LocalDate.parse("2026-07-28");
+      LocalDate d2Date = LocalDate.parse("2026-07-29");
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d2Date)).willReturn(List.of());
+      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date)).willReturn(List.of());
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          any(), any(), any())).willReturn(List.of());
+
+      processor.handleD1(List.of(grid), today);
+
+      verify(weatherRepository).findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), d2Date.atStartOfDay(KST).toInstant(),
+          d2Date.plusDays(1).atStartOfDay(KST).toInstant());
+      verify(weatherD1BaselineRepository).findAllByWeatherGridIdInAndTargetDate(
+          List.of(grid.getId()), d1Date);
     }
   }
 }
