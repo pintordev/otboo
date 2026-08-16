@@ -115,7 +115,7 @@ public class WeatherSuddenChangeNotifier {
       List<String> locationNames = entry.getKey();
       String regionName = locationNames.isEmpty() ? ""
           : locationNames.get(locationNames.size() - 1) + " ";
-      String content = regionName + String.join(" ", result.reasons());
+      String content = result.content(regionName);
       eventPublisher.publishEvent(new NotificationRequestedEvent(
           Set.copyOf(entry.getValue()), "날씨 급변", content, NotificationLevel.WARNING));
     }
