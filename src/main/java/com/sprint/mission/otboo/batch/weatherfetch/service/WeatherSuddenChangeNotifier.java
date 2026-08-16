@@ -3,13 +3,19 @@ package com.sprint.mission.otboo.batch.weatherfetch.service;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,13 +33,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class WeatherSuddenChangeNotifier {
 
+  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final String EVENING_BASE_TIME = "2000";
   private static final String LAST_BASE_TIME = "2300";
 
   private final WeatherRepository weatherRepository;
   private final ProfileRepository profileRepository;
+  private final WeatherD1BaselineRepository weatherD1BaselineRepository;
   private final WeatherChangeEvaluator weatherChangeEvaluator;
   private final ApplicationEventPublisher eventPublisher;
+  private final Clock clock;
 
   @Transactional
   public void detectAndNotify(BaseTime baseTime) {
@@ -111,5 +120,22 @@ public class WeatherSuddenChangeNotifier {
   // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
   private List<String> normalizedLocationNames(List<String> locationNames) {
     return locationNames == null ? List.of() : locationNames;
+  }
+
+  // 오늘의 캡처가 내일의 D1 baseline이 된다 - 매일 20시 배치에서 D2(오늘+2) 24시간 스냅샷을
+  // upsert해두면, 이틀 뒤 그 날짜가 D1이 됐을 때 어제 캡처해둔 값과 비교할 수 있다.
+  void captureD2Snapshot(WeatherGrid grid, LocalDate d2Date) {
+    Instant from = d2Date.atStartOfDay(KST).toInstant();
+    Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
+    Map<Instant, WeatherChangeSnapshot> hourlySnapshot = weatherRepository
+        .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(grid, from, to)
+        .stream()
+        .collect(Collectors.toMap(Weather::getForecastAt, WeatherChangeSnapshot::currentOf));
+
+    weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date)
+        .ifPresentOrElse(
+            existing -> existing.updateHourlySnapshot(hourlySnapshot, clock.instant()),
+            () -> weatherD1BaselineRepository.save(
+                WeatherD1Baseline.create(grid, d2Date, hourlySnapshot, clock.instant())));
   }
 }
