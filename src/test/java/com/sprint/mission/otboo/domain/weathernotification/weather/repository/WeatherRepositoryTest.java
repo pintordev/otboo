@@ -131,6 +131,8 @@ class WeatherRepositoryTest {
       Instant from = Instant.parse("2026-07-27T00:00:00Z");
       Weather before = weatherRepository.save(weatherOf(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T23:00:00Z"), 20.0));
+      Weather atFrom = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-27T08:00:00Z"), from, 24.0));
       Weather after = weatherRepository.save(weatherOf(weatherGrid,
           Instant.parse("2026-07-27T08:00:00Z"), Instant.parse("2026-07-27T01:00:00Z"), 25.0));
       testEntityManager.flush();
@@ -140,7 +142,7 @@ class WeatherRepositoryTest {
           weatherGrid, from);
 
       assertThat(result).extracting(Weather::getId)
-          .containsExactly(after.getId())
+          .containsExactlyInAnyOrder(atFrom.getId(), after.getId())
           .doesNotContain(before.getId());
     }
   }
@@ -159,6 +161,8 @@ class WeatherRepositoryTest {
       Instant to = Instant.parse("2026-07-30T00:00:00Z");
       Weather before = weatherRepository.save(weatherOf(weatherGrid,
           Instant.parse("2026-07-27T08:00:00Z"), Instant.parse("2026-07-28T23:00:00Z"), 19.0));
+      Weather atFrom = weatherRepository.save(weatherOf(weatherGrid,
+          Instant.parse("2026-07-27T08:00:00Z"), from, 20.0));
       Weather within = weatherRepository.save(weatherOf(weatherGrid,
           Instant.parse("2026-07-27T08:00:00Z"), Instant.parse("2026-07-29T03:00:00Z"), 20.0));
       Weather after = weatherRepository.save(weatherOf(weatherGrid,
@@ -171,7 +175,7 @@ class WeatherRepositoryTest {
               from, to);
 
       assertThat(result).extracting(Weather::getId)
-          .containsExactly(within.getId())
+          .containsExactlyInAnyOrder(atFrom.getId(), within.getId())
           .doesNotContain(before.getId(), after.getId());
     }
   }
