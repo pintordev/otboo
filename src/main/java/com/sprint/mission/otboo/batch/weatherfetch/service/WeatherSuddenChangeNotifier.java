@@ -78,19 +78,19 @@ public class WeatherSuddenChangeNotifier {
     return notified;
   }
 
+  // baseTime과 forecastAt이 정확히 일치해 이 슬롯은 하루에 한 번만 D0 평가된다 - 리셋 여부가
+  // 이후 재평가에 영향을 줄 일이 없으므로, 변경이 감지되면 수신자 유무와 무관하게 리셋한다.
+  // notified 카운트(로그용)만 실제 발행 성공 여부를 따른다.
   private boolean evaluateD0(Weather weather) {
     Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
         WeatherChangeSnapshot.baselineOf(weather), WeatherChangeSnapshot.currentOf(weather));
-
-    if (result.isPresent() && publish(weather.getWeatherGrid(), result.get())) {
-      resetBaseline(weather);
-      return true;
+    if (result.isEmpty()) {
+      return false;
     }
-    return false;
+    resetBaseline(weather);
+    return publish(weather.getWeatherGrid(), result.get());
   }
 
-  // 급변 알림을 발행하면 baseline을 지금 값으로 리셋한다 - 이후 이 슬롯을 다시 보는 일이 있어도
-  // 델타가 0부터 다시 시작한다.
   private void resetBaseline(Weather weather) {
     weatherRepository.updateBaseline(weather.getId(), weather.getTemperatureCurrent(),
         weather.getPrecipitationType(), weather.getPrecipitationProbability(),
