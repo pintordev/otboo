@@ -10,6 +10,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
@@ -37,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,6 +49,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,11 +78,23 @@ class WeatherSuddenChangeChunkProcessorTest {
   private ApplicationEventPublisher eventPublisher;
 
   private WeatherSuddenChangeChunkProcessor processor;
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
 
   @BeforeEach
   void setUp() {
     processor = new WeatherSuddenChangeChunkProcessor(weatherRepository, profileRepository,
         weatherD1BaselineRepository, weatherChangeEvaluator, eventPublisher, CLOCK);
+    logger = (Logger) LoggerFactory.getLogger(WeatherSuddenChangeChunkProcessor.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    logger.detachAppender(appender);
+    appender.stop();
   }
 
   private Profile profileWithLocation(List<String> locationNames) {
@@ -303,19 +320,28 @@ class WeatherSuddenChangeChunkProcessorTest {
     }
 
     @Test
-    @DisplayName("baseline이_전혀_없으면_비교_쿼리_없이_경고_로그만_남기고_0을_반환한다")
-    void baseline이_전혀_없으면_비교_쿼리_없이_경고_로그만_남기고_0을_반환한다() {
-      WeatherGrid grid = gridWithId(60, 127);
+    @DisplayName("baseline이_전혀_없으면_비교_쿼리_없이_경고_로그_1줄만_남기고_0을_반환한다")
+    void baseline이_전혀_없으면_비교_쿼리_없이_경고_로그_1줄만_남기고_0을_반환한다() {
+      // given - 청크에 그리드가 여러 개여도 원인은 하나(어제 20시 캡처 누락)이므로 로그도
+      // 집계된 1줄이어야 한다(그리드 수만큼 반복되면 안 됨)
+      WeatherGrid gridA = gridWithId(60, 127);
+      WeatherGrid gridB = gridWithId(61, 128);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
-          List.of(grid.getId()), d1Date)).willReturn(List.of());
+          List.of(gridA.getId(), gridB.getId()), d1Date)).willReturn(List.of());
 
-      int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
+      // when
+      int notified = processor.compareD1AndNotify(List.of(gridA, gridB), d1Date);
 
+      // then
       assertThat(notified).isZero();
       verify(weatherRepository, never())
           .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(),
               any(), any());
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .filteredOn(message -> message.contains("D1 baseline 스냅샷 없음"))
+          .hasSize(1);
     }
 
     @Test
