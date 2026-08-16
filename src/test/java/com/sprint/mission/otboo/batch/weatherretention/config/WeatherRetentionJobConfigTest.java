@@ -6,11 +6,14 @@ import static org.mockito.Mockito.mock;
 
 import com.sprint.mission.otboo.batch.weatherretention.listener.WeatherRetentionJobListener;
 import com.sprint.mission.otboo.batch.weatherretention.listener.WeatherRetentionStepListener;
+import com.sprint.mission.otboo.batch.weatherretention.reader.WeatherD1BaselineRetentionReader;
 import com.sprint.mission.otboo.batch.weatherretention.reader.WeatherRetentionReader;
+import com.sprint.mission.otboo.batch.weatherretention.writer.WeatherD1BaselineRetentionWriter;
 import com.sprint.mission.otboo.batch.weatherretention.writer.WeatherRetentionWriter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.batch.core.job.AbstractJob;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
@@ -34,6 +37,8 @@ class WeatherRetentionJobConfigTest {
       WeatherRetentionStepListener stepListener = mock(WeatherRetentionStepListener.class);
       WeatherRetentionReader reader = mock(WeatherRetentionReader.class);
       WeatherRetentionWriter writer = mock(WeatherRetentionWriter.class);
+      WeatherD1BaselineRetentionReader d1Reader = mock(WeatherD1BaselineRetentionReader.class);
+      WeatherD1BaselineRetentionWriter d1Writer = mock(WeatherD1BaselineRetentionWriter.class);
 
       WeatherRetentionJobConfig config = new WeatherRetentionJobConfig(
           jobRepository,
@@ -42,19 +47,27 @@ class WeatherRetentionJobConfigTest {
           stepListener,
           reader,
           writer,
+          d1Reader,
+          d1Writer,
           new WeatherRetentionProperties(500, 7)
       );
 
       // when
       Job job = config.weatherRetentionJob();
       Step step = config.weatherRetentionStep();
+      Step d1Step = config.weatherD1BaselineRetentionStep();
 
       // then
       assertNotNull(job);
       assertThat(job.getName()).isEqualTo("weatherRetentionJob");
+      assertThat(((AbstractJob) job).getStepNames())
+          .containsExactly("weatherRetentionStep", "weatherD1BaselineRetentionStep");
 
       assertNotNull(step);
       assertThat(step.getName()).isEqualTo("weatherRetentionStep");
+
+      assertNotNull(d1Step);
+      assertThat(d1Step.getName()).isEqualTo("weatherD1BaselineRetentionStep");
     }
   }
 }
