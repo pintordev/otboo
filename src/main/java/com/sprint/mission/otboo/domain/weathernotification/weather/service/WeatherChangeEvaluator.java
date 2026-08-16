@@ -1,13 +1,9 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangeProperties;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -18,35 +14,34 @@ public class WeatherChangeEvaluator {
 
   private final WeatherChangeProperties properties;
 
-  public Optional<ChangeResult> evaluate(Weather previous, Weather latest) {
+  public Optional<ChangeResult> evaluate(WeatherChangeSnapshot previous,
+      WeatherChangeSnapshot latest) {
     List<String> reasons = new ArrayList<>();
 
-    double temperatureDelta = latest.getTemperatureCurrent() - previous.getTemperatureCurrent();
+    double temperatureDelta = latest.temperatureCurrent() - previous.temperatureCurrent();
     if (Math.abs(temperatureDelta) >= properties.temperatureThreshold()) {
       reasons.add(temperatureMessage(temperatureDelta));
     }
 
     // 값 자체가 바뀌었는지만 본다 - NONE↔RAIN/SNOW/RAIN_SNOW뿐 아니라 RAIN↔SNOW 같은
     // 전환도 이걸로 잡힌다.
-    if (previous.getPrecipitationType() != latest.getPrecipitationType()) {
+    if (previous.precipitationType() != latest.precipitationType()) {
       reasons.add(
-          precipitationTypeMessage(previous.getPrecipitationType(), latest.getPrecipitationType()));
+          precipitationTypeMessage(previous.precipitationType(), latest.precipitationType()));
     }
 
     double probabilityDelta =
-        latest.getPrecipitationProbability() - previous.getPrecipitationProbability();
+        latest.precipitationProbability() - previous.precipitationProbability();
     if (Math.abs(probabilityDelta) >= properties.precipitationProbabilityThreshold()) {
       reasons.add(precipitationProbabilityMessage(probabilityDelta));
     }
 
-    double amountDelta = latest.getPrecipitationAmount() - previous.getPrecipitationAmount();
+    double amountDelta = latest.precipitationAmount() - previous.precipitationAmount();
     if (Math.abs(amountDelta) >= properties.precipitationAmountThreshold()) {
       reasons.add(precipitationAmountMessage(amountDelta));
     }
 
-    return reasons.isEmpty() ? Optional.empty()
-        : Optional.of(new ChangeResult(latest.getWeatherGrid(), latest.getForecastAt(),
-            latest.getForecastedAt(), reasons));
+    return reasons.isEmpty() ? Optional.empty() : Optional.of(new ChangeResult(reasons));
   }
 
   private String temperatureMessage(double delta) {
@@ -69,8 +64,7 @@ public class WeatherChangeEvaluator {
     return "강수량이 %.1fmm %s어요.".formatted(Math.abs(delta), delta > 0 ? "늘었" : "줄었");
   }
 
-  public record ChangeResult(WeatherGrid weatherGrid, Instant forecastAt,
-      Instant latestForecastedAt, List<String> reasons) {
+  public record ChangeResult(List<String> reasons) {
 
   }
 }

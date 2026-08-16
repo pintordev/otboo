@@ -26,6 +26,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator.ChangeResult;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
@@ -130,10 +131,11 @@ class WeatherSuddenChangeNotifierTest {
 
       given(notificationLogRepository.findByWeatherGridAndForecastAt(any(), any()))
           .willReturn(Optional.empty());
-      given(weatherChangeEvaluator.evaluate(changedPrevious, changedLatest))
-          .willReturn(Optional.of(new ChangeResult(changedGrid, D0,
-              changedLatest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
-      given(weatherChangeEvaluator.evaluate(unchangedPrevious, unchangedLatest))
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(changedPrevious),
+          WeatherChangeSnapshot.currentOf(changedLatest)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(unchangedPrevious),
+          WeatherChangeSnapshot.currentOf(unchangedLatest)))
           .willReturn(Optional.empty());
 
       Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
@@ -169,9 +171,9 @@ class WeatherSuddenChangeNotifierTest {
           .willReturn(List.of(previous, latest));
       given(notificationLogRepository.findByWeatherGridAndForecastAt(grid, D0))
           .willReturn(Optional.empty());
-      given(weatherChangeEvaluator.evaluate(previous, latest))
-          .willReturn(Optional.of(
-              new ChangeResult(grid, D0, latest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(previous),
+          WeatherChangeSnapshot.currentOf(latest)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
 
       Profile profile = profileWithLocation(null);
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
@@ -199,9 +201,9 @@ class WeatherSuddenChangeNotifierTest {
           .willReturn(List.of(previous, latest));
       given(notificationLogRepository.findByWeatherGridAndForecastAt(grid, D0))
           .willReturn(Optional.empty());
-      given(weatherChangeEvaluator.evaluate(previous, latest))
-          .willReturn(Optional.of(
-              new ChangeResult(grid, D0, latest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(previous),
+          WeatherChangeSnapshot.currentOf(latest)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
 
       Profile gangnamProfile = profileWithLocation(List.of("서울특별시", "강남구"));
       Profile seochoProfile = profileWithLocation(List.of("서울특별시", "서초구"));
@@ -244,9 +246,9 @@ class WeatherSuddenChangeNotifierTest {
           .willReturn(List.of(previous, latest));
       given(notificationLogRepository.findByWeatherGridAndForecastAt(grid, D0))
           .willReturn(Optional.empty());
-      given(weatherChangeEvaluator.evaluate(previous, latest))
-          .willReturn(Optional.of(
-              new ChangeResult(grid, D0, latest.getForecastedAt(), List.of("기온이 5.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(previous),
+          WeatherChangeSnapshot.currentOf(latest)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
       given(profileRepository.findByLocation(grid.getX(), grid.getY())).willReturn(List.of());
 
       // when
@@ -278,7 +280,8 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then
-      verify(weatherChangeEvaluator).evaluate(previous, latest);
+      verify(weatherChangeEvaluator).evaluate(WeatherChangeSnapshot.currentOf(previous),
+          WeatherChangeSnapshot.currentOf(latest));
     }
 
     @Test
@@ -308,7 +311,8 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then - 직전 리비전(previous)이 아니라 로그가 가리키는 리비전(logged)과 비교한다
-      verify(weatherChangeEvaluator).evaluate(logged, latest);
+      verify(weatherChangeEvaluator).evaluate(WeatherChangeSnapshot.currentOf(logged),
+          WeatherChangeSnapshot.currentOf(latest));
     }
 
     @Test
@@ -333,7 +337,8 @@ class WeatherSuddenChangeNotifierTest {
       given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(grid, D0,
           loggedForecastedAt)).willReturn(Optional.of(logged));
       // logged(24.0) -> latest(25.0)는 임계값 미만이라 감지되지 않음
-      given(weatherChangeEvaluator.evaluate(logged, latest)).willReturn(Optional.empty());
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(logged),
+          WeatherChangeSnapshot.currentOf(latest))).willReturn(Optional.empty());
 
       // when
       notifier.detectAndNotify(baseTime);
@@ -364,9 +369,9 @@ class WeatherSuddenChangeNotifierTest {
           .willReturn(Optional.of(log));
       given(weatherRepository.findByWeatherGridAndForecastAtAndForecastedAt(grid, D0,
           loggedForecastedAt)).willReturn(Optional.of(logged));
-      given(weatherChangeEvaluator.evaluate(logged, latest))
-          .willReturn(Optional.of(
-              new ChangeResult(grid, D0, latestForecastedAt, List.of("기온이 7.0도 올랐어요."))));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.currentOf(logged),
+          WeatherChangeSnapshot.currentOf(latest)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 7.0도 올랐어요."))));
       Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
       given(profileRepository.findByLocation(grid.getX(), grid.getY())).willReturn(
           List.of(profile));
@@ -407,7 +412,8 @@ class WeatherSuddenChangeNotifierTest {
       notifier.detectAndNotify(baseTime);
 
       // then - 로그가 가리키는 리비전을 못 찾았으니 직전 리비전(previous)으로 폴백한다
-      verify(weatherChangeEvaluator).evaluate(previous, latest);
+      verify(weatherChangeEvaluator).evaluate(WeatherChangeSnapshot.currentOf(previous),
+          WeatherChangeSnapshot.currentOf(latest));
     }
 
     @Test

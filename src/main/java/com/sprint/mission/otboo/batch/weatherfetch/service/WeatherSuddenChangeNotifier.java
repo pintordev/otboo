@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
@@ -96,9 +97,10 @@ public class WeatherSuddenChangeNotifier {
       Optional<WeatherChangeNotificationLog> notificationLog =
           notificationLogRepository.findByWeatherGridAndForecastAt(grid, forecastAt);
       Weather baseline = resolveBaseline(grid, forecastAt, sorted.get(1), notificationLog);
-      Optional<WeatherChangeEvaluator.ChangeResult> result =
-          weatherChangeEvaluator.evaluate(baseline, latest);
-      if (result.isPresent() && publish(result.get(), notificationLog)) {
+      Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
+          WeatherChangeSnapshot.currentOf(baseline), WeatherChangeSnapshot.currentOf(latest));
+      if (result.isPresent() && publish(grid, forecastAt, latest.getForecastedAt(), result.get(),
+          notificationLog)) {
         notified++;
       }
     }
@@ -123,9 +125,9 @@ public class WeatherSuddenChangeNotifier {
         .orElse(previousRevision);
   }
 
-  private boolean publish(WeatherChangeEvaluator.ChangeResult result,
+  private boolean publish(WeatherGrid grid, Instant forecastAt, Instant latestForecastedAt,
+      WeatherChangeEvaluator.ChangeResult result,
       Optional<WeatherChangeNotificationLog> notificationLog) {
-    WeatherGrid grid = result.weatherGrid();
     List<Profile> profiles = profileRepository.findByLocation(grid.getX(), grid.getY());
     if (profiles.isEmpty()) {
       return false;
@@ -145,7 +147,7 @@ public class WeatherSuddenChangeNotifier {
       eventPublisher.publishEvent(new NotificationRequestedEvent(
           Set.copyOf(entry.getValue()), "날씨 급변", content, NotificationLevel.WARNING));
     }
-    recordNotified(grid, result.forecastAt(), result.latestForecastedAt(), notificationLog);
+    recordNotified(grid, forecastAt, latestForecastedAt, notificationLog);
     return true;
   }
 
