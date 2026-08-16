@@ -12,13 +12,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class WeatherChangeEvaluator {
 
+  // 기상청 관측값은 소수 1자리라 비교 정밀도를 데이터에 맞춘다 - double 뺄셈 그대로 비교하면
+  // "정확히 3.0도 차이"인 1.1→4.1 같은 값이 2.9999999999999996으로 미감지된다(PR #131 리뷰).
+  private static final double SCALE = 10.0;
+
   private final WeatherChangeProperties properties;
 
   public Optional<ChangeResult> evaluate(WeatherChangeSnapshot previous,
       WeatherChangeSnapshot latest) {
     List<String> reasons = new ArrayList<>();
 
-    double temperatureDelta = latest.temperatureCurrent() - previous.temperatureCurrent();
+    double temperatureDelta = normalize(latest.temperatureCurrent()
+        - previous.temperatureCurrent());
     if (Math.abs(temperatureDelta) >= properties.temperatureThreshold()) {
       reasons.add(temperatureMessage(temperatureDelta));
     }
@@ -30,18 +35,23 @@ public class WeatherChangeEvaluator {
           precipitationTypeMessage(previous.precipitationType(), latest.precipitationType()));
     }
 
-    double probabilityDelta =
-        latest.precipitationProbability() - previous.precipitationProbability();
+    double probabilityDelta = normalize(latest.precipitationProbability()
+        - previous.precipitationProbability());
     if (Math.abs(probabilityDelta) >= properties.precipitationProbabilityThreshold()) {
       reasons.add(precipitationProbabilityMessage(probabilityDelta));
     }
 
-    double amountDelta = latest.precipitationAmount() - previous.precipitationAmount();
+    double amountDelta = normalize(latest.precipitationAmount()
+        - previous.precipitationAmount());
     if (Math.abs(amountDelta) >= properties.precipitationAmountThreshold()) {
       reasons.add(precipitationAmountMessage(amountDelta));
     }
 
     return reasons.isEmpty() ? Optional.empty() : Optional.of(new ChangeResult(reasons));
+  }
+
+  private double normalize(double delta) {
+    return Math.round(delta * SCALE) / SCALE;
   }
 
   private String temperatureMessage(double delta) {
