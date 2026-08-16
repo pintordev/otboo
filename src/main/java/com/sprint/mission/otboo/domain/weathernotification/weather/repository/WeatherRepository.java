@@ -24,6 +24,10 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
   List<Weather> findAllByWeatherGridAndForecastAtGreaterThanEqual(WeatherGrid weatherGrid,
       Instant from);
 
+  // D1 급변 알림의 D2 스냅샷 캡처 전용(#163) - target_date 하루치(24시간) 슬롯만 조회한다.
+  List<Weather> findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      WeatherGrid weatherGrid, Instant from, Instant to);
+
   List<Weather> findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
       WeatherGrid weatherGrid, Instant forecastedAt, List<Instant> forecastAts);
 
