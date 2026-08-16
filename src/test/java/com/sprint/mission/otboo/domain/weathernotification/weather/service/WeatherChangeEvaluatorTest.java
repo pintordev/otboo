@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangeProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -144,6 +145,33 @@ class WeatherChangeEvaluatorTest {
       Optional<WeatherChangeEvaluator.ChangeResult> result = evaluator.evaluate(previous, latest);
 
       assertThat(result).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("ChangeResult")
+  class ChangeResultTest {
+
+    @Test
+    @DisplayName("Content는_지역명_접두어와_reasons를_합쳐_문구를_만든다")
+    void Content는_지역명_접두어와_reasons를_합쳐_문구를_만든다() {
+      WeatherChangeEvaluator.ChangeResult result = new WeatherChangeEvaluator.ChangeResult(
+          List.of("기온이 3.0도 올랐어요.", "강수량이 5.0mm 늘었어요."));
+
+      String content = result.content("강남구 ");
+
+      assertThat(content).isEqualTo("강남구 기온이 3.0도 올랐어요. 강수량이 5.0mm 늘었어요.");
+    }
+
+    @Test
+    @DisplayName("Content는_지역명_접두어가_없으면_reasons만_이어붙인다")
+    void Content는_지역명_접두어가_없으면_reasons만_이어붙인다() {
+      WeatherChangeEvaluator.ChangeResult result = new WeatherChangeEvaluator.ChangeResult(
+          List.of("기온이 3.0도 올랐어요."));
+
+      String content = result.content("");
+
+      assertThat(content).isEqualTo("기온이 3.0도 올랐어요.");
     }
   }
 }
