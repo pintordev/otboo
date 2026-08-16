@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.batch.weatherfetch.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -99,6 +100,72 @@ class WeatherSuddenChangeNotifierTest {
         .set("user", user)
         .set("location", Location.create(37.5, 127.0, 60, 127, locationNames))
         .sample();
+  }
+
+  @Nested
+  @DisplayName("HandleD0")
+  class HandleD0 {
+
+    private Weather weatherWithBaseline(WeatherGrid grid, Instant forecastAt,
+        double baselineTemperature, double currentTemperature) {
+      return Weather.create(grid, D0, forecastAt, SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, currentTemperature, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK,
+          baselineTemperature, PrecipitationType.NONE, 0.0, 0.0);
+    }
+
+    @Test
+    @DisplayName("그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다")
+    void 그리드_수와_무관하게_대상_슬롯을_쿼리_1번으로_조회한다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid gridA = gridOf(60, 127);
+      WeatherGrid gridB = gridOf(61, 128);
+
+      notifier.handleD0(List.of(gridA, gridB), baseTime);
+
+      verify(weatherRepository, times(1)).findAllByWeatherGridIdInAndForecastAt(
+          List.of(gridA.getId(), gridB.getId()), baseTime.toInstant());
+    }
+
+    @Test
+    @DisplayName("baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다")
+    void baseline과_current가_임계값_이상_다르면_발행하고_baseline을_리셋한다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridOf(60, 127);
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
+          WeatherChangeSnapshot.currentOf(target)))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      int notified = notifier.handleD0(List.of(grid), baseTime);
+
+      assertThat(notified).isEqualTo(1);
+      verify(eventPublisher).publishEvent(any(NotificationRequestedEvent.class));
+      verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
+          0.0);
+    }
+
+    @Test
+    @DisplayName("임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다")
+    void 임계값_미만이면_발행하지_않고_baseline도_리셋하지_않는다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridOf(60, 127);
+      Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 20.5);
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(target));
+      // weatherChangeEvaluator는 mock이라 별도 stub 없으면 Optional.empty()를 기본 반환한다
+
+      int notified = notifier.handleD0(List.of(grid), baseTime);
+
+      assertThat(notified).isZero();
+      verify(eventPublisher, never()).publishEvent(any());
+      verify(weatherRepository, never()).updateBaseline(any(), anyDouble(), any(), anyDouble(),
+          anyDouble());
+    }
   }
 
   @Nested
