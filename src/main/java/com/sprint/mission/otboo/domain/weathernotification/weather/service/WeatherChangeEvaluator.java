@@ -76,5 +76,12 @@ public class WeatherChangeEvaluator {
 
   public record ChangeResult(List<String> reasons) {
 
+    // "reasons → 최종 문구" 조립 책임을 이 레코드로 모은다 - 이전엔 배치 패키지의
+    // WeatherSuddenChangeNotifier가 지역명 접두어를 붙여 content를 완성했는데, 문구를
+    // 바꾸려면 두 파일을 열어야 했다(PR #131 리뷰). regionPrefix는 호출부가 위치 도메인
+    // 지식(locationNames 그룹핑)으로 만들어 넘긴다 - 이 레코드는 위치를 모른다.
+    public String content(String regionPrefix) {
+      return regionPrefix + String.join(" ", reasons);
+    }
   }
 }
