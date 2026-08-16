@@ -169,4 +169,18 @@ public class WeatherSuddenChangeNotifier {
     weatherD1BaselineRepository.delete(baselineRow.get());
     return notified;
   }
+
+  // 오늘의 캡처가 내일의 D1 baseline이 되고, 오늘의 비교는 어제의 캡처를 baseline으로 쓴다 -
+  // 매일 반복되면서 "어제 20시 → 오늘 20시" 체인이 자연히 만들어진다.
+  int handleD1(List<WeatherGrid> updatedGrids, LocalDate today) {
+    LocalDate d1Date = today.plusDays(1);
+    LocalDate d2Date = today.plusDays(2);
+
+    int notified = 0;
+    for (WeatherGrid grid : updatedGrids) {
+      captureD2Snapshot(grid, d2Date);
+      notified += compareD1AndNotify(grid, d1Date);
+    }
+    return notified;
+  }
 }
