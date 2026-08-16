@@ -508,9 +508,10 @@ class WeatherFetchJobIntegrationTest {
                 assertThat(notification.getReceiverId()).isEqualTo(user.getId());
                 assertThat(notification.getContent()).startsWith("강남구 ");
               }));
-      // 다 쓴 D1 baseline 스냅샷은 비교 후 정리된다
+      // 다 쓴 D1 baseline 스냅샷은 비교 후에도 즉시 지우지 않는다 - target_date는 매일
+      // 전진해 재사용되지 않으므로, retention 배치의 cutoff(오늘) 삭제에 맡긴다(#163).
       assertThat(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
-          .isEmpty();
+          .isPresent();
     }
   }
 }
