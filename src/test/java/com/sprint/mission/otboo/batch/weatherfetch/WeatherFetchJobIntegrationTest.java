@@ -18,7 +18,6 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
-import com.sprint.mission.otboo.domain.weathernotification.notification.repository.WeatherChangeNotificationLogRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -333,9 +332,6 @@ class WeatherFetchJobIntegrationTest {
     @Autowired
     private NotificationRepository notificationRepository;
 
-    @Autowired
-    private WeatherChangeNotificationLogRepository notificationLogRepository;
-
     @BeforeEach
     void setUpNotification() {
       // 외부 클래스 setUp()은 weather/weatherGrid만 비운다 - 이전 실행이 중간에 죽으면
@@ -349,9 +345,6 @@ class WeatherFetchJobIntegrationTest {
     }
 
     private void cleanUpNotificationTables() {
-      // 외부 클래스 tearDown()의 weatherGridRepository.deleteAll()보다 먼저 정리해야
-      // weather_change_notification_logs의 FK 위반 없이 격자를 지울 수 있다
-      notificationLogRepository.deleteAll();
       notificationRepository.deleteAll();
       profileRepository.deleteAll();
       userRepository.deleteAll();
