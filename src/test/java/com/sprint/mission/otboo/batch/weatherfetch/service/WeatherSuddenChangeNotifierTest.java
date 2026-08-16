@@ -533,5 +533,35 @@ class WeatherSuddenChangeNotifierTest {
       verify(weatherRepository).updateBaseline(target.getId(), 25.0, PrecipitationType.NONE, 0.0,
           0.0);
     }
+
+    @Test
+    @DisplayName("baseTime이_2000이면_D1도_평가한다")
+    void baseTime이_2000이면_D1도_평가한다() {
+      BaseTime baseTime = new BaseTime("20260727", "2000");
+      WeatherGrid grid = gridWithId(60, 127);
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(List.of(grid));
+      given(weatherRepository
+          .findAllByWeatherGridAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(), any(),
+              any()))
+          .willReturn(List.of());
+
+      notifier.detectAndNotify(baseTime);
+
+      // CLOCK 고정 시각(2026-07-27 KST) 기준 D1 = 2026-07-28
+      verify(weatherD1BaselineRepository)
+          .findByWeatherGridAndTargetDate(grid, LocalDate.parse("2026-07-28"));
+    }
+
+    @Test
+    @DisplayName("baseTime이_2000이_아니면_D1을_평가하지_않는다")
+    void baseTime이_2000이_아니면_D1을_평가하지_않는다() {
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridWithId(60, 127);
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(List.of(grid));
+
+      notifier.detectAndNotify(baseTime);
+
+      verify(weatherD1BaselineRepository, never()).findByWeatherGridAndTargetDate(any(), any());
+    }
   }
 }
