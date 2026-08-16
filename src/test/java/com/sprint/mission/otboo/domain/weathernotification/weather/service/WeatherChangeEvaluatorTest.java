@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class WeatherChangeEvaluatorTest {
 
   private final WeatherChangeEvaluator evaluator = new WeatherChangeEvaluator(
-      new WeatherChangeProperties(3.0, 30.0, 20.0));
+      new WeatherChangeProperties(3.0, 30.0, 20.0, 500));
 
   private WeatherChangeSnapshot snapshotOf(double temperatureCurrent,
       PrecipitationType precipitationType, double precipitationProbability,
