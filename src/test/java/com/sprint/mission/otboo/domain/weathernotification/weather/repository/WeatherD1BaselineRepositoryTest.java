@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sprint.mission.otboo.batch.weatherretention.dto.WeatherD1BaselineRetentionItem;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -11,8 +12,10 @@ import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -127,6 +131,76 @@ class WeatherD1BaselineRepositoryTest {
           .findByWeatherGridAndTargetDate(grid, LocalDate.parse("2026-07-29"));
 
       assertThat(found).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("FindForRetention")
+  class FindForRetention {
+
+    @Test
+    @DisplayName("cutoff_이하인_target_date만_반환하고_이후_날짜는_제외한다")
+    void cutoff_이하인_target_date만_반환하고_이후_날짜는_제외한다() {
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      LocalDate cutoff = LocalDate.parse("2026-07-28");
+      WeatherD1Baseline overdue = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid, LocalDate.parse("2026-07-28"), Map.of(), Instant.parse("2026-07-26T11:10:00Z")));
+      weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid, LocalDate.parse("2026-07-29"), Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherD1BaselineRetentionItem> result = weatherD1BaselineRepository
+          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 10);
+
+      assertThat(result).extracting(WeatherD1BaselineRetentionItem::id)
+          .containsExactly(overdue.getId());
+    }
+
+    @Test
+    @DisplayName("같은_target_date면_id를_tie_breaker로_다음_페이지를_반환한다")
+    void 같은_target_date면_id를_tie_breaker로_다음_페이지를_반환한다() {
+      WeatherGrid grid1 = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid grid2 = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      testEntityManager.flush();
+
+      LocalDate cutoff = LocalDate.parse("2026-08-01");
+      LocalDate sameTargetDate = LocalDate.parse("2026-07-28");
+      weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid1, sameTargetDate, Map.of(), Instant.parse("2026-07-26T11:10:00Z")));
+      weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          grid2, sameTargetDate, Map.of(), Instant.parse("2026-07-26T11:10:00Z")));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherD1BaselineRetentionItem> both = weatherD1BaselineRepository
+          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 2);
+      assertThat(both).hasSize(2);
+      UUID expectedFirstId = both.get(0).id();
+      UUID expectedSecondId = both.get(1).id();
+
+      List<WeatherD1BaselineRetentionItem> firstPage = weatherD1BaselineRepository
+          .findForRetention(cutoff, LocalDate.MIN, new UUID(0L, 0L), 1);
+
+      assertThat(firstPage).extracting(WeatherD1BaselineRetentionItem::id)
+          .containsExactly(expectedFirstId);
+
+      List<WeatherD1BaselineRetentionItem> secondPage = weatherD1BaselineRepository
+          .findForRetention(cutoff, firstPage.get(0).targetDate(), firstPage.get(0).id(), 1);
+
+      assertThat(secondPage).extracting(WeatherD1BaselineRetentionItem::id)
+          .containsExactly(expectedSecondId);
+    }
+
+    @Test
+    @DisplayName("limit이_0_이하이면_예외가_발생한다")
+    void limit이_0_이하이면_예외가_발생한다() {
+      assertThatThrownBy(() -> weatherD1BaselineRepository.findForRetention(
+          LocalDate.MIN, LocalDate.MIN, new UUID(0L, 0L), 0))
+          .isInstanceOf(InvalidDataAccessApiUsageException.class)
+          .hasCauseInstanceOf(IllegalArgumentException.class);
     }
   }
 }
