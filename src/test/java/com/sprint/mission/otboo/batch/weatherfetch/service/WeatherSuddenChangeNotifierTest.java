@@ -15,9 +15,7 @@ import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangePropertie
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,10 +29,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WeatherSuddenChangeNotifier")
 class WeatherSuddenChangeNotifierTest {
-
-  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-  private static final Clock CLOCK = Clock.fixed(
-      java.time.Instant.parse("2026-07-27T01:00:00Z"), KST);
 
   private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
@@ -51,7 +45,7 @@ class WeatherSuddenChangeNotifierTest {
   private WeatherSuddenChangeNotifier notifierWithChunkSize(int gridChunkSize) {
     WeatherChangeProperties properties =
         new WeatherChangeProperties(1.0, 10.0, 1.0, gridChunkSize);
-    return new WeatherSuddenChangeNotifier(weatherRepository, chunkProcessor, properties, CLOCK);
+    return new WeatherSuddenChangeNotifier(weatherRepository, chunkProcessor, properties);
   }
 
   @BeforeEach
@@ -141,8 +135,25 @@ class WeatherSuddenChangeNotifierTest {
 
       notifier.detectAndNotify(baseTime);
 
-      // CLOCK 고정 시각(2026-07-27 KST) 기준 today = 2026-07-27
       verify(chunkProcessor).process(any(), eq(baseTime), eq(LocalDate.parse("2026-07-27")),
+          anyBoolean(), eq(true));
+    }
+
+    @Test
+    @DisplayName("지연_실행으로_자정을_넘겨도_D1_날짜는_시스템_시각이_아닌_baseTime_기준으로_계산한다")
+    void 지연_실행으로_자정을_넘겨도_D1_날짜는_시스템_시각이_아닌_baseTime_기준으로_계산한다() {
+      // baseTime의 baseDate가 "실제 실행 시각의 오늘 날짜"와 다를 수 있다(예: 20시 배치가
+      // 지연되어 자정을 넘겨 실행됨) - today는 시스템 시각이 아니라 baseTime.baseDate()로
+      // 계산해야 한다.
+      BaseTime baseTime = new BaseTime("20260815", "2000");
+      WeatherGrid grid = gridWithId(60, 127);
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(List.of(grid));
+      given(chunkProcessor.process(any(), any(), any(), anyBoolean(), anyBoolean()))
+          .willReturn(new WeatherSuddenChangeChunkProcessor.ChunkResult(0, 0));
+
+      notifier.detectAndNotify(baseTime);
+
+      verify(chunkProcessor).process(any(), eq(baseTime), eq(LocalDate.parse("2026-08-15")),
           anyBoolean(), eq(true));
     }
 
