@@ -121,6 +121,12 @@ class WeatherSuddenChangeChunkProcessorTest {
         baselineTemperature, PrecipitationType.NONE, 0.0, 0.0);
   }
 
+  private Weather weatherWithNullBaseline(WeatherGrid grid, Instant forecastAt) {
+    return Weather.create(grid, D0, forecastAt, SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+        0.0, 65.0, 0.0, 25.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK,
+        null, PrecipitationType.NONE, 0.0, 0.0);
+  }
+
   @Nested
   @DisplayName("HandleD0")
   class HandleD0 {
@@ -177,6 +183,26 @@ class WeatherSuddenChangeChunkProcessorTest {
       verify(eventPublisher, never()).publishEvent(any());
       verify(weatherRepository, never()).updateBaseline(any(), anyDouble(), any(), anyDouble(),
           anyDouble());
+    }
+
+    @Test
+    @DisplayName("baseline_컬럼_중_하나라도_null이면_평가없이_건너뛴다")
+    void baseline_컬럼_중_하나라도_null이면_평가없이_건너뛴다() {
+      // given - baseline_temperature_current가 null인 슬롯(정상 쓰기 경로에서는 발생하지
+      // 않지만 방어적으로 처리한다)
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      WeatherGrid grid = gridWithId(60, 127);
+      Weather incomplete = weatherWithNullBaseline(grid, baseTime.toInstant());
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
+          baseTime.toInstant())).willReturn(List.of(incomplete));
+
+      // when
+      int notified = processor.handleD0(List.of(grid), baseTime);
+
+      // then
+      assertThat(notified).isZero();
+      verify(weatherChangeEvaluator, never()).evaluate(any(), any());
+      verify(eventPublisher, never()).publishEvent(any());
     }
   }
 
