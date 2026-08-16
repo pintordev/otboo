@@ -71,6 +71,8 @@ class WeatherD1BaselineRepositoryTest {
       assertThat(found.get().getWeatherGrid().getId()).isEqualTo(weatherGrid.getId());
       assertThat(found.get().getTargetDate()).isEqualTo(LocalDate.parse("2026-07-29"));
       assertThat(found.get().getHourlySnapshot()).isEqualTo(hourlySnapshot);
+      assertThat(found.get().getCreatedAt()).isNotNull();
+      assertThat(found.get().getUpdatedAt()).isNotNull();
     }
 
     @Test
