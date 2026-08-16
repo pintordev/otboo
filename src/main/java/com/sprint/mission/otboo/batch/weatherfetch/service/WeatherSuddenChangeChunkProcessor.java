@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.batch.weatherfetch.service;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
+import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
@@ -12,7 +13,10 @@ import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -103,5 +107,100 @@ public class WeatherSuddenChangeChunkProcessor {
   // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
   private List<String> normalizedLocationNames(List<String> locationNames) {
     return locationNames == null ? List.of() : locationNames;
+  }
+
+  // 오늘의 캡처가 내일의 D1 baseline이 된다 - 매일 20시 배치에서 청크 전체의 D2(오늘+2)
+  // 24시간 스냅샷을 쿼리 2번(슬롯 조회 1번, 기존 baseline 조회 1번)으로 upsert한다(#163).
+  void captureD2Snapshot(List<WeatherGrid> chunk, LocalDate d2Date) {
+    List<UUID> gridIds = chunk.stream().map(WeatherGrid::getId).toList();
+    Instant from = d2Date.atStartOfDay(KST).toInstant();
+    Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
+
+    Map<UUID, List<Weather>> slotsByGridId = weatherRepository
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+            to)
+        .stream()
+        .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
+    Map<UUID, WeatherD1Baseline> existingByGridId = weatherD1BaselineRepository
+        .findAllByWeatherGridIdInAndTargetDate(gridIds, d2Date)
+        .stream()
+        .collect(Collectors.toMap(baseline -> baseline.getWeatherGrid().getId(),
+            baseline -> baseline));
+
+    List<WeatherD1Baseline> newBaselines = new ArrayList<>();
+    for (WeatherGrid grid : chunk) {
+      Map<Instant, WeatherChangeSnapshot> hourlySnapshot = slotsByGridId
+          .getOrDefault(grid.getId(), List.of()).stream()
+          .collect(Collectors.toMap(Weather::getForecastAt, WeatherChangeSnapshot::currentOf));
+      WeatherD1Baseline existing = existingByGridId.get(grid.getId());
+      if (existing != null) {
+        existing.updateHourlySnapshot(hourlySnapshot, clock.instant());
+      } else {
+        newBaselines.add(WeatherD1Baseline.create(grid, d2Date, hourlySnapshot, clock.instant()));
+      }
+    }
+    if (!newBaselines.isEmpty()) {
+      weatherD1BaselineRepository.saveAll(newBaselines);
+    }
+  }
+
+  // 어제 20시에 captureD2Snapshot()이 캡처해둔 D1 baseline과 오늘 24개 시각을 각각 독립적으로
+  // 비교한다 - 평균/최댓값 요약 없이 시각별로 그대로 비교(#163). 소비된 baseline row는 여기서
+  // 지우지 않는다 - target_date가 매일 전진해 재사용될 일이 없으므로, retention 배치의
+  // cutoff(오늘) 삭제에 맡긴다(#163, PR #131 리뷰).
+  int compareD1AndNotify(List<WeatherGrid> chunk, LocalDate d1Date) {
+    List<UUID> gridIds = chunk.stream().map(WeatherGrid::getId).toList();
+    List<WeatherD1Baseline> baselineRows = weatherD1BaselineRepository
+        .findAllByWeatherGridIdInAndTargetDate(gridIds, d1Date);
+    if (baselineRows.isEmpty()) {
+      chunk.forEach(grid -> log.warn(
+          "D1 baseline 스냅샷 없음: grid={}, date={} - 어제 20시 캡처가 안 됐거나 슬롯 결측",
+          grid.getId(), d1Date));
+      return 0;
+    }
+    Map<UUID, WeatherD1Baseline> baselineByGridId = baselineRows.stream()
+        .collect(Collectors.toMap(baseline -> baseline.getWeatherGrid().getId(),
+            baseline -> baseline));
+
+    Instant from = d1Date.atStartOfDay(KST).toInstant();
+    Instant to = d1Date.plusDays(1).atStartOfDay(KST).toInstant();
+    Map<UUID, List<Weather>> currentByGridId = weatherRepository
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+            to)
+        .stream()
+        .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
+
+    int notified = 0;
+    for (WeatherGrid grid : chunk) {
+      WeatherD1Baseline baselineRow = baselineByGridId.get(grid.getId());
+      if (baselineRow == null) {
+        log.warn("D1 baseline 스냅샷 없음: grid={}, date={} - 어제 20시 캡처가 안 됐거나 슬롯 결측",
+            grid.getId(), d1Date);
+        continue;
+      }
+      Map<Instant, WeatherChangeSnapshot> baselineByHour = baselineRow.getHourlySnapshot();
+      for (Weather current : currentByGridId.getOrDefault(grid.getId(), List.of())) {
+        WeatherChangeSnapshot baseline = baselineByHour.get(current.getForecastAt());
+        if (baseline == null) {
+          continue; // 어제는 없었던 슬롯(경계 케이스) - 비교 스킵
+        }
+        Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
+            baseline, WeatherChangeSnapshot.currentOf(current));
+        if (result.isPresent() && publish(grid, result.get())) {
+          notified++;
+        }
+      }
+    }
+    return notified;
+  }
+
+  // 오늘의 캡처가 내일의 D1 baseline이 되고, 오늘의 비교는 어제의 캡처를 baseline으로 쓴다 -
+  // 매일 반복되면서 "어제 20시 → 오늘 20시" 체인이 자연히 만들어진다.
+  int handleD1(List<WeatherGrid> chunk, LocalDate today) {
+    LocalDate d1Date = today.plusDays(1);
+    LocalDate d2Date = today.plusDays(2);
+
+    captureD2Snapshot(chunk, d2Date);
+    return compareD1AndNotify(chunk, d1Date);
   }
 }
