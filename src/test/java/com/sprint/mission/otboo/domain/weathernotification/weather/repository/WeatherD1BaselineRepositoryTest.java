@@ -203,4 +203,37 @@ class WeatherD1BaselineRepositoryTest {
           .hasCauseInstanceOf(IllegalArgumentException.class);
     }
   }
+
+  @Nested
+  @DisplayName("FindAllByWeatherGridIdInAndTargetDate")
+  class FindAllByWeatherGridIdInAndTargetDate {
+
+    @Test
+    @DisplayName("여러_격자의_같은_target_date_baseline을_한_번에_반환한다")
+    void 여러_격자의_같은_target_date_baseline을_한_번에_반환한다() {
+      WeatherGrid targetGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid otherTargetGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      WeatherGrid excludedGrid = weatherGridRepository.save(WeatherGrid.create(62, 129));
+      testEntityManager.flush();
+
+      LocalDate targetDate = LocalDate.parse("2026-07-29");
+      WeatherD1Baseline matched1 = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          targetGrid, targetDate, Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
+      WeatherD1Baseline matched2 = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          otherTargetGrid, targetDate, Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
+      weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          excludedGrid, targetDate, Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
+      weatherD1BaselineRepository.save(WeatherD1Baseline.create(
+          targetGrid, targetDate.plusDays(1), Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<WeatherD1Baseline> result = weatherD1BaselineRepository
+          .findAllByWeatherGridIdInAndTargetDate(
+              List.of(targetGrid.getId(), otherTargetGrid.getId()), targetDate);
+
+      assertThat(result).extracting(WeatherD1Baseline::getId)
+          .containsExactlyInAnyOrder(matched1.getId(), matched2.getId());
+    }
+  }
 }
