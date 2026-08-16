@@ -192,16 +192,19 @@ public class WeatherSuddenChangeChunkProcessor {
         continue;
       }
       Map<Instant, WeatherChangeSnapshot> baselineByHour = baselineRow.getHourlySnapshot();
+      // 24개 시각 중 여러 시각이 동시에 임계값을 넘어도 grid당 알림은 1건이면 된다 -
+      // reasons를 모아뒀다가 publish는 grid당 1회만 호출한다.
+      List<String> reasons = new ArrayList<>();
       for (Weather current : currentByGridId.getOrDefault(grid.getId(), List.of())) {
         WeatherChangeSnapshot baseline = baselineByHour.get(current.getForecastAt());
         if (baseline == null) {
           continue; // 어제는 없었던 슬롯(경계 케이스) - 비교 스킵
         }
-        Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
-            baseline, WeatherChangeSnapshot.currentOf(current));
-        if (result.isPresent() && publish(grid, result.get())) {
-          notified++;
-        }
+        weatherChangeEvaluator.evaluate(baseline, WeatherChangeSnapshot.currentOf(current))
+            .ifPresent(result -> reasons.addAll(result.reasons()));
+      }
+      if (!reasons.isEmpty() && publish(grid, new WeatherChangeEvaluator.ChangeResult(reasons))) {
+        notified++;
       }
     }
     return notified;
