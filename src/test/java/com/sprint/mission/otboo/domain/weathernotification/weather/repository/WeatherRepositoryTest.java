@@ -275,6 +275,34 @@ class WeatherRepositoryTest {
   }
 
   @Nested
+  @DisplayName("UpdateBaseline")
+  class UpdateBaseline {
+
+    @Test
+    @DisplayName("baseline_컬럼만_갱신하고_current_컬럼은_그대로_둔다")
+    void baseline_컬럼만_갱신하고_current_컬럼은_그대로_둔다() {
+      WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      testEntityManager.flush();
+
+      Weather weather = weatherRepository.save(
+          weatherOf(weatherGrid, Instant.parse("2026-07-27T00:00:00Z"),
+              Instant.parse("2026-07-27T02:00:00Z"), 20.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      weatherRepository.updateBaseline(weather.getId(), 25.0, PrecipitationType.RAIN, 40.0, 5.0);
+      testEntityManager.clear();
+
+      Weather reloaded = weatherRepository.findById(weather.getId()).orElseThrow();
+      assertThat(reloaded.getBaselineTemperatureCurrent()).isEqualTo(25.0);
+      assertThat(reloaded.getBaselinePrecipitationType()).isEqualTo(PrecipitationType.RAIN);
+      assertThat(reloaded.getBaselinePrecipitationProbability()).isEqualTo(40.0);
+      assertThat(reloaded.getBaselinePrecipitationAmount()).isEqualTo(5.0);
+      assertThat(reloaded.getTemperatureCurrent()).isEqualTo(20.0);
+    }
+  }
+
+  @Nested
   @DisplayName("FindForRetention")
   class FindForRetention {
 
