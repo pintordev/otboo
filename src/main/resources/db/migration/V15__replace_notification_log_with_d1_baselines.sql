@@ -7,6 +7,8 @@ CREATE TABLE weather_d1_baselines
     target_date       DATE                     NOT NULL,
     hourly_snapshot   JSONB                    NOT NULL,
     captured_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at        TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at        TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT PK_weather_d1_baselines PRIMARY KEY (id),
     CONSTRAINT UQ_weather_d1_baselines_weather_grid_id_target_date
         UNIQUE (weather_grid_id, target_date),

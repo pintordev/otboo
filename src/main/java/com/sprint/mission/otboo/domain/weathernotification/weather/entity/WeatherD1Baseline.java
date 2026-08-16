@@ -21,6 +21,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
@@ -50,6 +52,14 @@ public class WeatherD1Baseline {
 
   @Column(name = "captured_at", nullable = false)
   private Instant capturedAt;
+
+  @CreatedDate
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
+
+  @LastModifiedDate
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
 
   private WeatherD1Baseline(WeatherGrid weatherGrid, LocalDate targetDate,
       Map<Instant, WeatherChangeSnapshot> hourlySnapshot, Instant capturedAt) {
