@@ -27,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 // 청크(그리드 일부) 단위 D0/D1 감지·발행 전용(#163, PR #131 리뷰 - 전체 격자를 한 트랜잭션에서
 // 처리하던 문제) - detectAndNotify()가 gridChunkSize만큼 잘라 넘긴 청크를 여기서 트랜잭션
@@ -44,6 +45,17 @@ public class WeatherSuddenChangeChunkProcessor {
   private final WeatherChangeEvaluator weatherChangeEvaluator;
   private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
+
+  // 청크(그리드 일부) 하나를 트랜잭션 하나로 처리한다(#163, PR #131 리뷰 - 전체 격자
+  // 단일 트랜잭션 리스크) - detectAndNotify()가 gridChunkSize만큼 나눠 청크별로 이 메서드를
+  // 호출한다. shouldHandleD0/shouldHandleD1은 baseTime 기준 라우팅 게이트를 그대로 전달받는다.
+  @Transactional
+  public ChunkResult process(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today,
+      boolean shouldHandleD0, boolean shouldHandleD1) {
+    int d0Notified = shouldHandleD0 ? handleD0(chunk, baseTime) : 0;
+    int d1Notified = shouldHandleD1 ? handleD1(chunk, today) : 0;
+    return new ChunkResult(d0Notified, d1Notified);
+  }
 
   // baseTime과 정확히 일치하는 슬롯만 청크 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
   // 따로 조회하지 않으므로 N+1이 없다(#163). RepresentativeSlotSelector는 여기서 필요 없다 -
@@ -202,5 +214,9 @@ public class WeatherSuddenChangeChunkProcessor {
 
     captureD2Snapshot(chunk, d2Date);
     return compareD1AndNotify(chunk, d1Date);
+  }
+
+  public record ChunkResult(int d0Notified, int d1Notified) {
+
   }
 }
