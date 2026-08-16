@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherSuddenChangeNotifier;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Location;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
@@ -23,8 +24,10 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
+import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherWriter;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
@@ -38,9 +41,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -79,13 +83,15 @@ class WeatherFetchJobIntegrationTest {
   @Autowired
   private WeatherRepository weatherRepository;
 
+  @Autowired
+  private WeatherD1BaselineRepository weatherD1BaselineRepository;
+
   @MockitoBean
   private KmaForecastFetcher kmaForecastFetcher;
 
   @BeforeEach
   void setUp() {
-    weatherRepository.deleteAll();
-    weatherGridRepository.deleteAll();
+    cleanUpWeatherTables();
     jobOperatorTestUtils.setJob(weatherFetchJob);
   }
 
@@ -94,6 +100,14 @@ class WeatherFetchJobIntegrationTest {
     // @SpringBootTest는 @DataJpaTest와 달리 트랜잭션이 자동 롤백되지 않고 실제 커밋되므로,
     // 같은 Testcontainers DB를 공유하는 다른 테스트 클래스가 이 테스트의 잔여 데이터와
     // 충돌하지 않도록 종료 시점에도 정리한다
+    cleanUpWeatherTables();
+  }
+
+  private void cleanUpWeatherTables() {
+    // afterJob()이 실제 시각 기준으로 baseTime=2000(저녁)이면 어느 nested 클래스의 Job 실행이든
+    // handleD1을 태워 weather_d1_baselines에 행을 남길 수 있다 - weatherGrids보다 먼저 지운다
+    // (weather_d1_baselines가 weather_grids를 참조하는 FK가 있어 순서가 중요하다).
+    weatherD1BaselineRepository.deleteAll();
     weatherRepository.deleteAll();
     weatherGridRepository.deleteAll();
   }
@@ -314,13 +328,51 @@ class WeatherFetchJobIntegrationTest {
     // 평가 대상에서 빠지는 23:30 회차를 피한다. 실제 시각과 무관하게 결정적으로 재현.
     private static final Instant FIXED_NOW = Instant.parse("2026-08-12T00:10:00Z");
 
+    // D1 체인 테스트가 "어제 20시 → 오늘 20시"를 한 테스트 메서드 안에서 재현하려면 Clock을
+    // 중간에 전진시켜야 한다 - Clock.fixed()는 불변이라 대신 이 mutable 구현을 쓴다.
+    private static final class MutableClock extends Clock {
+
+      private final AtomicReference<Instant> instant;
+      private final ZoneId zone;
+
+      private MutableClock(AtomicReference<Instant> instant, ZoneId zone) {
+        this.instant = instant;
+        this.zone = zone;
+      }
+
+      static MutableClock startingAt(Instant initial, ZoneId zone) {
+        return new MutableClock(new AtomicReference<>(initial), zone);
+      }
+
+      void advanceTo(Instant next) {
+        instant.set(next);
+      }
+
+      @Override
+      public ZoneId getZone() {
+        return zone;
+      }
+
+      @Override
+      public Clock withZone(ZoneId zone) {
+        return this.zone.equals(zone) ? this : new MutableClock(instant, zone);
+      }
+
+      @Override
+      public Instant instant() {
+        return instant.get();
+      }
+    }
+
     @TestBean
     private Clock clock;
 
     static Clock clock() {
-      // Mockito mock 대신 실제 고정 Clock을 반환 - millis()/getZone() 등 다른 메서드가
-      // 호출돼도 mock 기본값(null/0) 대신 정상 동작한다(CodeRabbit PR #131 리뷰)
-      return Clock.fixed(FIXED_NOW, KST);
+      return MutableClock.startingAt(FIXED_NOW, KST);
+    }
+
+    private void advanceClockTo(Instant instant) {
+      ((MutableClock) clock).advanceTo(instant);
     }
 
     @Autowired
@@ -332,11 +384,18 @@ class WeatherFetchJobIntegrationTest {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired
+    private WeatherWriter weatherWriter;
+
+    @Autowired
+    private WeatherSuddenChangeNotifier weatherSuddenChangeNotifier;
+
     @BeforeEach
     void setUpNotification() {
-      // 외부 클래스 setUp()은 weather/weatherGrid만 비운다 - 이전 실행이 중간에 죽으면
-      // users/profiles가 남아 356행의 고정 이메일이 유니크 제약에 걸릴 수 있어 시작 시에도 정리
+      // 외부 클래스 setUp()은 notifications/profiles/users를 비우지 않는다 - 이전 실행이
+      // 중간에 죽으면 고정 이메일이 유니크 제약에 걸릴 수 있어 시작 시에도 정리
       cleanUpNotificationTables();
+      advanceClockTo(FIXED_NOW);
     }
 
     @AfterEach
@@ -350,23 +409,29 @@ class WeatherFetchJobIntegrationTest {
       userRepository.deleteAll();
     }
 
-    @Disabled("V14(유니크 제약 (weather_grid_id, forecast_at)) 이후 리비전 개념이 사라져 "
-        + "revisions.size()<2가 상시 참 - #163에서 baseline 컬럼 비교 방식으로 재설계 후 재작성")
+    private WeatherForecastSlotDto slotDtoOf(LocalDate date, Instant slotAt,
+        double temperatureCurrent) {
+      return FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", date)
+          .set("slotAt", slotAt)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .set("temperatureCurrent", temperatureCurrent)
+          .sample();
+    }
+
     @Test
-    @DisplayName("이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다")
-    void 이전_리비전_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다() throws Exception {
-      // given
+    @DisplayName("baseline_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다")
+    void baseline_대비_기온이_급변하면_Job_COMPLETED_후_비동기로_알림이_저장된다() throws Exception {
+      // given - baseTime과 forecastAt이 정확히 일치해야 D0 평가 대상이 된다(#163)
       BaseTime currentBaseTime = KmaBaseTimeCalculator.calculate(FIXED_NOW);
-      LocalDate today = LocalDate.parse(currentBaseTime.baseDate(),
-          DateTimeFormatter.ofPattern("yyyyMMdd"));
-      Instant forecastAt = today.atStartOfDay(KST).toInstant();
-      Instant previousForecastedAt = KmaBaseTimeCalculator
-          .calculate(FIXED_NOW.minus(Duration.ofHours(3))).toInstant();
+      Instant forecastAt = currentBaseTime.toInstant();
+      Instant previousForecastedAt = forecastAt.minus(Duration.ofHours(3));
 
       WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherRepository.save(Weather.create(grid, previousForecastedAt, forecastAt,
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, 20.0, 0.0, 15.0, 25.0, 2.0,
-          WindStrength.WEAK, null, null, null, null));
+          WindStrength.WEAK, 20.0, PrecipitationType.NONE, 0.0, 0.0));
 
       User user = userRepository.save(
           User.create("홍길동", "sudden-change@test.com", "encoded-password"));
@@ -376,20 +441,16 @@ class WeatherFetchJobIntegrationTest {
       profileRepository.save(profile);
 
       given(kmaForecastFetcher.fetchSlots(any(), any())).willReturn(List.of(
-          FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
-              .set("date", today)
-              .set("slotAt", today.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant())
-              .set("skyStatus", SkyStatus.CLEAR)
-              .set("precipitationType", PrecipitationType.NONE)
-              .set("temperatureCurrent", 25.0)
-              .sample()));
+          slotDtoOf(LocalDate.parse(currentBaseTime.baseDate(),
+              DateTimeFormatter.ofPattern("yyyyMMdd")), forecastAt, 25.0)));
 
       // when
       JobExecution execution = jobOperatorTestUtils.startJob(
           jobOperatorTestUtils.getUniqueJobParameters());
 
-      // then - 20.0도 -> 25.0도(임계값 3.0도 이상) 급변, afterJob()이 COMPLETED 이후 감지·발행하고
-      // NotificationRequestedEventListener가 AFTER_COMMIT + @Async로 저장을 마칠 때까지 대기한다
+      // then - baseline(20.0도) -> current(25.0도, 임계값 3.0도 이상) 급변, afterJob()이
+      // COMPLETED 이후 감지·발행하고 NotificationRequestedEventListener가
+      // AFTER_COMMIT + @Async로 저장을 마칠 때까지 대기한다
       assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
       await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
           assertThat(notificationRepository.findAll())
@@ -397,6 +458,59 @@ class WeatherFetchJobIntegrationTest {
                 assertThat(notification.getReceiverId()).isEqualTo(user.getId());
                 assertThat(notification.getContent()).startsWith("강남구 ");
               }));
+    }
+
+    @Test
+    @DisplayName("어제_20시_캡처가_오늘_20시_비교의_baseline이_되어_알림까지_이어진다")
+    void 어제_20시_캡처가_오늘_20시_비교의_baseline이_되어_알림까지_이어진다() {
+      // given
+      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      User user = userRepository.save(
+          User.create("김철수", "d1-chain@test.com", "encoded-password"));
+      Profile profile = Profile.create(user);
+      profile.changeProfile(null, null,
+          Location.create(37.5, 127.0, 60, 127, List.of("서울특별시", "강남구")), 3);
+      profileRepository.save(profile);
+
+      // 20:30 KST(버퍼 20분 적용 시 20:10) - baseTime "2000"으로 고정
+      Instant day1Now = Instant.parse("2026-08-12T11:30:00Z");
+      BaseTime day1BaseTime = KmaBaseTimeCalculator.calculate(day1Now);
+      LocalDate day1 = LocalDate.parse(day1BaseTime.baseDate(),
+          DateTimeFormatter.ofPattern("yyyyMMdd"));
+      LocalDate d2Date = day1.plusDays(2);
+      Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
+
+      // findGridsUpdatedAt()이 forecasted_at = baseTime.toInstant()로 대상 격자를 거르므로,
+      // saveSlots()의 forecastedAt도 "now"가 아니라 baseTime의 Instant와 정확히 맞춰야 한다.
+      weatherWriter.saveSlots(grid, day1BaseTime.toInstant(),
+          List.of(slotDtoOf(d2Date, hour0, 20.0)), Map.of());
+
+      // when - 어제(day1) 20시: D2(모레) 스냅샷을 캡처한다
+      advanceClockTo(day1Now);
+      weatherSuddenChangeNotifier.detectAndNotify(day1BaseTime);
+
+      assertThat(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
+          .isPresent();
+
+      // 오늘(day2) 20시: 어제 캡처해둔 값과 달라진 현재 예보를 다시 채운다
+      Instant day2Now = day1Now.plus(Duration.ofDays(1));
+      BaseTime day2BaseTime = KmaBaseTimeCalculator.calculate(day2Now);
+      weatherWriter.saveSlots(grid, day2BaseTime.toInstant(),
+          List.of(slotDtoOf(d2Date, hour0, 26.0)), Map.of());
+
+      advanceClockTo(day2Now);
+      weatherSuddenChangeNotifier.detectAndNotify(day2BaseTime);
+
+      // then - 어제(20.0도) -> 오늘(26.0도, 임계값 이상) 급변이 baseline 없이도 감지된다
+      await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+          assertThat(notificationRepository.findAll())
+              .anySatisfy(notification -> {
+                assertThat(notification.getReceiverId()).isEqualTo(user.getId());
+                assertThat(notification.getContent()).startsWith("강남구 ");
+              }));
+      // 다 쓴 D1 baseline 스냅샷은 비교 후 정리된다
+      assertThat(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
+          .isEmpty();
     }
   }
 }
