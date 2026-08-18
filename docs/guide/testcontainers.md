@@ -5,12 +5,13 @@
 ## 1. Postgres
 
 `application-test.yaml`의 JDBC URL이 Testcontainers 전용 스킴(`jdbc:tc:`)이라 별도 설정 없이 자동으로 컨테이너가
-연결됩니다. 여러 테스트 클래스가 같은 URL을 쓰면 드라이버 레벨에서 컨테이너를 자동으로 재사용하므로, 이 문서의 나머지
-항목들과 달리 신경 쓸 게 없습니다.
+연결됩니다. 같은 `jdbc:tc:` URL을 같은 JVM에서 비병렬로 실행하면 드라이버(`ContainerDatabaseDriver`)가 static
+캐시로 컨테이너를 재사용합니다 — 이 프로젝트는 이 세 조건(동일 URL/단일 JVM/비병렬)을 항상 만족하므로 이 문서의
+나머지 항목들과 달리 신경 쓸 게 없습니다.
 
 ## 2. Redis — Spring 컨텍스트 없는 테스트에서 컨테이너 공유하기
 
-Spring 컨텍스트를 안 띄우는 순수 단위 테스트에서 여러 클래스가 컨테이너 하나를 공유하려면, 공유 인터페이스에
+Spring 컨텍스트를 안 띄우고 실제 Redis에 직접 붙는 통합 테스트에서 여러 클래스가 컨테이너 하나를 공유하려면, 공유 인터페이스에
 `private static` 팩토리 메서드로 컨테이너를 시작시켜 두고 `implements`로 가져다 씁니다.
 
 ```java
@@ -50,12 +51,23 @@ class UserSessionRedisRegistryTest implements RedisTestContainerSupport {
 컨테이너까지 죽습니다. 이 패턴은 프레임워크가 생명주기를 아예 소유하지 않도록, 필드 초기화식에서 완전히 수동으로
 시작만 시킵니다.
 
+**전제 조건**: 이 패턴은 아래 두 조건이 성립하는 동안만 안전합니다.
+- 테스트 실행이 병렬이 아닐 것 (`build.gradle`에 `maxParallelForks`/`parallel` 미설정, `junit-platform.properties` 없음)
+- 어떤 테스트도 다른 테스트의 키를 광범위하게 조회/검증하지 않을 것 (`redisTemplate.keys(...)` 같은 전체 스캔 금지)
+
+`flushAll()`처럼 컨테이너 전체를 비우는 호출은 병렬 실행 시 다른 클래스의 상태를 지울 수 있습니다. 위 두 조건 중 하나라도
+깨야 한다면(병렬 실행 도입, 광범위 키 조회 필요 등) 키 접두사 또는 별도 Redis 데이터베이스로 테스트 간 격리를 먼저
+추가해야 합니다.
+
 ## 3. Elasticsearch
 
 CI/로컬 모두 사전에 기동된 컨테이너(`docker/elasticsearch/Dockerfile` 빌드 + 실행)에 연결합니다. 테스트 코드에서
 별도로 컨테이너를 관리하지 않습니다.
 
 ## 4. Kafka — `@EmbeddedKafka`
+
+`spring-kafka`/`spring-kafka-test` 의존성이 있어야 아래 예제가 동작합니다 — 아직 `build.gradle`에 없으므로
+실제 Kafka 클라이언트를 도입하는 시점에 함께 추가합니다.
 
 Docker 컨테이너가 아니라 JVM 내 임베디드 브로커를 씁니다. 테스트 클래스에 `@EmbeddedKafka`를 붙이면
 `EmbeddedKafkaBroker` 빈이 등록되고, `spring.embedded.kafka.brokers` 프로퍼티로 부트스트랩 서버 주소가 채워집니다.
@@ -81,7 +93,7 @@ class NotificationKafkaListenerTest {
 
 ## 5. 체크리스트
 
-- [ ] Spring 컨텍스트가 없는 순수 단위 테스트에서 컨테이너를 여러 클래스가 공유해야 하면 2번 패턴(공유 인터페이스 +
+- [ ] Spring 컨텍스트가 없는 통합 테스트에서 컨테이너를 여러 클래스가 공유해야 하면 2번 패턴(공유 인터페이스 +
   `private static` 팩토리 메서드) 사용
 - [ ] `@Container`/`@Testcontainers`와 "여러 클래스 간 공유"를 같이 쓰지 않기 — 클래스 종료 시 자동 stop되므로 공유
   목적엔 안 맞음 (2번 주의 2)
