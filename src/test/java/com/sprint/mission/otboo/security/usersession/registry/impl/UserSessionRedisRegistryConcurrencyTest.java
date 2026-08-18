@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.security.usersession.registry.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import com.sprint.mission.otboo.security.usersession.dto.UserSession;
 import com.sprint.mission.otboo.security.usersession.exception.business.RefreshTokenReusedException;
 import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionExpiredException;
@@ -25,19 +26,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 // replace-all-user-sessions.lua / compare-and-rotate.lua가 실제로 레이스를 없애는지,
 // 그리고 revokeAll()이 동시 save()와 부딪혀도 좀비 세션을 안 만드는지를 스레드풀로 재현해서 검증한다.
-@Testcontainers
-class UserSessionRedisRegistryConcurrencyTest {
-
-  @Container
-  static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+class UserSessionRedisRegistryConcurrencyTest implements RedisTestContainerSupport {
 
   private static final Duration TTL = Duration.ofMinutes(30);
   // Redis EXPIREAT는 Redis 서버의 실제 시스템 시계로 평가되므로 실제 현재 시각에 가까워야 한다.
@@ -52,7 +44,8 @@ class UserSessionRedisRegistryConcurrencyTest {
 
   @BeforeAll
   static void setUpRedis() {
-    connectionFactory = new LettuceConnectionFactory(REDIS.getHost(), REDIS.getMappedPort(6379));
+    connectionFactory = new LettuceConnectionFactory(
+        REDIS_CONTAINER.getHost(), REDIS_CONTAINER.getMappedPort(6379));
     connectionFactory.afterPropertiesSet();
     redisTemplate = new StringRedisTemplate(connectionFactory);
     redisTemplate.afterPropertiesSet();

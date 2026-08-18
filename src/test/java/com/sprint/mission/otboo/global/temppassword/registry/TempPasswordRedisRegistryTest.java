@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.global.temppassword.properties.TempPasswordGener
 import com.sprint.mission.otboo.global.temppassword.properties.TempPasswordProperties;
 import com.sprint.mission.otboo.global.temppassword.properties.TempPasswordRegistryType;
 import com.sprint.mission.otboo.global.temppassword.registry.impl.TempPasswordRedisRegistry;
+import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -19,19 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 // 임시 비밀번호가 실제로 저장/암호화/만료되는지는 실제 Redis 없이는 검증할 수 없어 Testcontainers를 쓴다.
-@Testcontainers
 @DisplayName("TempPasswordRedisRegistry")
-class TempPasswordRedisRegistryTest {
-
-  @Container
-  static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+class TempPasswordRedisRegistryTest implements RedisTestContainerSupport {
 
   static LettuceConnectionFactory connectionFactory;
   static StringRedisTemplate redisTemplate;
@@ -40,7 +32,8 @@ class TempPasswordRedisRegistryTest {
 
   @BeforeAll
   static void setUpRedis() {
-    connectionFactory = new LettuceConnectionFactory(REDIS.getHost(), REDIS.getMappedPort(6379));
+    connectionFactory = new LettuceConnectionFactory(
+        REDIS_CONTAINER.getHost(), REDIS_CONTAINER.getMappedPort(6379));
     connectionFactory.afterPropertiesSet();
     redisTemplate = new StringRedisTemplate(connectionFactory);
     redisTemplate.afterPropertiesSet();

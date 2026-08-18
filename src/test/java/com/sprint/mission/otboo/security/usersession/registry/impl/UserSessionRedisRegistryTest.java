@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.security.usersession.registry.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import com.sprint.mission.otboo.security.usersession.dto.UserSession;
 import com.sprint.mission.otboo.security.usersession.exception.business.RefreshTokenReusedException;
 import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionExpiredException;
@@ -22,18 +23,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 // Redis 명령/Lua 스크립트가 실제로 기대한 대로 동작하는지는 실제 Redis 없이는 검증할 수 없어 Testcontainers를 쓴다.
-@Testcontainers
-class UserSessionRedisRegistryTest {
-
-  @Container
-  static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+class UserSessionRedisRegistryTest implements RedisTestContainerSupport {
 
   private static final Duration TTL = Duration.ofMinutes(30);
   // Redis EXPIREAT는 Redis 서버의 실제 시스템 시계로 평가되므로, 여기서만 쓰는 논리적 시각이 아니라
@@ -47,7 +39,8 @@ class UserSessionRedisRegistryTest {
 
   @BeforeAll
   static void setUpRedis() {
-    connectionFactory = new LettuceConnectionFactory(REDIS.getHost(), REDIS.getMappedPort(6379));
+    connectionFactory = new LettuceConnectionFactory(
+        REDIS_CONTAINER.getHost(), REDIS_CONTAINER.getMappedPort(6379));
     connectionFactory.afterPropertiesSet();
     redisTemplate = new StringRedisTemplate(connectionFactory);
     redisTemplate.afterPropertiesSet();
