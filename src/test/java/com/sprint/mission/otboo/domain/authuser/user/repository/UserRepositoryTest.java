@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -106,6 +107,35 @@ class UserRepositoryTest {
     void 존재하지_않는_ID로_조회하면_빈_Optional을_반환한다() {
       // when & then
       assertThat(userRepository.findById(UUID.randomUUID())).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("전체 ID 조회 (findAllIds)")
+  class FindAllIds {
+
+    @Test
+    @DisplayName("저장된 유저가 있으면 전체 ID를 반환한다")
+    void 저장된_유저가_있으면_전체_ID를_반환한다() {
+      // given
+      User user1 = User.create("홍길동", "hong@test.com", "encoded-password");
+      User user2 = User.create("김철수", "kim@test.com", "encoded-password");
+      userRepository.save(user1);
+      userRepository.save(user2);
+      testEntityManager.flush();
+
+      // when
+      List<UUID> result = userRepository.findAllIds();
+
+      // then
+      assertThat(result).containsExactlyInAnyOrder(user1.getId(), user2.getId());
+    }
+
+    @Test
+    @DisplayName("저장된 유저가 없으면 빈 리스트를 반환한다")
+    void 저장된_유저가_없으면_빈_리스트를_반환한다() {
+      // when & then
+      assertThat(userRepository.findAllIds()).isEmpty();
     }
   }
 }
