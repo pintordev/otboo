@@ -1,0 +1,65 @@
+.git
+.claude
+.gradle
+build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Windows OS ###
+Thumbs.db
+
+### Logs ###
+.logs
+*.log
+
+### Environment ###
+.env
+.env.*
+otboo.env
+
+### App Properties ###
+# scripts/link_prop.sh가 만든 심볼릭 링크(호스트 절대경로)라 빌드 컨텍스트에 못 들어감
+# 실제 값은 docker-compose.yml이 런타임에 컨테이너로 마운트해서 채운다
+# (.gitignore의 bare 패턴과 달리 dockerignore는 슬래시 없는 패턴이 루트에서만 매치되므로 **/ 필요)
+**/application*.yaml
+
+### Python (scripts/) ###
+__pycache__/
+*.pyc
+
+### Docs / CI ###
+# .gitignore는 docs/intro, docs/draft만 제외하지만(나머지 docs는 git엔 추적 대상),
+# 빌드 컨텍스트엔 docs 전체·CI 설정 다 필요 없어서 통째로 제외
+docs
+.github
+
+### File ###
+uploads
