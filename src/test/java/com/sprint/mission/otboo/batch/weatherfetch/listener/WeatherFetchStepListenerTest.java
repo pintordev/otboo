@@ -2,11 +2,13 @@ package com.sprint.mission.otboo.batch.weatherfetch.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sprint.mission.otboo.batch.weatherfetch.metrics.WeatherFetchMetrics;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,9 +32,12 @@ class WeatherFetchStepListenerTest {
   @Mock
   private StepExecution stepExecution;
 
+  @Mock
+  private WeatherFetchMetrics weatherFetchMetrics;
+
   @BeforeEach
   void setUp() {
-    listener = new WeatherFetchStepListener();
+    listener = new WeatherFetchStepListener(weatherFetchMetrics);
     logger = (Logger) LoggerFactory.getLogger(WeatherFetchStepListener.class);
     appender = new ListAppender<>();
     appender.start();
@@ -87,6 +92,22 @@ class WeatherFetchStepListenerTest {
         assertThat(event.getFormattedMessage()).contains("readCount=10", "writeCount=9",
             "skipCount=1");
       });
+    }
+
+    @Test
+    @DisplayName("시작_종료_시각이_있으면_skipCount를_카운터에_기록한다")
+    void 시작_종료_시각이_있으면_skipCount를_카운터에_기록한다() {
+      // given
+      given(stepExecution.getStartTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 0));
+      given(stepExecution.getEndTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 5));
+      given(stepExecution.getSkipCount()).willReturn(1L);
+      given(stepExecution.getExitStatus()).willReturn(ExitStatus.COMPLETED);
+
+      // when
+      listener.afterStep(stepExecution);
+
+      // then
+      verify(weatherFetchMetrics).countSkipped(1L);
     }
 
     @Test
