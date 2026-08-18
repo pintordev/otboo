@@ -105,6 +105,9 @@ public class SecurityConfig {
         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
         .requestMatchers("/ws/**").permitAll()
 
+        .requestMatchers("/actuator/health").permitAll()
+        .requestMatchers("/actuator/**").hasAuthority(Role.ADMIN.name())
+
         .requestMatchers(HttpMethod.POST, "/api/auth/sign-out").permitAll()
         .requestMatchers(HttpMethod.POST, "/api/auth/sign-in").permitAll()
         .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
