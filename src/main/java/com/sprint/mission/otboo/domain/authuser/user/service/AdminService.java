@@ -10,9 +10,13 @@ import com.sprint.mission.otboo.domain.authuser.user.exception.UserNotFoundExcep
 import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +28,7 @@ public class AdminService {
   private final UserRepository userRepository;
   private final UserSessionRegistry userSessionRegistry;
   private final UserMapper userMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   public CursorPageResponse<UserDto> searchUserList(UserListParams condition) {
     return userRepository.search(condition);
@@ -36,6 +41,10 @@ public class AdminService {
     foundUser.changeRole(request.role());
 
     userSessionRegistry.revokeAll(userId);
+
+    eventPublisher.publishEvent(new NotificationRequestedEvent(
+        Set.of(userId), "권한 변경",
+        request.role() + " 권한으로 변경되었습니다.", NotificationLevel.WARNING));
 
     return userMapper.userDtoFrom(foundUser);
   }
