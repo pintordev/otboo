@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserListParams;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserLockUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserRoleUpdateRequest;
@@ -36,6 +39,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AdminService")
 class AdminServiceTest {
+
+  private static final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
 
   @InjectMocks
   private AdminService adminService;
@@ -120,7 +128,9 @@ class AdminServiceTest {
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
       ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
       given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
-      UserRoleUpdateRequest request = new UserRoleUpdateRequest(Role.ADMIN);
+      UserRoleUpdateRequest request = fm.giveMeBuilder(UserRoleUpdateRequest.class)
+          .set("role", Role.ADMIN)
+          .sample();
 
       UserDto expected = new UserDto(user.getId(), user.getCreatedAt(), user.getEmail(),
           user.getName(), Role.ADMIN, false);
