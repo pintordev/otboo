@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?.env에 POSTGRES_USER를 설정하세요}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env에 POSTGRES_PASSWORD를 설정하세요}
     ports:
-      - "5433:5432"   # 로컬에 이미 떠 있는 네이티브 postgres(5432)와 충돌 방지 — 컨테이너 간 통신은 5432 그대로 사용
+      - "127.0.0.1:5433:5432"   # 로컬에 이미 떠 있는 네이티브 postgres(5432)와 충돌 방지 — 컨테이너 간 통신은 5432 그대로 사용, loopback만 노출
     volumes:
       - postgres_data:/var/lib/postgresql   # postgres 18+ 이미지는 /var/lib/postgresql/data 직접 마운트를 지원하지 않음
     healthcheck:
@@ -19,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"   # 인증 없는 Redis라 loopback만 노출
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -29,7 +29,7 @@ services:
   kafka:
     image: apache/kafka:3.9.0   # KRaft 내장 — Zookeeper 불필요
     ports:
-      - "29092:29092"
+      - "127.0.0.1:29092:29092"   # PLAINTEXT라 loopback만 노출
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -58,7 +58,7 @@ services:
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: -Xms512m -Xmx512m
     ports:
-      - "9201:9200"   # 로컬에 다른 ES가 9200을 점유하고 있어도 충돌 없게 회피
+      - "127.0.0.1:9201:9200"   # 로컬에 다른 ES가 9200을 점유하고 있어도 충돌 없게 회피, 보안 비활성 상태라 loopback만 노출
     healthcheck:
       test: [ "CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1" ]
       interval: 10s
@@ -92,6 +92,7 @@ services:
       SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
       JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}   # 컨테이너 메모리 제한을 인지해 힙을 잡도록(기본 25%는 너무 작음)
     volumes:
+      - uploads_data:/app/uploads   # 두 인스턴스가 같은 업로드 파일을 봐야 라운드로빈에서 조회가 안 깨짐
       - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
       - ./.claude/otboo-secret/application-local.yaml:/app/config/application-local.yaml:ro
     ports:
@@ -124,6 +125,7 @@ services:
       SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
       JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
     volumes:
+      - uploads_data:/app/uploads
       - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
       - ./.claude/otboo-secret/application-local.yaml:/app/config/application-local.yaml:ro
     ports:
@@ -145,3 +147,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
