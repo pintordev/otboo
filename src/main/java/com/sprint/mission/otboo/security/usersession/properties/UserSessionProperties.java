@@ -15,11 +15,11 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "otboo.security.user-session")
 public record UserSessionProperties(
 
-    @NotNull
-    @DurationMin(seconds = 1)
+    @NotNull(message = "userSessionExpiration은 필수 값입니다.")
+    @DurationMin(seconds = 1, message = "userSessionExpiration은 최소 1초 이상이어야 합니다.")
     Duration userSessionExpiration,
 
-    @Positive
+    @Positive(message = "maxDevices는 0보다 커야 합니다.")
     Integer maxDevices,
 
     ExpirationPolicyType expirationPolicy,

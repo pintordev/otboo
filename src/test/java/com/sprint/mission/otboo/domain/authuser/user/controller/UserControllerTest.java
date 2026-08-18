@@ -218,8 +218,8 @@ class UserControllerTest {
   class ChangePassword {
 
     @Test
-    @DisplayName("본인이면 200을 반환한다")
-    void 본인이면_200을_반환한다() throws Exception {
+    @DisplayName("본인이면 204를 반환한다")
+    void 본인이면_204를_반환한다() throws Exception {
       // given
       UUID userId = UUID.randomUUID();
       SecurityContextHolder.getContext().setAuthentication(authenticationOf(userId));
@@ -229,7 +229,7 @@ class UserControllerTest {
       mockMvc.perform(patch("/api/users/{userId}/password", userId)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(request)))
-          .andExpect(status().isOk());
+          .andExpect(status().isNoContent());
     }
 
     @Test

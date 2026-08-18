@@ -63,13 +63,13 @@ public class UserController implements UserApi {
 
   @Override
   @PatchMapping("/{userId}/password")
-  public ResponseEntity<UserDto> changePassword(
+  public ResponseEntity<Void> changePassword(
       @PathVariable UUID userId,
       @Valid @RequestBody ChangePasswordRequest request,
       @CurrentUser UserPrincipal principal) {
     userService.changePassword(userId, request, principal.userId());
     return ResponseEntity
-        .status(HttpStatus.OK)
+        .status(HttpStatus.NO_CONTENT)
         .build();
   }
 }

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
 import java.util.List;
 
 public record LocationRequest(
@@ -23,8 +24,9 @@ public record LocationRequest(
     @NotNull(message = "y는 필수입니다.")
     Integer y,
 
-    @Size(max = 10, message = "locationNames는 10개를 넘을 수 없습니다.")
-    List<String> locationNames
+    @NotNull(message = "locationNames는 필수입니다.")
+    @Size(min = 4, max = 4, message = "locationNames는 4개여야 합니다.")
+    List<@NotNull(message = "지역 이름에 빈 값이 포함될 수 없습니다.") String> locationNames
 ) {
 
 }

@@ -14,9 +14,9 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "otboo.file")
 public record FileProperties(
     FileImplType impl,
-    @NotBlank String publicBaseUrl,
-    @Positive long maxSizeBytes,
-    @NotEmpty Set<String> allowedExtensions,
+    @NotBlank(message = "publicBaseUrl은 필수 값입니다.") String publicBaseUrl,
+    @Positive(message = "maxSizeBytes는 0보다 커야 합니다.") long maxSizeBytes,
+    @NotEmpty(message = "allowedExtensions는 최소 1개 이상이어야 합니다.") Set<String> allowedExtensions,
     @Valid Local local,
     @Valid S3 s3
 ) {
@@ -38,11 +38,14 @@ public record FileProperties(
     return true;
   }
 
-  public record Local(@NotBlank String uploadDir) {
+  public record Local(@NotBlank(message = "uploadDir은 필수 값입니다.") String uploadDir) {
 
   }
 
-  public record S3(@NotBlank String bucket, @NotBlank String region) {
+  public record S3(
+      @NotBlank(message = "bucket은 필수 값입니다.") String bucket,
+      @NotBlank(message = "region은 필수 값입니다.") String region
+  ) {
 
   }
 }

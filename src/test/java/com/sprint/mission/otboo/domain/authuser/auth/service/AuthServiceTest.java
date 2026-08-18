@@ -249,17 +249,16 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("가입되지 않은 이메일이면 아무 것도 하지 않는다")
-    void 가입되지_않은_이메일이면_아무_것도_하지_않는다() {
+    @DisplayName("가입되지 않은 이메일이면 예외가 발생한다")
+    void 가입되지_않은_이메일이면_예외가_발생한다() {
       // given
       given(userRepository.findByEmail("unknown@test.com")).willReturn(Optional.empty());
       ResetPasswordRequest request = new ResetPasswordRequest("unknown@test.com");
 
-      // when
-      authService.resetPassword(request);
-
-      // then
-      verify(tempPasswordRegistry, never()).save(any(), any());
+      // when & then
+      assertThatThrownBy(() -> authService.resetPassword(request))
+          .isInstanceOf(UserNotFoundException.class);
+      verify(tempPasswordRegistry, never()).issue(any());
       verify(eventPublisher, never()).publishEvent(any());
     }
   }

@@ -32,10 +32,11 @@ public interface AuthApi {
   })
   ResponseEntity<JwtDto> signIn(SignInRequest request, HttpServletResponse response);
 
-  @Operation(summary = "임시 비밀번호 발급", description = "가입된 이메일로 임시 비밀번호를 발급해 메일로 전송합니다. 계정 존재 여부를 노출하지 않기 위해 이메일이 존재하지 않아도 항상 200을 반환합니다.")
+  @Operation(summary = "비밀번호 초기화", description = "임시 비밀번호로 초기화 후 이메일로 전송합니다.")
   @ApiResponses({
-      @ApiResponse(responseCode = "200", description = "요청 접수 성공 (가입된 이메일인 경우에만 실제로 임시 비밀번호가 발급/발송됨)"),
+      @ApiResponse(responseCode = "204", description = "비밀번호 초기화 성공"),
       @ApiResponse(responseCode = "400", description = "이메일이 비어있거나 형식이 올바르지 않음"),
+      @ApiResponse(responseCode = "404", description = "비밀번호 초기화 실패(사용자 없음)"),
       @ApiResponse(responseCode = "500", description = "Redis 장애")
   })
   ResponseEntity<Void> resetPassword(ResetPasswordRequest request);

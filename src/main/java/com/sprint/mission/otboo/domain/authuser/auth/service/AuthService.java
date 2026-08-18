@@ -110,13 +110,13 @@ public class AuthService {
   }
   
   public void resetPassword(ResetPasswordRequest request) {
-    userRepository.findByEmail(request.email())
-        .ifPresent(user -> {
-          String rawTempPassword = tempPasswordRegistry.issue(user.getId());
-          eventPublisher.publishEvent(
-              new TempPasswordRequestedEvent(user.getEmail(), rawTempPassword,
-                  tempPasswordRegistry.getExpirationMinutes()));
-        });
+    User user = userRepository.findByEmail(request.email())
+        .orElseThrow(UserNotFoundException::withNone);
+
+    String rawTempPassword = tempPasswordRegistry.issue(user.getId());
+    eventPublisher.publishEvent(
+        new TempPasswordRequestedEvent(user.getEmail(), rawTempPassword,
+            tempPasswordRegistry.getExpirationMinutes()));
   }
 
   public RefreshDto refresh(String refreshToken) {

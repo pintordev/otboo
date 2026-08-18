@@ -55,12 +55,12 @@ class AuthControllerTest {
   class SignOut {
 
     @Test
-    @DisplayName("정상 요청이면 200을 반환하고 refresh 쿠키를 삭제한다")
-    void 정상_요청이면_200을_반환하고_refresh_쿠키를_삭제한다() throws Exception {
+    @DisplayName("정상 요청이면 204를 반환하고 refresh 쿠키를 삭제한다")
+    void 정상_요청이면_204를_반환하고_refresh_쿠키를_삭제한다() throws Exception {
       // given & when & then
       mockMvc.perform(post("/api/auth/sign-out")
               .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "refresh-token")))
-          .andExpect(status().isOk());
+          .andExpect(status().isNoContent());
 
       verify(authService).signOut("refresh-token");
       verify(refreshTokenCookieProvider).clear(any());
@@ -133,13 +133,13 @@ class AuthControllerTest {
   class ResetPassword {
 
     @Test
-    @DisplayName("정상 요청이면 200을 반환한다")
-    void 정상_요청이면_200을_반환한다() throws Exception {
+    @DisplayName("정상 요청이면 204를 반환한다")
+    void 정상_요청이면_204를_반환한다() throws Exception {
       // when & then
       mockMvc.perform(post("/api/auth/reset-password")
               .contentType(MediaType.APPLICATION_JSON)
               .content("{\"email\":\"hong@test.com\"}"))
-          .andExpect(status().isOk());
+          .andExpect(status().isNoContent());
 
       verify(authService).resetPassword(new ResetPasswordRequest("hong@test.com"));
     }
@@ -152,6 +152,19 @@ class AuthControllerTest {
               .contentType(MediaType.APPLICATION_JSON)
               .content("{\"email\":\"not-an-email\"}"))
           .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("가입되지 않은 이메일이면 404를 반환한다")
+    void 가입되지_않은_이메일이면_404를_반환한다() throws Exception {
+      // given
+      willThrow(UserNotFoundException.withNone()).given(authService).resetPassword(any());
+
+      // when & then
+      mockMvc.perform(post("/api/auth/reset-password")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content("{\"email\":\"unknown@test.com\"}"))
+          .andExpect(status().isNotFound());
     }
   }
 
