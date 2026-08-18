@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -19,14 +18,16 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.Clothes
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDef;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDefValue;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNameDuplicatedException;
+import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.mapper.ClothesAttributeDefMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
-import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
 import com.sprint.mission.otboo.global.dto.SortDirection;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -38,8 +39,6 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
-import java.util.Optional;
-import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ClothesAttributeDefServiceTest")
@@ -251,6 +250,7 @@ class ClothesAttributeDefServiceTest {
       assertThat(result.selectableValues()).containsExactly("빨강", "파랑");
       verify(clothesAttributeDefValueRepository).deleteAllByDefinitionId(definitionId);
     }
+
     @Test
     @DisplayName("Should throw NotFoundException when definition does not exist")
     void updateFailWhenNotFound() {
@@ -266,6 +266,7 @@ class ClothesAttributeDefServiceTest {
       assertThatThrownBy(() -> clothesAttributeDefService.update(definitionId, request))
           .isInstanceOf(ClothesAttributeDefNotFoundException.class);
     }
+
     @Test
     @DisplayName("Should throw NameDuplicatedException when new name already exists")
     void updateFailWhenNameDuplicated() {
@@ -307,6 +308,7 @@ class ClothesAttributeDefServiceTest {
       assertThat(result.name()).isEqualTo("색상");
     }
   }
+
   @Nested
   @DisplayName("Delete")
   class Delete {

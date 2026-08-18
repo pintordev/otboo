@@ -60,7 +60,8 @@ class AdminServiceTest {
     @DisplayName("조건에 맞는 사용자 목록을 페이지로 반환한다")
     void 조건에_맞는_사용자_목록을_페이지로_반환한다() {
       // given
-      UserListParams condition = new UserListParams(null, null, 10, "email", SortDirection.ASCENDING, null, null, null);
+      UserListParams condition = new UserListParams(null, null, 10, "email",
+          SortDirection.ASCENDING, null, null, null);
       CursorPageResponse<UserDto> expected = new CursorPageResponse<>(
           List.of(), null, null, false, 0L, "email", SortDirection.ASCENDING);
       given(userRepository.search(condition)).willReturn(expected);
