@@ -13,13 +13,15 @@ public class WeatherRetentionMetrics {
   private static final String FAILED = "batch.weather-retention.job.failed";
   private static final String JOB_DURATION = "batch.weather-retention.job.duration";
   private static final String CLEANED = "batch.weather-retention.step.cleaned";
+  private static final String STEP = "step";
 
+  private final MeterRegistry registry;
   private final Counter completedCounter;
   private final Counter failedCounter;
   private final Timer jobDurationTimer;
-  private final Counter cleanedCounter;
 
   public WeatherRetentionMetrics(MeterRegistry registry) {
+    this.registry = registry;
     this.completedCounter = Counter.builder(COMPLETED)
         .description("WeatherRetention Job 성공 횟수")
         .register(registry);
@@ -28,9 +30,6 @@ public class WeatherRetentionMetrics {
         .register(registry);
     this.jobDurationTimer = Timer.builder(JOB_DURATION)
         .description("WeatherRetention Job 실행 시간")
-        .register(registry);
-    this.cleanedCounter = Counter.builder(CLEANED)
-        .description("WeatherRetention Step 정리(삭제) 건수")
         .register(registry);
   }
 
@@ -46,7 +45,7 @@ public class WeatherRetentionMetrics {
     jobDurationTimer.record(duration);
   }
 
-  public void countCleaned(long count) {
-    cleanedCounter.increment(count);
+  public void countCleaned(String stepName, long count) {
+    registry.counter(CLEANED, STEP, stepName).increment(count);
   }
 }

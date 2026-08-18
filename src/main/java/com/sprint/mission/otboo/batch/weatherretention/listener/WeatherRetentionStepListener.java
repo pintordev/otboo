@@ -27,7 +27,7 @@ public class WeatherRetentionStepListener implements StepExecutionListener {
     Duration duration = Duration.between(stepExecution.getStartTime(), stepExecution.getEndTime());
     ExitStatus exitStatus = stepExecution.getExitStatus();
 
-    weatherRetentionMetrics.countCleaned(stepExecution.getWriteCount());
+    weatherRetentionMetrics.countCleaned(stepExecution.getStepName(), stepExecution.getWriteCount());
 
     if (ExitStatus.FAILED.getExitCode().equals(exitStatus.getExitCode())) {
       log.error("WeatherRetention Step 실패 | readCount={}, writeCount={}, duration={}, exitStatus={}",
