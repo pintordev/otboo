@@ -103,11 +103,14 @@ class WeatherSuddenChangeNotifierTest {
     @Test
     @DisplayName("청크별_결과를_합산해_D0_D1_알림_건수를_메트릭에_기록한다")
     void 청크별_결과를_합산해_D0_D1_알림_건수를_메트릭에_기록한다() {
+      notifier = notifierWithChunkSize(1);
       BaseTime baseTime = new BaseTime("20260727", "0800");
       List<WeatherGrid> grids = List.of(gridWithId(60, 127), gridWithId(61, 128));
       given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(grids);
       given(chunkProcessor.process(any(), any(), any(), anyBoolean(), anyBoolean()))
-          .willReturn(new WeatherSuddenChangeChunkProcessor.ChunkResult(3, 2));
+          .willReturn(
+              new WeatherSuddenChangeChunkProcessor.ChunkResult(1, 1),
+              new WeatherSuddenChangeChunkProcessor.ChunkResult(2, 1));
 
       notifier.detectAndNotify(baseTime);
 

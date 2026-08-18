@@ -55,6 +55,10 @@ class WeatherFetchJobListenerTest {
   @BeforeEach
   void setUp() {
     listener = new WeatherFetchJobListener(clock, weatherSuddenChangeNotifier, weatherFetchMetrics);
+    ExecutionContext executionContext = new ExecutionContext();
+    executionContext.putString("baseDate", "20260727");
+    executionContext.putString("baseTime", "0800");
+    given(jobExecution.getExecutionContext()).willReturn(executionContext);
     logger = (Logger) LoggerFactory.getLogger(WeatherFetchJobListener.class);
     appender = new ListAppender<>();
     appender.start();
