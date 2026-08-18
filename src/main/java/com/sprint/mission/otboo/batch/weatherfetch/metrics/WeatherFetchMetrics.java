@@ -13,13 +13,17 @@ public class WeatherFetchMetrics {
   private static final String FAILED = "batch.weather-fetch.job.failed";
   private static final String JOB_DURATION = "batch.weather-fetch.job.duration";
   private static final String SKIPPED = "batch.weather-fetch.step.skipped";
+  private static final String NOTIFIED = "batch.weather-fetch.notified";
+  private static final String TYPE = "type";
 
+  private final MeterRegistry registry;
   private final Counter completedCounter;
   private final Counter failedCounter;
   private final Timer jobDurationTimer;
   private final Counter skippedCounter;
 
   public WeatherFetchMetrics(MeterRegistry registry) {
+    this.registry = registry;
     this.completedCounter = Counter.builder(COMPLETED)
         .description("WeatherFetch Job 성공 횟수")
         .register(registry);
@@ -48,5 +52,9 @@ public class WeatherFetchMetrics {
 
   public void countSkipped(long count) {
     skippedCounter.increment(count);
+  }
+
+  public void countNotified(String type, int count) {
+    registry.counter(NOTIFIED, TYPE, type).increment(count);
   }
 }
