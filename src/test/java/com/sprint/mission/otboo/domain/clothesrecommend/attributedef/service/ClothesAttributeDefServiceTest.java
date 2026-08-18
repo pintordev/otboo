@@ -10,6 +10,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.AttributeDefSortBy;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefCreateRequest;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefDto;
@@ -23,15 +24,19 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +53,12 @@ class ClothesAttributeDefServiceTest {
 
   @Mock
   ClothesAttributeDefValueRepository clothesAttributeDefValueRepository;
+
+  @Mock
+  UserRepository userRepository;
+
+  @Mock
+  ApplicationEventPublisher eventPublisher;
 
   @Spy
   ClothesAttributeDefMapper clothesAttributeDefMapper = new ClothesAttributeDefMapper();
@@ -91,6 +102,55 @@ class ClothesAttributeDefServiceTest {
       assertThatThrownBy(() -> clothesAttributeDefService.create(request))
           .isInstanceOf(ClothesAttributeDefNameDuplicatedException.class);
       verify(clothesAttributeDefRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("등록에 성공하면 전체 유저에게 INFO 알림 이벤트를 발행한다")
+    void 등록에_성공하면_전체_유저에게_INFO_알림_이벤트를_발행한다() {
+      // given
+      ClothesAttributeDefCreateRequest request =
+          new ClothesAttributeDefCreateRequest("색상", List.of("빨강"));
+      given(clothesAttributeDefRepository.existsByName("색상")).willReturn(false);
+      given(clothesAttributeDefRepository.saveAndFlush(any(ClothesAttributeDef.class)))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(clothesAttributeDefValueRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+
+      UUID userId1 = UUID.randomUUID();
+      UUID userId2 = UUID.randomUUID();
+      given(userRepository.findAllIds()).willReturn(List.of(userId1, userId2));
+
+      // when
+      clothesAttributeDefService.create(request);
+
+      // then
+      ArgumentCaptor<NotificationRequestedEvent> eventCaptor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+      NotificationRequestedEvent event = eventCaptor.getValue();
+      assertThat(event.receiverIds()).containsExactlyInAnyOrder(userId1, userId2);
+      assertThat(event.level()).isEqualTo(NotificationLevel.INFO);
+    }
+
+    @Test
+    @DisplayName("유저가 없으면 알림 이벤트를 발행하지 않는다")
+    void 유저가_없으면_알림_이벤트를_발행하지_않는다() {
+      // given
+      ClothesAttributeDefCreateRequest request =
+          new ClothesAttributeDefCreateRequest("색상", List.of("빨강"));
+      given(clothesAttributeDefRepository.existsByName("색상")).willReturn(false);
+      given(clothesAttributeDefRepository.saveAndFlush(any(ClothesAttributeDef.class)))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(clothesAttributeDefValueRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(userRepository.findAllIds()).willReturn(List.of());
+
+      // when
+      clothesAttributeDefService.create(request);
+
+      // then
+      verify(eventPublisher, never()).publishEvent(any());
     }
   }
 
