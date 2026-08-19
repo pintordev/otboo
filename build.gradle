@@ -43,6 +43,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.6.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:6.6.0'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     implementation 'com.nimbusds:nimbus-jose-jwt:10.1'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
