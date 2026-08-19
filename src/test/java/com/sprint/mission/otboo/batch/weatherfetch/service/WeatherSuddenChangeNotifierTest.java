@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangeProperties;
+import com.sprint.mission.otboo.batch.weatherfetch.metrics.WeatherFetchMetrics;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -39,13 +40,16 @@ class WeatherSuddenChangeNotifierTest {
   private WeatherRepository weatherRepository;
   @Mock
   private WeatherSuddenChangeChunkProcessor chunkProcessor;
+  @Mock
+  private WeatherFetchMetrics weatherFetchMetrics;
 
   private WeatherSuddenChangeNotifier notifier;
 
   private WeatherSuddenChangeNotifier notifierWithChunkSize(int gridChunkSize) {
     WeatherChangeProperties properties =
         new WeatherChangeProperties(1.0, 10.0, 1.0, gridChunkSize);
-    return new WeatherSuddenChangeNotifier(weatherRepository, chunkProcessor, properties);
+    return new WeatherSuddenChangeNotifier(weatherRepository, chunkProcessor, properties,
+        weatherFetchMetrics);
   }
 
   @BeforeEach
@@ -94,6 +98,24 @@ class WeatherSuddenChangeNotifierTest {
       assertThat(captor.getAllValues())
           .extracting(List::size)
           .containsExactly(2, 2, 1);
+    }
+
+    @Test
+    @DisplayName("청크별_결과를_합산해_D0_D1_알림_건수를_메트릭에_기록한다")
+    void 청크별_결과를_합산해_D0_D1_알림_건수를_메트릭에_기록한다() {
+      notifier = notifierWithChunkSize(1);
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      List<WeatherGrid> grids = List.of(gridWithId(60, 127), gridWithId(61, 128));
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(grids);
+      given(chunkProcessor.process(any(), any(), any(), anyBoolean(), anyBoolean()))
+          .willReturn(
+              new WeatherSuddenChangeChunkProcessor.ChunkResult(1, 1),
+              new WeatherSuddenChangeChunkProcessor.ChunkResult(2, 1));
+
+      notifier.detectAndNotify(baseTime);
+
+      verify(weatherFetchMetrics).countNotified("D0", 3);
+      verify(weatherFetchMetrics).countNotified("D1", 2);
     }
 
     @Test

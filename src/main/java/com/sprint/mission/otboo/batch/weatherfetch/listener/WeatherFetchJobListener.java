@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.batch.weatherfetch.listener;
 
+import com.sprint.mission.otboo.batch.weatherfetch.metrics.WeatherFetchMetrics;
 import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherSuddenChangeNotifier;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -19,6 +20,7 @@ public class WeatherFetchJobListener implements JobExecutionListener {
 
   private final Clock clock;
   private final WeatherSuddenChangeNotifier weatherSuddenChangeNotifier;
+  private final WeatherFetchMetrics weatherFetchMetrics;
 
   @Override
   public void beforeJob(JobExecution jobExecution) {
@@ -38,14 +40,17 @@ public class WeatherFetchJobListener implements JobExecutionListener {
   public void afterJob(JobExecution jobExecution) {
     if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
       log.info("WeatherFetch Job 성공 | jobId={}", jobExecution.getId());
+      weatherFetchMetrics.countCompleted();
     } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
       log.error("WeatherFetch Job 실패 | jobId={}, exitStatus={}", jobExecution.getId(),
           jobExecution.getExitStatus());
+      weatherFetchMetrics.countFailed();
     }
 
     if (jobExecution.getStartTime() != null && jobExecution.getEndTime() != null) {
       Duration duration = Duration.between(jobExecution.getStartTime(), jobExecution.getEndTime());
       log.info("WeatherFetch Job duration={}", duration);
+      weatherFetchMetrics.recordJobDuration(duration);
     }
 
     if (!jobExecution.getAllFailureExceptions().isEmpty()) {
