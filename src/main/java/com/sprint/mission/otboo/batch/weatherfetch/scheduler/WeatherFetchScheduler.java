@@ -14,7 +14,10 @@ public class WeatherFetchScheduler {
 
   private final WeatherFetchService weatherFetchService;
 
-  @SchedulerLock(name = "WeatherFetchBatchSchedulerLock", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
+  @SchedulerLock(
+      name = "WeatherFetchBatchSchedulerLock",
+      lockAtMostFor = "${batch.weather-fetch.lock-at-most-for:PT10M}",
+      lockAtLeastFor = "${batch.weather-fetch.lock-at-least-for:PT1M}")
   @Scheduled(cron = "0 30 2,5,8,11,14,17,20,23 * * *", zone = "Asia/Seoul")
   public void fetch() {
     log.info("날씨 수집 배치 시작");

@@ -14,7 +14,10 @@ public class WeatherRetentionScheduler {
 
   private final WeatherRetentionService weatherRetentionService;
 
-  @SchedulerLock(name = "WeatherRetentionBatchSchedulerLock", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
+  @SchedulerLock(
+      name = "WeatherRetentionBatchSchedulerLock",
+      lockAtMostFor = "${batch.weather-retention.lock-at-most-for:PT30M}",
+      lockAtLeastFor = "${batch.weather-retention.lock-at-least-for:PT1M}")
   @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
   public void cleanUp() {
     log.info("날씨 retention 배치 시작");
