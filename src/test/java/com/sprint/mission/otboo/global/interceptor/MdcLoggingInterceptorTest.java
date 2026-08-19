@@ -65,4 +65,45 @@ class MdcLoggingInterceptorTest {
       assertThat(response.getHeader(HEADER_NAME)).isEqualTo(requestId);
     }
   }
+
+  @Nested
+  @DisplayName("인바운드 헤더 형식이 무효한 경우")
+  class InvalidInboundHeader {
+
+    @Test
+    @DisplayName("개행 문자가 포함된 값은 버리고 새로 생성한다")
+    void 개행_포함_값은_무시하고_새로_생성한다() {
+      // given
+      String malicious = "abc\ninjected-log-line";
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      request.addHeader(HEADER_NAME, malicious);
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      // when
+      interceptor.preHandle(request, response, new Object());
+
+      // then
+      String requestId = MDC.get("requestId");
+      assertThat(requestId).isNotEqualTo(malicious);
+      assertThat(UUID.fromString(requestId)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("길이 상한(64자)을 넘는 값은 버리고 새로 생성한다")
+    void 길이_상한_초과_값은_무시하고_새로_생성한다() {
+      // given
+      String tooLong = "a".repeat(65);
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      request.addHeader(HEADER_NAME, tooLong);
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      // when
+      interceptor.preHandle(request, response, new Object());
+
+      // then
+      String requestId = MDC.get("requestId");
+      assertThat(requestId).isNotEqualTo(tooLong);
+      assertThat(UUID.fromString(requestId)).isNotNull();
+    }
+  }
 }
