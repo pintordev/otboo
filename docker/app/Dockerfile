@@ -13,7 +13,7 @@ FROM amazoncorretto:17-alpine
 RUN addgroup -S otboo && adduser -S otboo -G otboo   # non-root 실행
 WORKDIR /app
 COPY --from=build /workspace/build/libs/*-SNAPSHOT.jar app.jar
-ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /app/otel-javaagent.jar
+ADD --checksum=sha256:9d6bc2ad8dd8fb7f730984988e57b8ac0a82d81c7b3b8ae795378718733a509d https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.30.0/opentelemetry-javaagent.jar /app/otel-javaagent.jar
 RUN mkdir -p /app/uploads && chown -R otboo:otboo /app   # LocalFileStorageService가 쓰는 업로드 디렉토리
 
 USER otboo
