@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.global.interceptor;
 
+import io.opentelemetry.api.trace.Span;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
@@ -24,6 +25,7 @@ public class MdcLoggingInterceptor implements HandlerInterceptor {
       MDC.put("url", request.getRequestURI());
       MDC.put("clientIp", resolveClientIp(request));
     }
+    putTraceIdIfPresent();
     response.setHeader(HEADER_NAME, MDC.get("requestId"));
     return true;
   }
@@ -31,6 +33,13 @@ public class MdcLoggingInterceptor implements HandlerInterceptor {
   private String resolveRequestId(HttpServletRequest request) {
     String inbound = request.getHeader(HEADER_NAME);
     return isValid(inbound) ? inbound : UUID.randomUUID().toString();
+  }
+
+  private void putTraceIdIfPresent() {
+    Span span = Span.current();
+    if (span.getSpanContext().isValid()) {
+      MDC.put("traceId", span.getSpanContext().getTraceId());
+    }
   }
 
   private boolean isValid(String value) {
