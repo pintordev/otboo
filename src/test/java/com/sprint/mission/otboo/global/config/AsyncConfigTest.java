@@ -5,14 +5,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 class AsyncConfigTest {
 
   private final AsyncConfig asyncConfig = new AsyncConfig();
+
+  private ThreadPoolTaskExecutor executor;
+
+  @AfterEach
+  void tearDown() {
+    executor.shutdown();
+    MDC.clear();
+  }
 
   @Nested
   @DisplayName("mailExecutor")
@@ -24,14 +34,11 @@ class AsyncConfigTest {
       // given
       String requestId = UUID.randomUUID().toString();
       CompletableFuture<String> captured = new CompletableFuture<>();
+      executor = (ThreadPoolTaskExecutor) asyncConfig.mailExecutor();
 
       // when
-      try {
-        MDC.put("requestId", requestId);
-        asyncConfig.mailExecutor().execute(() -> captured.complete(MDC.get("requestId")));
-      } finally {
-        MDC.remove("requestId");
-      }
+      MDC.put("requestId", requestId);
+      executor.execute(() -> captured.complete(MDC.get("requestId")));
 
       // then
       assertThat(captured.get(5, TimeUnit.SECONDS)).isEqualTo(requestId);
@@ -48,14 +55,11 @@ class AsyncConfigTest {
       // given
       String requestId = UUID.randomUUID().toString();
       CompletableFuture<String> captured = new CompletableFuture<>();
+      executor = (ThreadPoolTaskExecutor) asyncConfig.notificationExecutor();
 
       // when
-      try {
-        MDC.put("requestId", requestId);
-        asyncConfig.notificationExecutor().execute(() -> captured.complete(MDC.get("requestId")));
-      } finally {
-        MDC.remove("requestId");
-      }
+      MDC.put("requestId", requestId);
+      executor.execute(() -> captured.complete(MDC.get("requestId")));
 
       // then
       assertThat(captured.get(5, TimeUnit.SECONDS)).isEqualTo(requestId);
@@ -72,14 +76,11 @@ class AsyncConfigTest {
       // given
       String requestId = UUID.randomUUID().toString();
       CompletableFuture<String> captured = new CompletableFuture<>();
+      executor = (ThreadPoolTaskExecutor) asyncConfig.sseDisconnectExecutor();
 
       // when
-      try {
-        MDC.put("requestId", requestId);
-        asyncConfig.sseDisconnectExecutor().execute(() -> captured.complete(MDC.get("requestId")));
-      } finally {
-        MDC.remove("requestId");
-      }
+      MDC.put("requestId", requestId);
+      executor.execute(() -> captured.complete(MDC.get("requestId")));
 
       // then
       assertThat(captured.get(5, TimeUnit.SECONDS)).isEqualTo(requestId);
