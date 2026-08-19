@@ -1,0 +1,150 @@
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-otboo}
+      POSTGRES_USER: ${POSTGRES_USER:?.env에 POSTGRES_USER를 설정하세요}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env에 POSTGRES_PASSWORD를 설정하세요}
+    ports:
+      - "127.0.0.1:5433:5432"   # 로컬에 이미 떠 있는 네이티브 postgres(5432)와 충돌 방지 — 컨테이너 간 통신은 5432 그대로 사용, loopback만 노출
+    volumes:
+      - postgres_data:/var/lib/postgresql   # postgres 18+ 이미지는 /var/lib/postgresql/data 직접 마운트를 지원하지 않음
+    healthcheck:
+      # $$는 compose 변수 보간 이스케이프 — 컨테이너 내부 셸이 자기 POSTGRES_USER/DB env var를 그대로 참조하게 함(하드코딩 방지)
+      test: [ "CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"   # 인증 없는 Redis라 loopback만 노출
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.0   # KRaft 내장 — Zookeeper 불필요
+    ports:
+      - "127.0.0.1:29092:29092"   # PLAINTEXT라 loopback만 노출
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # PLAINTEXT(9092)는 compose 네트워크 내부용(app이 kafka:9092로 접속), PLAINTEXT_HOST(29092)는 호스트 디버깅용 — 리스너 분리
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  elasticsearch:
+    build:
+      context: ./docker/elasticsearch   # CI에서 이미 검증 중인 이미지 재사용 — 별도로 새로 안 만듦
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9201:9200"   # 로컬에 다른 ES가 9200을 점유하고 있어도 충돌 없게 회피, 보안 비활성 상태라 loopback만 노출
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  nginx:
+    image: nginx:1.27-alpine   # 설정 파일 하나만 얹으면 되므로 커스텀 이미지 빌드 없이 공식 이미지 + 마운트로 충분
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      # base-url/OAuth2 redirect-uri/CORS allowed-origin이 시크릿 설정에 :8080으로 고정돼 있어서,
+      # nginx를 그 포트로 맞춰야 로그인·CORS가 깨지지 않는다(시크릿 파일/OAuth 콘솔 등록값은 안 건드림)
+      - "8080:80"
+    depends_on:
+      - app-1
+      - app-2
+
+  app-1:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/otboo
+      SPRING_DATA_REDIS_HOST: redis
+      ES_HOST: elasticsearch
+      ES_PORT: 9200
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # application*.yaml은 scripts/link_prop.sh가 만드는 심볼릭 링크(호스트 절대경로)라 빌드 컨텍스트에 못 들어감(.dockerignore 참고)
+      # — 이미지엔 안 굽고, 실제 파일을 컨테이너에 마운트해서 런타임에 additional-location으로 읽는다
+      SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
+      JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}   # 컨테이너 메모리 제한을 인지해 힙을 잡도록(기본 25%는 너무 작음)
+    volumes:
+      - uploads_data:/app/uploads   # 두 인스턴스가 같은 업로드 파일을 봐야 라운드로빈에서 조회가 안 깨짐
+      - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
+      - ./.claude/otboo-secret/application-local.yaml:/app/config/application-local.yaml:ro
+    ports:
+      - "8081:8080"   # nginx(8080) 라운드로빈과 별개로, 특정 인스턴스 직접 접근용 유지
+    deploy:
+      resources:
+        limits:   # ECS Fargate 태스크 사이징을 흉내낸 기본값 — 필요 시 APP_CPU_LIMIT/APP_MEMORY_LIMIT로 오버라이드
+          cpus: "${APP_CPU_LIMIT:-1}"
+          memory: ${APP_MEMORY_LIMIT:-1024M}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  app-2:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/otboo
+      SPRING_DATA_REDIS_HOST: redis
+      ES_HOST: elasticsearch
+      ES_PORT: 9200
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
+      JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+    volumes:
+      - uploads_data:/app/uploads
+      - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
+      - ./.claude/otboo-secret/application-local.yaml:/app/config/application-local.yaml:ro
+    ports:
+      - "8082:8080"   # nginx(8080) 라운드로빈과 별개로, 특정 인스턴스 직접 접근용(app-1=8081/app-2=8082) 유지
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPU_LIMIT:-1}"
+          memory: ${APP_MEMORY_LIMIT:-1024M}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads_data:
