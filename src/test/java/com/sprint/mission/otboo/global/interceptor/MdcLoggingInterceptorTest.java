@@ -2,12 +2,17 @@ package com.sprint.mission.otboo.global.interceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.sdk.testing.junit5.OpenTelemetryExtension;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -15,6 +20,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class MdcLoggingInterceptorTest {
 
   private static final String HEADER_NAME = "Otboo-Request-Id";
+
+  @RegisterExtension
+  static final OpenTelemetryExtension otelTesting = OpenTelemetryExtension.create();
 
   private final MdcLoggingInterceptor interceptor = new MdcLoggingInterceptor();
 
@@ -110,6 +118,46 @@ class MdcLoggingInterceptorTest {
       String requestId = MDC.get("requestId");
       assertThat(requestId).isNotEqualTo(tooLong);
       assertThat(UUID.fromString(requestId)).isNotNull();
+    }
+  }
+
+  @Nested
+  @DisplayName("OTel trace id 연동")
+  class TraceIdIntegration {
+
+    private final Tracer tracer = otelTesting.getOpenTelemetry().getTracer("test");
+
+    @Test
+    @DisplayName("활성 span이 있으면 traceId를 MDC에 추가한다")
+    void 활성_span이_있으면_traceId를_MDC에_추가한다() {
+      // given
+      Span span = tracer.spanBuilder("test-span").startSpan();
+
+      // when & then
+      try (Scope scope = span.makeCurrent()) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        interceptor.preHandle(request, response, new Object());
+
+        assertThat(MDC.get("traceId")).isEqualTo(span.getSpanContext().getTraceId());
+      } finally {
+        span.end();
+      }
+    }
+
+    @Test
+    @DisplayName("활성 span이 없으면 traceId를 MDC에 추가하지 않는다")
+    void 활성_span이_없으면_traceId를_MDC에_추가하지_않는다() {
+      // given
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      // when
+      interceptor.preHandle(request, response, new Object());
+
+      // then
+      assertThat(MDC.get("traceId")).isNull();
     }
   }
 }

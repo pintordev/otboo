@@ -80,6 +80,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client-test'
     testImplementation 'org.awaitility:awaitility'
     testImplementation 'org.springframework.boot:spring-boot-data-elasticsearch-test'
+    testImplementation 'io.opentelemetry:opentelemetry-sdk-testing:1.51.0'
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
