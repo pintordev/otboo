@@ -17,6 +17,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -55,6 +56,10 @@ class GlobalExceptionHandlerTest {
 
     @GetMapping("/header")
     public void header(@RequestHeader("X-Test-Header") String header) {
+    }
+
+    @GetMapping("/cookie")
+    public void cookie(@CookieValue(name = "test-cookie", required = true) String cookie) {
     }
 
     @GetMapping("/param")
@@ -128,6 +133,21 @@ class GlobalExceptionHandlerTest {
       mockMvc.perform(get("/test/header"))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.exceptionName").value("MissingRequestHeaderException"));
+    }
+  }
+
+  @Nested
+  @DisplayName("필수 쿠키가 없을 때")
+  class MissingRequestCookieHandling {
+
+    @Test
+    @DisplayName("401을 반환한다")
+    void _401을_반환한다() throws Exception {
+      mockMvc.perform(get("/test/cookie"))
+          .andExpect(status().isUnauthorized())
+          .andExpect(jsonPath("$.exceptionName").value("MissingRequestCookieException"))
+          .andExpect(jsonPath("$.message").value("필수 쿠키가 누락되었습니다."))
+          .andExpect(jsonPath("$.details.cookie").value("test-cookie"));
     }
   }
 

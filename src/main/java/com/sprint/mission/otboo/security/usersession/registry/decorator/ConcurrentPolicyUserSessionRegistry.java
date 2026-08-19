@@ -45,6 +45,11 @@ public class ConcurrentPolicyUserSessionRegistry implements UserSessionRegistry 
   }
 
   @Override
+  public UserSession evictOldestAndSave(UserSession session, int maxDevices, Instant expiresAt) {
+    return delegate.evictOldestAndSave(session, maxDevices, expiresAt);
+  }
+
+  @Override
   public UserSession compareAndRotate(UUID userId, UUID sessionId, UUID expectedRefreshJti,
       UUID newRefreshJti, Instant issuedAt, Instant expiresAt) {
     return delegate.compareAndRotate(userId, sessionId, expectedRefreshJti, newRefreshJti,

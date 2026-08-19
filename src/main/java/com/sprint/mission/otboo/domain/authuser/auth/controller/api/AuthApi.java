@@ -44,8 +44,7 @@ public interface AuthApi {
   @Operation(summary = "액세스 토큰 재발급", description = "리프레시 토큰 쿠키를 이용해 액세스 토큰과 리프레시 토큰을 재발급합니다(Refresh Token Rotation).")
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "재발급 성공"),
-      @ApiResponse(responseCode = "400", description = "리프레시 토큰 쿠키 누락"),
-      @ApiResponse(responseCode = "401", description = "리프레시 토큰이 유효하지 않거나 만료됨 / 세션이 만료되었거나 다른 기기 로그인으로 무효화됨 / 토큰 재사용 탐지"),
+      @ApiResponse(responseCode = "401", description = "리프레시 토큰 쿠키 누락 / 리프레시 토큰이 유효하지 않거나 만료됨 / 세션이 만료되었거나 다른 기기 로그인으로 무효화됨 / 토큰 재사용 탐지"),
       @ApiResponse(responseCode = "403", description = "계정 잠김"),
       @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
   })

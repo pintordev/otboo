@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestCookieException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -45,6 +46,16 @@ public class GlobalExceptionHandler {
     return ResponseEntity
         .status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponse(e.getClass().getSimpleName(), "요청 본문을 읽을 수 없습니다.", null));
+  }
+
+  @ExceptionHandler(MissingRequestCookieException.class)
+  public ResponseEntity<ErrorResponse> handleMissingRequestCookie(MissingRequestCookieException e) {
+    // 필수 쿠키 누락은 대부분 인증 토큰(refreshToken 등) 누락이라 400이 아니라 401로 응답한다.
+    Map<String, Object> details = Map.of("cookie", e.getCookieName());
+    log.warn("[{}] {}", e.getClass().getSimpleName(), details);
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED)
+        .body(new ErrorResponse(e.getClass().getSimpleName(), "필수 쿠키가 누락되었습니다.", details));
   }
 
   @ExceptionHandler(MissingRequestHeaderException.class)

@@ -25,6 +25,16 @@ public interface UserSessionRegistry {
     return replaceAll(issued, expiresAt);
   }
 
+  /**
+   * 이 유저의 세션 수가 maxDevices 이상이면 issuedAt이 가장 오래된 세션부터 회수해 정원을
+   * 맞춘 뒤, 새 세션을 원자적으로 발급한다 (최대 기기 수 제한 로그인 등에서 사용).
+   */
+  default UserSession evictOldestAndIssue(UUID userId, int maxDevices, Instant now) {
+    UserSession issued = UserSession.issue(userId, now);
+    Instant expiresAt = requireFuture(expirationPolicy().expiresAtOnIssue(now), now);
+    return evictOldestAndSave(issued, maxDevices, expiresAt);
+  }
+
   default UserSession rotate(UUID userId, UUID sessionId, UUID currentRefreshJti, Instant now) {
     UserSession current = verifyUserSession(userId, sessionId);
     Instant expiresAt = requireFuture(expirationPolicy().expiresAtOnRotate(current, now), now);
@@ -56,6 +66,12 @@ public interface UserSessionRegistry {
 
   /** session의 userId가 가진 기존 세션을 전부 지우고 session만 원자적으로 저장한다. */
   UserSession replaceAll(UserSession session, Instant expiresAt);
+
+  /**
+   * session의 userId가 가진 기존 세션 수가 maxDevices 이상이면 issuedAt이 가장 오래된 세션부터
+   * 회수해 정원을 맞춘 뒤, session을 원자적으로 저장한다.
+   */
+  UserSession evictOldestAndSave(UserSession session, int maxDevices, Instant expiresAt);
 
   /**
    * 저장된 refreshJti가 expectedRefreshJti와 같을 때만 원자적으로 newRefreshJti로 교체한다.

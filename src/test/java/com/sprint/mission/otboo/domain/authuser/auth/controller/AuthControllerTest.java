@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -213,6 +214,16 @@ class AuthControllerTest {
       mockMvc.perform(post("/api/auth/refresh")
               .cookie(new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "refresh-token")))
           .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("refresh 쿠키가 없으면 401을 반환한다")
+    void refresh_쿠키가_없으면_401을_반환한다() throws Exception {
+      // when & then
+      mockMvc.perform(post("/api/auth/refresh"))
+          .andExpect(status().isUnauthorized());
+
+      verifyNoInteractions(authService);
     }
   }
 }

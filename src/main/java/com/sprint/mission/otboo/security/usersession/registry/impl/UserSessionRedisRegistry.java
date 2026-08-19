@@ -33,6 +33,12 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
       new ClassPathResource("scripts/replace-all-user-sessions.lua"), Long.class);
   private static final RedisScript<Long> COMPARE_AND_ROTATE_SCRIPT = RedisScript.of(
       new ClassPathResource("scripts/compare-and-rotate.lua"), Long.class);
+  private static final RedisScript<Long> EVICT_OLDEST_AND_ISSUE_SCRIPT = RedisScript.of(
+      new ClassPathResource("scripts/evict-oldest-and-issue.lua"), Long.class);
+  private static final RedisScript<Long> REVOKE_SESSION_SCRIPT = RedisScript.of(
+      new ClassPathResource("scripts/revoke-session.lua"), Long.class);
+  private static final RedisScript<Long> REVOKE_ALL_SESSIONS_SCRIPT = RedisScript.of(
+      new ClassPathResource("scripts/revoke-all-sessions.lua"), Long.class);
 
   private final StringRedisTemplate redisTemplate;
   private final HashOperations<String, String, String> hashOps;
@@ -99,6 +105,23 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
   }
 
   @Override
+  public UserSession evictOldestAndSave(UserSession session, int maxDevices, Instant expiresAt) {
+    String indexKey = indexKey(session.userId());
+    String newSessionKey = sessionKey(session.userId(), session.sessionId());
+
+    redisTemplate.execute(EVICT_OLDEST_AND_ISSUE_SCRIPT,
+        List.of(indexKey, newSessionKey),
+        sessionKeyPrefix(session.userId()),
+        String.valueOf(maxDevices),
+        session.sessionId().toString(),
+        session.currentRefreshJti().toString(),
+        session.issuedAt().toString(),
+        String.valueOf(expiresAt.toEpochMilli()));
+
+    return session;
+  }
+
+  @Override
   public UserSession compareAndRotate(UUID userId, UUID sessionId, UUID expectedRefreshJti,
       UUID newRefreshJti, Instant issuedAt, Instant expiresAt) {
     String sessionKey = sessionKey(userId, sessionId);
@@ -153,25 +176,16 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
 
   @Override
   public void revoke(UUID userId, UUID sessionId) {
-    redisTemplate.delete(sessionKey(userId, sessionId));
-    zSetOps.remove(indexKey(userId), sessionId.toString());
+    redisTemplate.execute(REVOKE_SESSION_SCRIPT,
+        List.of(sessionKey(userId, sessionId), indexKey(userId)),
+        sessionId.toString());
   }
 
   @Override
   public void revokeAll(UUID userId) {
-    String indexKey = indexKey(userId);
-    Set<String> sessionIds = zSetOps.range(indexKey, 0, -1);
-
-    if (sessionIds != null) {
-      for (String rawSessionId : sessionIds) {
-        redisTemplate.delete(sessionKey(userId, UUID.fromString(rawSessionId)));
-      }
-      // 읽은 멤버만 제거한다. indexKey 자체를 delete()하면, 이 범위조회 이후 동시에
-      // 다른 요청이 추가한 세션의 인덱스 엔트리까지 같이 지워져서 좀비 세션이 생긴다.
-      if (!sessionIds.isEmpty()) {
-        zSetOps.remove(indexKey, sessionIds.toArray());
-      }
-    }
+    redisTemplate.execute(REVOKE_ALL_SESSIONS_SCRIPT,
+        List.of(indexKey(userId)),
+        sessionKeyPrefix(userId));
   }
 
   private void pruneExpired(String indexKey) {
@@ -204,10 +218,16 @@ public class UserSessionRedisRegistry implements UserSessionRegistry {
   }
 
   private String sessionKeyPrefix(UUID userId) {
-    return SESSION_KEY_PREFIX + userId + ":";
+    return SESSION_KEY_PREFIX + userHashTag(userId) + ":";
   }
 
   private String indexKey(UUID userId) {
-    return INDEX_KEY_PREFIX + userId;
+    return INDEX_KEY_PREFIX + userHashTag(userId);
+  }
+
+  // Redis Cluster 해시 태그. 세션 키와 인덱스 키가 접두사는 달라도 이 부분만으로 슬롯이
+  // 정해지므로, 같은 유저의 두 키가 항상 같은 슬롯에 배치되어 MULTI/스크립트에서 함께 다룰 수 있다.
+  private String userHashTag(UUID userId) {
+    return "{" + userId + "}";
   }
 }
