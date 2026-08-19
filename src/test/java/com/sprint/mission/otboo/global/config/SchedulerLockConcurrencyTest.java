@@ -61,23 +61,28 @@ class SchedulerLockConcurrencyTest implements RedisTestContainerSupport {
       CountDownLatch start = new CountDownLatch(1);
       ExecutorService executor = Executors.newFixedThreadPool(2);
 
-      // when
-      List<Future<Object>> futures = IntStream.range(0, 2)
-          .<Future<Object>>mapToObj(i -> executor.submit(() -> {
-            ready.countDown();
-            start.await();
-            weatherFetchScheduler.fetch();
-            return null;
-          }))
-          .toList();
-      ready.await();
-      start.countDown();
-      for (Future<Object> future : futures) {
-        future.get(15, TimeUnit.SECONDS);
-      }
+      try {
+        // when
+        List<Future<Object>> futures = IntStream.range(0, 2)
+            .<Future<Object>>mapToObj(i -> executor.submit(() -> {
+              ready.countDown();
+              start.await();
+              weatherFetchScheduler.fetch();
+              return null;
+            }))
+            .toList();
+        ready.await();
+        start.countDown();
+        for (Future<Object> future : futures) {
+          future.get(15, TimeUnit.SECONDS);
+        }
 
-      // then
-      verify(weatherFetchService, times(1)).execute();
+        // then
+        verify(weatherFetchService, times(1)).execute();
+      } finally {
+        executor.shutdownNow();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+      }
     }
   }
 
@@ -93,23 +98,28 @@ class SchedulerLockConcurrencyTest implements RedisTestContainerSupport {
       CountDownLatch start = new CountDownLatch(1);
       ExecutorService executor = Executors.newFixedThreadPool(2);
 
-      // when
-      List<Future<Object>> futures = IntStream.range(0, 2)
-          .<Future<Object>>mapToObj(i -> executor.submit(() -> {
-            ready.countDown();
-            start.await();
-            weatherRetentionScheduler.cleanUp();
-            return null;
-          }))
-          .toList();
-      ready.await();
-      start.countDown();
-      for (Future<Object> future : futures) {
-        future.get(15, TimeUnit.SECONDS);
-      }
+      try {
+        // when
+        List<Future<Object>> futures = IntStream.range(0, 2)
+            .<Future<Object>>mapToObj(i -> executor.submit(() -> {
+              ready.countDown();
+              start.await();
+              weatherRetentionScheduler.cleanUp();
+              return null;
+            }))
+            .toList();
+        ready.await();
+        start.countDown();
+        for (Future<Object> future : futures) {
+          future.get(15, TimeUnit.SECONDS);
+        }
 
-      // then
-      verify(weatherRetentionService, times(1)).execute();
+        // then
+        verify(weatherRetentionService, times(1)).execute();
+      } finally {
+        executor.shutdownNow();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+      }
     }
   }
 }
