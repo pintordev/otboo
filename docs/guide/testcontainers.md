@@ -69,9 +69,10 @@ CI/로컬 모두 사전에 기동된 컨테이너(`docker/elasticsearch/Dockerfi
 `spring-kafka`/`spring-kafka-test` 의존성이 있어야 아래 예제가 동작합니다 — 아직 `build.gradle`에 없으므로
 실제 Kafka 클라이언트를 도입하는 시점에 함께 추가합니다.
 
-Docker 컨테이너가 아니라 JVM 내 임베디드 브로커를 씁니다. 테스트 클래스에 `@EmbeddedKafka`를 붙이면
-`EmbeddedKafkaBroker` 빈이 등록되고, `spring.kafka.bootstrap-servers` 프로퍼티로 부트스트랩 서버 주소가 채워집니다
-(Spring Kafka 3.0.10+ 기본값 — Spring Boot의 Kafka 오토컨피그 프로퍼티와 동일해서 별도 매핑이 필요 없습니다).
+Docker 컨테이너가 아니라 JVM 내 임베디드 브로커를 씁니다. `@SpringBootTest`처럼 Spring 컨텍스트를 쓰는 테스트
+클래스에 `@EmbeddedKafka`를 붙이면 `EmbeddedKafkaBroker` 빈이 등록되고, `spring.kafka.bootstrap-servers`
+프로퍼티로 부트스트랩 서버 주소가 채워집니다(Spring Kafka 3.0.10+ 기본값). Spring 컨텍스트 없이 쓰면 standalone
+브로커만 생성되고 빈으로 등록되지 않습니다.
 
 ```java
 @SpringBootTest
