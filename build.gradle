@@ -52,6 +52,7 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
     implementation 'org.apache.tika:tika-core:2.9.2'
     implementation 'org.springframework.retry:spring-retry'
+    implementation 'io.opentelemetry:opentelemetry-api:1.51.0'
 
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:7.5:jpa"

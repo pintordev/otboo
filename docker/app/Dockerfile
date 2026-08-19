@@ -13,8 +13,9 @@ FROM amazoncorretto:17-alpine
 RUN addgroup -S otboo && adduser -S otboo -G otboo   # non-root 실행
 WORKDIR /app
 COPY --from=build /workspace/build/libs/*-SNAPSHOT.jar app.jar
+ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /app/otel-javaagent.jar
 RUN mkdir -p /app/uploads && chown -R otboo:otboo /app   # LocalFileStorageService가 쓰는 업로드 디렉토리
 
 USER otboo
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-javaagent:/app/otel-javaagent.jar", "-jar", "app.jar"]
