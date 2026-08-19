@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.global.interceptor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -10,18 +11,30 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class MdcLoggingInterceptor implements HandlerInterceptor {
 
+  private static final String HEADER_NAME = "Otboo-Request-Id";
+  private static final Pattern SAFE_REQUEST_ID = Pattern.compile("^[a-zA-Z0-9-]{1,64}$");
+
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
       Object handler) {
     if (MDC.get("requestId") == null) {
-      String requestId = UUID.randomUUID().toString();
+      String requestId = resolveRequestId(request);
       MDC.put("requestId", requestId);
       MDC.put("method", request.getMethod());
       MDC.put("url", request.getRequestURI());
       MDC.put("clientIp", resolveClientIp(request));
     }
-    response.setHeader("Otboo-Request-ID", MDC.get("requestId"));
+    response.setHeader(HEADER_NAME, MDC.get("requestId"));
     return true;
+  }
+
+  private String resolveRequestId(HttpServletRequest request) {
+    String inbound = request.getHeader(HEADER_NAME);
+    return isValid(inbound) ? inbound : UUID.randomUUID().toString();
+  }
+
+  private boolean isValid(String value) {
+    return value != null && SAFE_REQUEST_ID.matcher(value).matches();
   }
 
   @Override
