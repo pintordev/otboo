@@ -22,6 +22,11 @@ import org.springframework.web.multipart.MultipartFile;
 @DisplayName("LocalFileStorageService")
 class LocalFileStorageServiceTest {
 
+  private static final byte[] JPEG_MAGIC_BYTES = {
+      (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10,
+      0x4A, 0x46, 0x49, 0x46, 0x00, 0x01
+  };
+
   @TempDir
   Path tempDir;
 
@@ -42,7 +47,7 @@ class LocalFileStorageServiceTest {
       // given
       LocalFileStorageService localFileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
 
       // when
       String key = localFileStorageService.store(file, "profile");
@@ -71,7 +76,7 @@ class LocalFileStorageServiceTest {
       // given
       LocalFileStorageService localFileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
 
       // when & then
       assertThatThrownBy(() -> localFileStorageService.store(file, "../../etc"))
@@ -89,7 +94,7 @@ class LocalFileStorageServiceTest {
       // given
       LocalFileStorageService localFileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
       String key = localFileStorageService.store(file, "profile");
 
       // when

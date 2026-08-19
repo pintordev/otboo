@@ -32,6 +32,11 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 @DisplayName("S3FileStorageService")
 class S3FileStorageServiceTest {
 
+  private static final byte[] JPEG_MAGIC_BYTES = {
+      (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10,
+      0x4A, 0x46, 0x49, 0x46, 0x00, 0x01
+  };
+
   @Mock
   private S3Client s3Client;
 
@@ -53,7 +58,7 @@ class S3FileStorageServiceTest {
       // given
       S3FileStorageService s3FileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
 
       // when
       String key = s3FileStorageService.store(file, "profile");
@@ -69,7 +74,7 @@ class S3FileStorageServiceTest {
       // given
       S3FileStorageService s3FileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
       given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
           .willThrow(S3Exception.builder().message("access denied").build());
 
@@ -84,7 +89,7 @@ class S3FileStorageServiceTest {
       // given
       S3FileStorageService s3FileStorageService = buildService();
       MultipartFile file = new MockMultipartFile("file", "profile.jpg", "image/jpeg",
-          new byte[]{1, 2, 3});
+          JPEG_MAGIC_BYTES);
       given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
           .willThrow(SdkClientException.create("자격 증명을 찾을 수 없습니다"));
 
