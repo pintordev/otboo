@@ -70,7 +70,8 @@ CI/로컬 모두 사전에 기동된 컨테이너(`docker/elasticsearch/Dockerfi
 실제 Kafka 클라이언트를 도입하는 시점에 함께 추가합니다.
 
 Docker 컨테이너가 아니라 JVM 내 임베디드 브로커를 씁니다. 테스트 클래스에 `@EmbeddedKafka`를 붙이면
-`EmbeddedKafkaBroker` 빈이 등록되고, `spring.embedded.kafka.brokers` 프로퍼티로 부트스트랩 서버 주소가 채워집니다.
+`EmbeddedKafkaBroker` 빈이 등록되고, `spring.kafka.bootstrap-servers` 프로퍼티로 부트스트랩 서버 주소가 채워집니다
+(Spring Kafka 3.0.10+ 기본값 — Spring Boot의 Kafka 오토컨피그 프로퍼티와 동일해서 별도 매핑이 필요 없습니다).
 
 ```java
 @SpringBootTest
@@ -81,7 +82,7 @@ class NotificationKafkaListenerTest {
   @Autowired
   private EmbeddedKafkaBroker embeddedKafkaBroker;
 
-  @Value("${spring.embedded.kafka.brokers}")
+  @Value("${spring.kafka.bootstrap-servers}")
   private String brokerAddresses;
 
   // KafkaTemplate으로 메시지 발행 → @KafkaListener가 실제로 소비하는지 검증
