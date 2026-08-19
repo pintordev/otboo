@@ -100,6 +100,7 @@ services:
       OTEL_SERVICE_NAME: otboo-app-1
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc   # SDK 기본 프로토콜(http/protobuf)이 4317(gRPC 전용 포트)과 어긋나 연결이 끊기므로 명시
       OTEL_METRICS_EXPORTER: none   # 메트릭은 Actuator/Micrometer가 이미 담당
       OTEL_LOGS_EXPORTER: none      # 로그는 기존 logback 파이프라인 그대로
     volumes:
@@ -138,6 +139,7 @@ services:
       OTEL_SERVICE_NAME: otboo-app-2
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc   # SDK 기본 프로토콜(http/protobuf)이 4317(gRPC 전용 포트)과 어긋나 연결이 끊기므로 명시
       OTEL_METRICS_EXPORTER: none   # 메트릭은 Actuator/Micrometer가 이미 담당
       OTEL_LOGS_EXPORTER: none      # 로그는 기존 logback 파이프라인 그대로
     volumes:
