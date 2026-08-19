@@ -50,6 +50,7 @@ public class AsyncConfig implements AsyncConfigurer {
     executor.setMaxPoolSize(4);
     executor.setQueueCapacity(50);
     executor.setThreadNamePrefix("sse-disconnect-async-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
     executor.initialize();
     return executor;
   }
