@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,11 @@ class MdcLoggingInterceptorTest {
   private static final String HEADER_NAME = "Otboo-Request-Id";
 
   private final MdcLoggingInterceptor interceptor = new MdcLoggingInterceptor();
+
+  @BeforeEach
+  void clearMdcBeforeEach() {
+    MDC.clear();
+  }
 
   @AfterEach
   void clearMdc() {
