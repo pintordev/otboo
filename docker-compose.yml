@@ -65,6 +65,12 @@ services:
       timeout: 10s
       retries: 10
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "127.0.0.1:16686:16686"   # Jaeger UI
+      - "127.0.0.1:4317:4317"     # OTLP gRPC 수신
+
   nginx:
     image: nginx:1.27-alpine   # 설정 파일 하나만 얹으면 되므로 커스텀 이미지 빌드 없이 공식 이미지 + 마운트로 충분
     volumes:
@@ -91,6 +97,11 @@ services:
       # — 이미지엔 안 굽고, 실제 파일을 컨테이너에 마운트해서 런타임에 additional-location으로 읽는다
       SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
       JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}   # 컨테이너 메모리 제한을 인지해 힙을 잡도록(기본 25%는 너무 작음)
+      OTEL_SERVICE_NAME: otboo-app-1
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_METRICS_EXPORTER: none   # 메트릭은 Actuator/Micrometer가 이미 담당
+      OTEL_LOGS_EXPORTER: none      # 로그는 기존 logback 파이프라인 그대로
     volumes:
       - uploads_data:/app/uploads   # 두 인스턴스가 같은 업로드 파일을 봐야 라운드로빈에서 조회가 안 깨짐
       - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
@@ -124,6 +135,11 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/
       JAVA_TOOL_OPTIONS: ${APP_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+      OTEL_SERVICE_NAME: otboo-app-2
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_METRICS_EXPORTER: none   # 메트릭은 Actuator/Micrometer가 이미 담당
+      OTEL_LOGS_EXPORTER: none      # 로그는 기존 logback 파이프라인 그대로
     volumes:
       - uploads_data:/app/uploads
       - ./.claude/otboo-secret/application.yaml:/app/config/application.yaml:ro
