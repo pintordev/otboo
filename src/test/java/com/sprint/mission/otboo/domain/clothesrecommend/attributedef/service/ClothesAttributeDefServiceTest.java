@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
+import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.AttributeDefSortBy;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefCreateRequest;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefDto;
@@ -18,27 +21,36 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.Clothes
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDef;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDefValue;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNameDuplicatedException;
+import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.mapper.ClothesAttributeDefMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
-import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
-import java.util.Optional;
-import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ClothesAttributeDefServiceTest")
 class ClothesAttributeDefServiceTest {
+
+  private static final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
 
   @InjectMocks
   ClothesAttributeDefService clothesAttributeDefService;
@@ -48,6 +60,12 @@ class ClothesAttributeDefServiceTest {
 
   @Mock
   ClothesAttributeDefValueRepository clothesAttributeDefValueRepository;
+
+  @Mock
+  UserRepository userRepository;
+
+  @Mock
+  ApplicationEventPublisher eventPublisher;
 
   @Spy
   ClothesAttributeDefMapper clothesAttributeDefMapper = new ClothesAttributeDefMapper();
@@ -91,6 +109,59 @@ class ClothesAttributeDefServiceTest {
       assertThatThrownBy(() -> clothesAttributeDefService.create(request))
           .isInstanceOf(ClothesAttributeDefNameDuplicatedException.class);
       verify(clothesAttributeDefRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("등록에 성공하면 전체 유저에게 INFO 알림 이벤트를 발행한다")
+    void 등록에_성공하면_전체_유저에게_INFO_알림_이벤트를_발행한다() {
+      // given
+      ClothesAttributeDefCreateRequest request = fm.giveMeBuilder(ClothesAttributeDefCreateRequest.class)
+          .set("name", "색상")
+          .set("selectableValues", List.of("빨강"))
+          .sample();
+      given(clothesAttributeDefRepository.existsByName("색상")).willReturn(false);
+      given(clothesAttributeDefRepository.saveAndFlush(any(ClothesAttributeDef.class)))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(clothesAttributeDefValueRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+
+      UUID userId1 = UUID.randomUUID();
+      UUID userId2 = UUID.randomUUID();
+      given(userRepository.findAllIds()).willReturn(List.of(userId1, userId2));
+
+      // when
+      clothesAttributeDefService.create(request);
+
+      // then
+      ArgumentCaptor<NotificationRequestedEvent> eventCaptor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+      NotificationRequestedEvent event = eventCaptor.getValue();
+      assertThat(event.receiverIds()).containsExactlyInAnyOrder(userId1, userId2);
+      assertThat(event.level()).isEqualTo(NotificationLevel.INFO);
+    }
+
+    @Test
+    @DisplayName("유저가 없으면 알림 이벤트를 발행하지 않는다")
+    void 유저가_없으면_알림_이벤트를_발행하지_않는다() {
+      // given
+      ClothesAttributeDefCreateRequest request = fm.giveMeBuilder(ClothesAttributeDefCreateRequest.class)
+          .set("name", "색상")
+          .set("selectableValues", List.of("빨강"))
+          .sample();
+      given(clothesAttributeDefRepository.existsByName("색상")).willReturn(false);
+      given(clothesAttributeDefRepository.saveAndFlush(any(ClothesAttributeDef.class)))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(clothesAttributeDefValueRepository.saveAll(anyList()))
+          .willAnswer(invocation -> invocation.getArgument(0));
+      given(userRepository.findAllIds()).willReturn(List.of());
+
+      // when
+      clothesAttributeDefService.create(request);
+
+      // then
+      verify(eventPublisher, never()).publishEvent(any());
     }
   }
 
@@ -191,6 +262,7 @@ class ClothesAttributeDefServiceTest {
       assertThat(result.selectableValues()).containsExactly("빨강", "파랑");
       verify(clothesAttributeDefValueRepository).deleteAllByDefinitionId(definitionId);
     }
+
     @Test
     @DisplayName("Should throw NotFoundException when definition does not exist")
     void updateFailWhenNotFound() {
@@ -206,6 +278,7 @@ class ClothesAttributeDefServiceTest {
       assertThatThrownBy(() -> clothesAttributeDefService.update(definitionId, request))
           .isInstanceOf(ClothesAttributeDefNotFoundException.class);
     }
+
     @Test
     @DisplayName("Should throw NameDuplicatedException when new name already exists")
     void updateFailWhenNameDuplicated() {
@@ -247,6 +320,7 @@ class ClothesAttributeDefServiceTest {
       assertThat(result.name()).isEqualTo("색상");
     }
   }
+
   @Nested
   @DisplayName("Delete")
   class Delete {

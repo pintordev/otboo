@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserListParams;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserLockUpdateRequest;
 import com.sprint.mission.otboo.domain.authuser.user.dto.request.UserRoleUpdateRequest;
@@ -16,6 +19,8 @@ import com.sprint.mission.otboo.domain.authuser.user.mapper.UserMapper;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import java.util.List;
 import java.util.Optional;
@@ -24,13 +29,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AdminService")
 class AdminServiceTest {
+
+  private static final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
 
   @InjectMocks
   private AdminService adminService;
@@ -44,6 +57,9 @@ class AdminServiceTest {
   @Mock
   private UserMapper userMapper;
 
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
+
   @Nested
   @DisplayName("사용자 목록 조회 (searchUserList)")
   class SearchUserList {
@@ -52,7 +68,8 @@ class AdminServiceTest {
     @DisplayName("조건에 맞는 사용자 목록을 페이지로 반환한다")
     void 조건에_맞는_사용자_목록을_페이지로_반환한다() {
       // given
-      UserListParams condition = new UserListParams(null, null, 10, "email", SortDirection.ASCENDING, null, null, null);
+      UserListParams condition = new UserListParams(null, null, 10, "email",
+          SortDirection.ASCENDING, null, null, null);
       CursorPageResponse<UserDto> expected = new CursorPageResponse<>(
           List.of(), null, null, false, 0L, "email", SortDirection.ASCENDING);
       given(userRepository.search(condition)).willReturn(expected);
@@ -74,6 +91,7 @@ class AdminServiceTest {
     void 역할을_변경하고_해당_사용자의_모든_세션을_회수한다() {
       // given
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
       given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
       UserRoleUpdateRequest request = new UserRoleUpdateRequest(Role.ADMIN);
 
@@ -101,6 +119,35 @@ class AdminServiceTest {
       // when & then
       assertThatThrownBy(() -> adminService.changeRole(userId, request))
           .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("역할을 변경하면 대상 유저에게 WARNING 알림 이벤트를 발행한다")
+    void 역할을_변경하면_대상_유저에게_WARNING_알림_이벤트를_발행한다() {
+      // given
+      User user = User.create("홍길동", "hong@test.com", "encoded-password");
+      ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+      given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
+      UserRoleUpdateRequest request = fm.giveMeBuilder(UserRoleUpdateRequest.class)
+          .set("role", Role.ADMIN)
+          .sample();
+
+      UserDto expected = new UserDto(user.getId(), user.getCreatedAt(), user.getEmail(),
+          user.getName(), Role.ADMIN, false);
+      given(userMapper.userDtoFrom(user)).willReturn(expected);
+
+      // when
+      adminService.changeRole(user.getId(), request);
+
+      // then
+      ArgumentCaptor<NotificationRequestedEvent> eventCaptor =
+          ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+      verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+      NotificationRequestedEvent event = eventCaptor.getValue();
+      assertThat(event.receiverIds()).containsExactly(user.getId());
+      assertThat(event.content()).contains("ADMIN");
+      assertThat(event.level()).isEqualTo(NotificationLevel.WARNING);
     }
   }
 

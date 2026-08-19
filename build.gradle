@@ -37,6 +37,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-batch'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation "io.github.openfeign.querydsl:querydsl-jpa:7.5"
     implementation 'org.springframework.boot:spring-boot-flyway'
@@ -49,6 +50,8 @@ dependencies {
     implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
     implementation platform('software.amazon.awssdk:bom:2.51.4')
     implementation 'software.amazon.awssdk:s3'
+    implementation 'org.apache.tika:tika-core:2.9.2'
+    implementation 'org.springframework.retry:spring-retry'
 
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor "io.github.openfeign.querydsl:querydsl-apt:7.5:jpa"

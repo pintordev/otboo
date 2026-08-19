@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.batch.weatherfetch.service;
 
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangeProperties;
+import com.sprint.mission.otboo.batch.weatherfetch.metrics.WeatherFetchMetrics;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -29,6 +30,7 @@ public class WeatherSuddenChangeNotifier {
   private final WeatherRepository weatherRepository;
   private final WeatherSuddenChangeChunkProcessor chunkProcessor;
   private final WeatherChangeProperties weatherChangeProperties;
+  private final WeatherFetchMetrics weatherFetchMetrics;
 
   public void detectAndNotify(BaseTime baseTime) {
     List<WeatherGrid> updatedGrids = weatherRepository.findGridsUpdatedAt(baseTime.toInstant());
@@ -57,5 +59,7 @@ public class WeatherSuddenChangeNotifier {
 
     log.info("날씨 급변 감지 완료: 평가 격자 수={}, D0 알림={}, D1 알림={}", updatedGrids.size(),
         d0Notified, d1Notified);
+    weatherFetchMetrics.countNotified("D0", d0Notified);
+    weatherFetchMetrics.countNotified("D1", d1Notified);
   }
 }

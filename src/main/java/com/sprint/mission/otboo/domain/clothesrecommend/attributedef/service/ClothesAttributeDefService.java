@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.domain.clothesrecommend.attributedef.service;
 
+import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.AttributeDefSortBy;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefCreateRequest;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.ClothesAttributeDefDto;
@@ -13,14 +14,18 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.mapper.Clot
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.event.NotificationLevel;
+import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -35,6 +40,8 @@ public class ClothesAttributeDefService {
   private final ClothesAttributeDefRepository clothesAttributeDefRepository;
   private final ClothesAttributeDefValueRepository clothesAttributeDefValueRepository;
   private final ClothesAttributeDefMapper clothesAttributeDefMapper;
+  private final UserRepository userRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional
   public ClothesAttributeDefDto create(ClothesAttributeDefCreateRequest request) {
@@ -63,6 +70,13 @@ public class ClothesAttributeDefService {
             .toList();
     List<ClothesAttributeDefValue> savedValues =
         clothesAttributeDefValueRepository.saveAll(values);
+
+    List<UUID> receiverIds = userRepository.findAllIds();
+    if (!receiverIds.isEmpty()) {
+      eventPublisher.publishEvent(new NotificationRequestedEvent(
+          Set.copyOf(receiverIds), "의상 속성 추가",
+          name + " 의상 속성이 새로 추가되었습니다.", NotificationLevel.INFO));
+    }
 
     log.info("의상 속성 정의 등록 완료 definitionId={}, name={}", definition.getId(), name);
     return clothesAttributeDefMapper.toDto(definition, savedValues);

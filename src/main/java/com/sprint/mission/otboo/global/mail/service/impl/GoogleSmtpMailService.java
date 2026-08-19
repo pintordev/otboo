@@ -7,6 +7,8 @@ import jakarta.mail.internet.MimeMessage;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
@@ -21,6 +23,11 @@ public class GoogleSmtpMailService implements MailService {
   }
 
   @Override
+  @Retryable(
+      retryFor = MailSendErrorException.class,
+      maxAttempts = 3,
+      backoff = @Backoff(delay = 200, multiplier = 2, maxDelay = 2000)
+  )
   public void sendTempPassword(String toEmail, String rawTempPassword, int expireMinutes) {
     try {
       Context context = new Context();

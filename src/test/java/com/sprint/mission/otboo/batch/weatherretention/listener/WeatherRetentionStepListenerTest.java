@@ -2,11 +2,13 @@ package com.sprint.mission.otboo.batch.weatherretention.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sprint.mission.otboo.batch.weatherretention.metrics.WeatherRetentionMetrics;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,9 +32,12 @@ class WeatherRetentionStepListenerTest {
   @Mock
   private StepExecution stepExecution;
 
+  @Mock
+  private WeatherRetentionMetrics weatherRetentionMetrics;
+
   @BeforeEach
   void setUp() {
-    listener = new WeatherRetentionStepListener();
+    listener = new WeatherRetentionStepListener(weatherRetentionMetrics);
     logger = (Logger) LoggerFactory.getLogger(WeatherRetentionStepListener.class);
     appender = new ListAppender<>();
     appender.start();
@@ -85,6 +90,24 @@ class WeatherRetentionStepListenerTest {
         assertThat(event.getLevel()).isEqualTo(Level.INFO);
         assertThat(event.getFormattedMessage()).contains("readCount=10", "writeCount=9");
       });
+    }
+
+    @Test
+    @DisplayName("시작_종료_시각이_있으면_writeCount를_Step_이름_태그로_정리_건수_카운터에_기록한다")
+    void 시작_종료_시각이_있으면_writeCount를_Step_이름_태그로_정리_건수_카운터에_기록한다() {
+      // given
+      given(stepExecution.getStartTime()).willReturn(LocalDateTime.of(2026, 8, 7, 4, 0, 0));
+      given(stepExecution.getEndTime()).willReturn(LocalDateTime.of(2026, 8, 7, 4, 0, 5));
+      given(stepExecution.getWriteCount()).willReturn(9L);
+      given(stepExecution.getStepName()).willReturn("weatherRetentionStep");
+      given(stepExecution.getExitStatus()).willReturn(ExitStatus.COMPLETED);
+
+      // when
+      listener.afterStep(stepExecution);
+
+      // then - weatherRetentionStep과 weatherD1BaselineRetentionStep이 같은 리스너를 공유하므로
+      // Step 이름 태그로 구분해야 정리 건수가 두 테이블 기준으로 섞이지 않는다
+      verify(weatherRetentionMetrics).countCleaned("weatherRetentionStep", 9L);
     }
 
     @Test

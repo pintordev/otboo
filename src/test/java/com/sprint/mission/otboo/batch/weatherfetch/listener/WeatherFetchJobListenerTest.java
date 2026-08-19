@@ -11,9 +11,11 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sprint.mission.otboo.batch.weatherfetch.metrics.WeatherFetchMetrics;
 import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherSuddenChangeNotifier;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,9 +49,16 @@ class WeatherFetchJobListenerTest {
   @Mock
   private WeatherSuddenChangeNotifier weatherSuddenChangeNotifier;
 
+  @Mock
+  private WeatherFetchMetrics weatherFetchMetrics;
+
   @BeforeEach
   void setUp() {
-    listener = new WeatherFetchJobListener(clock, weatherSuddenChangeNotifier);
+    listener = new WeatherFetchJobListener(clock, weatherSuddenChangeNotifier, weatherFetchMetrics);
+    ExecutionContext executionContext = new ExecutionContext();
+    executionContext.putString("baseDate", "20260727");
+    executionContext.putString("baseTime", "0800");
+    given(jobExecution.getExecutionContext()).willReturn(executionContext);
     logger = (Logger) LoggerFactory.getLogger(WeatherFetchJobListener.class);
     appender = new ListAppender<>();
     appender.start();
@@ -214,6 +223,50 @@ class WeatherFetchJobListenerTest {
 
       // then - 실패 전에 성공 처리된 격자의 감지·알림은 Job 전체 성패와 무관하게 유효하다
       verify(weatherSuddenChangeNotifier).detectAndNotify(new BaseTime("20260727", "0800"));
+    }
+
+    @Test
+    @DisplayName("COMPLETED면_completed_카운터를_증가시킨다")
+    void COMPLETED면_completed_카운터를_증가시킨다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherFetchMetrics).countCompleted();
+    }
+
+    @Test
+    @DisplayName("FAILED면_failed_카운터를_증가시킨다")
+    void FAILED면_failed_카운터를_증가시킨다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.FAILED);
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherFetchMetrics).countFailed();
+    }
+
+    @Test
+    @DisplayName("시작_종료_시각이_모두_있으면_duration을_기록한다")
+    void 시작_종료_시각이_모두_있으면_duration을_기록한다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(jobExecution.getStartTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 0));
+      given(jobExecution.getEndTime()).willReturn(LocalDateTime.of(2026, 7, 27, 10, 0, 5));
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherFetchMetrics).recordJobDuration(Duration.ofSeconds(5));
     }
 
     @Test

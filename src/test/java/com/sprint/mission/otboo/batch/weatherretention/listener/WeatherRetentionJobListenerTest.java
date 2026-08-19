@@ -2,11 +2,14 @@ package com.sprint.mission.otboo.batch.weatherretention.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sprint.mission.otboo.batch.weatherretention.metrics.WeatherRetentionMetrics;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -32,9 +35,12 @@ class WeatherRetentionJobListenerTest {
   @Mock
   private JobExecution jobExecution;
 
+  @Mock
+  private WeatherRetentionMetrics weatherRetentionMetrics;
+
   @BeforeEach
   void setUp() {
-    listener = new WeatherRetentionJobListener();
+    listener = new WeatherRetentionJobListener(weatherRetentionMetrics);
     logger = (Logger) LoggerFactory.getLogger(WeatherRetentionJobListener.class);
     appender = new ListAppender<>();
     appender.start();
@@ -120,6 +126,50 @@ class WeatherRetentionJobListenerTest {
       // then
       assertThat(appender.list)
           .anySatisfy(event -> assertThat(event.getFormattedMessage()).contains("duration"));
+    }
+
+    @Test
+    @DisplayName("COMPLETED면_completed_카운터를_증가시킨다")
+    void COMPLETED면_completed_카운터를_증가시킨다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherRetentionMetrics).countCompleted();
+    }
+
+    @Test
+    @DisplayName("FAILED면_failed_카운터를_증가시킨다")
+    void FAILED면_failed_카운터를_증가시킨다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.FAILED);
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherRetentionMetrics).countFailed();
+    }
+
+    @Test
+    @DisplayName("시작_종료_시각이_모두_있으면_duration을_기록한다")
+    void 시작_종료_시각이_모두_있으면_duration을_기록한다() {
+      // given
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(jobExecution.getStartTime()).willReturn(LocalDateTime.of(2026, 8, 7, 4, 0, 0));
+      given(jobExecution.getEndTime()).willReturn(LocalDateTime.of(2026, 8, 7, 4, 0, 5));
+      given(jobExecution.getAllFailureExceptions()).willReturn(List.of());
+
+      // when
+      listener.afterJob(jobExecution);
+
+      // then
+      verify(weatherRetentionMetrics).recordJobDuration(Duration.ofSeconds(5));
     }
 
     @Test
