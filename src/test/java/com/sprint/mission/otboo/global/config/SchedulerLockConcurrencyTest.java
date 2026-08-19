@@ -5,6 +5,8 @@ import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.batch.weatherfetch.scheduler.WeatherFetchScheduler;
 import com.sprint.mission.otboo.batch.weatherfetch.service.WeatherFetchService;
+import com.sprint.mission.otboo.batch.weatherretention.scheduler.WeatherRetentionScheduler;
+import com.sprint.mission.otboo.batch.weatherretention.service.WeatherRetentionService;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -24,7 +26,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(classes = {
-    DataRedisAutoConfiguration.class, SchedulerLockConfig.class, WeatherFetchScheduler.class
+    DataRedisAutoConfiguration.class, SchedulerLockConfig.class, WeatherFetchScheduler.class,
+    WeatherRetentionScheduler.class
 })
 class SchedulerLockConcurrencyTest implements RedisTestContainerSupport {
 
@@ -40,6 +43,32 @@ class SchedulerLockConcurrencyTest implements RedisTestContainerSupport {
   @MockitoBean
   private WeatherFetchService weatherFetchService;
 
+  @Autowired
+  private WeatherRetentionScheduler weatherRetentionScheduler;
+
+  @MockitoBean
+  private WeatherRetentionService weatherRetentionService;
+
+  private void runConcurrently(Runnable action) throws Exception {
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    List<Future<Object>> futures = IntStream.range(0, 2)
+        .<Future<Object>>mapToObj(i -> executor.submit(() -> {
+          ready.countDown();
+          start.await();
+          action.run();
+          return null;
+        }))
+        .toList();
+    ready.await();
+    start.countDown();
+    for (Future<Object> future : futures) {
+      future.get(15, TimeUnit.SECONDS);
+    }
+  }
+
   @Nested
   @DisplayName("WeatherFetch 락")
   class WeatherFetchLock {
@@ -47,28 +76,26 @@ class SchedulerLockConcurrencyTest implements RedisTestContainerSupport {
     @Test
     @DisplayName("동시에 호출해도 실제 실행은 한 번뿐이다")
     void 동시에_호출해도_실제_실행은_한_번뿐이다() throws Exception {
-      // given
-      CountDownLatch ready = new CountDownLatch(2);
-      CountDownLatch start = new CountDownLatch(1);
-      ExecutorService executor = Executors.newFixedThreadPool(2);
-
       // when
-      List<Future<Object>> futures = IntStream.range(0, 2)
-          .<Future<Object>>mapToObj(i -> executor.submit(() -> {
-            ready.countDown();
-            start.await();
-            weatherFetchScheduler.fetch();
-            return null;
-          }))
-          .toList();
-      ready.await();
-      start.countDown();
-      for (Future<Object> future : futures) {
-        future.get(15, TimeUnit.SECONDS);
-      }
+      runConcurrently(weatherFetchScheduler::fetch);
 
       // then
       verify(weatherFetchService, times(1)).execute();
+    }
+  }
+
+  @Nested
+  @DisplayName("WeatherRetention 락")
+  class WeatherRetentionLock {
+
+    @Test
+    @DisplayName("동시에 호출해도 실제 실행은 한 번뿐이다")
+    void 동시에_호출해도_실제_실행은_한_번뿐이다() throws Exception {
+      // when
+      runConcurrently(weatherRetentionScheduler::cleanUp);
+
+      // then
+      verify(weatherRetentionService, times(1)).execute();
     }
   }
 }
