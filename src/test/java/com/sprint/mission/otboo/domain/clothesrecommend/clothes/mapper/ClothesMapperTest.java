@@ -15,6 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import com.sprint.mission.otboo.external.llm.dto.LlmExtractedClothesInfo;
+import com.sprint.mission.otboo.external.purchase.dto.PurchasePageResponse;
 
 class ClothesMapperTest {
 
@@ -84,6 +86,36 @@ class ClothesMapperTest {
       ClothesDto result = clothesMapper.toDto(clothes, List.of(), Map.of());
 
       // then
+      assertThat(result.imageUrl()).isNull();
+    }
+    @Test
+    @DisplayName("PurchasePageResponse를_ClothesDto로_변환한다")
+    void PurchasePageResponse를_ClothesDto로_변환한다() {
+      // given
+      PurchasePageResponse ogResult = new PurchasePageResponse(
+          "데님 자켓", "https://image.musinsa.com/goods/001.jpg", "설명", "무신사");
+
+      // when
+      ClothesDto result = clothesMapper.toDto(ogResult);
+
+      // then
+      assertThat(result.id()).isNull();
+      assertThat(result.name()).isEqualTo("데님 자켓");
+      assertThat(result.imageUrl()).isEqualTo("https://image.musinsa.com/goods/001.jpg");
+    }
+
+    @Test
+    @DisplayName("LlmExtractedClothesInfo를_ClothesDto로_변환한다")
+    void LlmExtractedClothesInfo를_ClothesDto로_변환한다() {
+      // given
+      LlmExtractedClothesInfo info = new LlmExtractedClothesInfo("후드티", null);
+
+      // when
+      ClothesDto result = clothesMapper.toDto(info);
+
+      // then
+      assertThat(result.id()).isNull();
+      assertThat(result.name()).isEqualTo("후드티");
       assertThat(result.imageUrl()).isNull();
     }
   }

@@ -16,6 +16,8 @@ import java.util.UUID;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesExtractionParams;
+import jakarta.validation.Valid;
 
 @Tag(name = "의상 관리", description = "의상 관련 API")
 public interface ClothesApi {
@@ -77,4 +79,19 @@ public interface ClothesApi {
               schema = @Schema(implementation = ErrorResponse.class)))
   })
   ResponseEntity<Void> delete(UUID clothesId);
+
+  @Operation(summary = "구매 링크로 옷 정보 불러오기", description = "구매 링크로 옷 정보 불러오기 API")
+  @ApiResponses({
+      @ApiResponse(
+          responseCode = "200",
+          description = "구매 링크로 옷 정보 불러오기 성공",
+          content = @Content(
+              schema = @Schema(implementation = ClothesDto.class))),
+      @ApiResponse(
+          responseCode = "400",
+          description = "구매 링크로 옷 정보 불러오기 실패",
+          content = @Content(
+              schema = @Schema(implementation = ErrorResponse.class)))
+  })
+  ResponseEntity<ClothesDto> extractByUrl(@ParameterObject @Valid ClothesExtractionParams params);
 }

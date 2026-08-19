@@ -50,6 +50,7 @@ dependencies {
     implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
     implementation platform('software.amazon.awssdk:bom:2.51.4')
     implementation 'software.amazon.awssdk:s3'
+    implementation 'org.jsoup:jsoup:1.18.1'
     implementation 'org.apache.tika:tika-core:2.9.2'
     implementation 'org.springframework.retry:spring-retry'
     implementation platform('io.opentelemetry:opentelemetry-bom:1.51.0')
@@ -84,6 +85,7 @@ dependencies {
     testImplementation 'io.opentelemetry:opentelemetry-sdk-testing'
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
 }
 
 dependencyManagement {

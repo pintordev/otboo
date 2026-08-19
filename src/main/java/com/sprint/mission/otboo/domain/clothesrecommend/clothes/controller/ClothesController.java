@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.service.ClothesExtractionService;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesExtractionParams;
 
 @RequiredArgsConstructor
 @RequestMapping("/api/clothes")
@@ -29,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ClothesController implements ClothesApi {
 
   private final ClothesService clothesService;
+  private final ClothesExtractionService clothesExtractionService;
 
   @Override
   @GetMapping
@@ -61,5 +64,12 @@ public class ClothesController implements ClothesApi {
   public ResponseEntity<Void> delete(@PathVariable UUID clothesId) {
     clothesService.delete(clothesId);
     return ResponseEntity.noContent().build();
+  }
+
+  @Override
+  @GetMapping("/extractions")
+  public ResponseEntity<ClothesDto> extractByUrl(@Valid ClothesExtractionParams params) {
+    ClothesDto extracted = clothesExtractionService.extractByUrl(params.url());
+    return ResponseEntity.ok(extracted);
   }
 }

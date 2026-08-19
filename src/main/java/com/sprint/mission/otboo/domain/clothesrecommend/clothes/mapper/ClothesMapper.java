@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import com.sprint.mission.otboo.external.llm.dto.LlmExtractedClothesInfo;
+import com.sprint.mission.otboo.external.purchase.dto.PurchasePageResponse;
 
 @Component
 public class ClothesMapper {
@@ -29,6 +31,14 @@ public class ClothesMapper {
         clothes.getType(),
         attributeDtos
     );
+  }
+
+  public ClothesDto toDto(PurchasePageResponse ogResult) {
+    return new ClothesDto(null, null, ogResult.title(), ogResult.imageUrl(), null, List.of());
+  }
+
+  public ClothesDto toDto(LlmExtractedClothesInfo info) {
+    return new ClothesDto(null, null, info.name(), info.imageUrl(), null, List.of());
   }
 
   private ClothesAttributeWithDefDto toAttributeWithDefDto(

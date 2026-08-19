@@ -77,10 +77,13 @@ public class Clothes {
   }
 
   public void delete() {
+    if (softDeletable == null) {
+      softDeletable = new SoftDeletable();
+    }
     softDeletable.delete();
   }
 
   public boolean isDeleted() {
-    return softDeletable.isDeleted();
+    return softDeletable != null && softDeletable.isDeleted();
   }
 }

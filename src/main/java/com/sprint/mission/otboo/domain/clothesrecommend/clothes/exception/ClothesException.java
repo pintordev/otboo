@@ -9,4 +9,9 @@ public abstract class ClothesException extends OtbooException {
   protected ClothesException(HttpStatus status, String message, Map<String, Object> details) {
     super(status, message, details);
   }
+
+  protected ClothesException(HttpStatus status, String message, Map<String, Object> details,
+      Throwable cause) {
+    super(status, message, details, cause);
+  }
 }
