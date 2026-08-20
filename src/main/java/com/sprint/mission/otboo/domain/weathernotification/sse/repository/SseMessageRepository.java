@@ -38,6 +38,7 @@ public class SseMessageRepository {
   }
 
   public UUID save(SseMessage message) {
+    evictExpired();
     String messageKey = MESSAGE_KEY_PREFIX + message.id();
     String json = objectMapper.writeValueAsString(message);
 
