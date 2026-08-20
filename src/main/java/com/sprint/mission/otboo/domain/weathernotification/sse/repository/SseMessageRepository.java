@@ -56,6 +56,7 @@ public class SseMessageRepository {
   }
 
   public List<SseMessage> findAllAfter(UUID lastEventId, UUID userId) {
+    evictExpired();
     if (lastEventId == null) {
       return List.of();
     }
@@ -77,12 +78,18 @@ public class SseMessageRepository {
   }
 
   public Instant getLatestCreatedAt() {
+    evictExpired();
     Set<ZSetOperations.TypedTuple<String>> latest = zSetOps.reverseRangeWithScores(INDEX_KEY, 0, 0);
     if (latest == null || latest.isEmpty()) {
       return null;
     }
     Double score = latest.iterator().next().getScore();
     return score != null ? Instant.ofEpochMilli(score.longValue()) : null;
+  }
+
+  private void evictExpired() {
+    Instant threshold = Instant.now(clock).minus(retention);
+    zSetOps.removeRangeByScore(INDEX_KEY, 0, threshold.toEpochMilli());
   }
 
   private String writeJson(SseMessage message) {
