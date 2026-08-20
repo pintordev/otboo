@@ -76,7 +76,6 @@ class SseServiceTest {
     void emitter를_생성해_repository에_등록하고_생성한_emitter를_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
-      given(sseMessageRepository.getLatestCreatedAt()).willReturn(null);
       given(sseMessageRepository.findAllAfter(isNull(), eq(userId))).willReturn(List.of());
 
       try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
@@ -86,6 +85,23 @@ class SseServiceTest {
         // then
         SseEmitter createdEmitter = mocked.constructed().get(0);
         assertThat(result).isSameAs(createdEmitter);
+        verify(sseEmitterRepository).save(userId, createdEmitter, null);
+      }
+    }
+
+    @Test
+    @DisplayName("lastEventId가_없으면_재생_버퍼_조회_없이_스냅샷을_null로_둔다")
+    void lastEventId가_없으면_재생_버퍼_조회_없이_스냅샷을_null로_둔다() {
+      // given — 최초 연결이라 재생 대상 자체가 없다
+      UUID userId = UUID.randomUUID();
+
+      try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
+        // when
+        sseService.connect(userId, null);
+
+        // then — 재생이 일어나지 않으므로 스냅샷도 null이어야 실시간 전달이 스킵되지 않는다
+        SseEmitter createdEmitter = mocked.constructed().get(0);
+        verify(sseMessageRepository, never()).getLatestCreatedAt();
         verify(sseEmitterRepository).save(userId, createdEmitter, null);
       }
     }
