@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.Clot
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDefValue;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNameDuplicatedException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
+import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefValueInvalidException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.mapper.ClothesAttributeDefMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
@@ -89,10 +90,10 @@ public class ClothesAttributeDefService {
         .toList();
 
     if (trimmed.isEmpty()) {
-      throw new IllegalArgumentException("선택 가능한 값을 1개 이상 입력해야 합니다.");
+      throw ClothesAttributeDefValueInvalidException.empty();
     }
     if (new LinkedHashSet<>(trimmed).size() != trimmed.size()) {
-      throw new IllegalArgumentException("선택 가능한 값은 중복될 수 없습니다.");
+      throw ClothesAttributeDefValueInvalidException.duplicated(trimmed);
     }
     return trimmed;
   }

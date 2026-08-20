@@ -11,6 +11,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesDto;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesListParams;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.exception.ClothesAttributeDuplicatedException;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.exception.ClothesNotFoundException;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.mapper.ClothesMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesAttributeRepository;
@@ -200,8 +201,7 @@ public class ClothesService {
     Set<UUID> seen = new HashSet<>();
     for (ClothesAttributeDto dto : attributeDtos) {
       if (!seen.add(dto.definitionId())) {
-        throw new IllegalArgumentException(
-            "중복된 속성 정의입니다. definitionId=" + dto.definitionId());
+        throw ClothesAttributeDuplicatedException.withDefinitionId(dto.definitionId());
       }
     }
   }

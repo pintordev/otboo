@@ -22,6 +22,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.Clot
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.entity.ClothesAttributeDefValue;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNameDuplicatedException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefNotFoundException;
+import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.exception.ClothesAttributeDefValueInvalidException;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.mapper.ClothesAttributeDefMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.repository.ClothesAttributeDefValueRepository;
@@ -162,6 +163,32 @@ class ClothesAttributeDefServiceTest {
 
       // then
       verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("선택_가능한_값이_비어있으면_예외가_발생한다")
+    void 선택_가능한_값이_비어있으면_예외가_발생한다() {
+      // given
+      ClothesAttributeDefCreateRequest request =
+          new ClothesAttributeDefCreateRequest("색상", List.of("  "));
+
+      // when & then
+      assertThatThrownBy(() -> clothesAttributeDefService.create(request))
+          .isInstanceOf(ClothesAttributeDefValueInvalidException.class);
+      verify(clothesAttributeDefRepository, never()).existsByName(any());
+    }
+
+    @Test
+    @DisplayName("선택_가능한_값이_중복되면_예외가_발생한다")
+    void 선택_가능한_값이_중복되면_예외가_발생한다() {
+      // given
+      ClothesAttributeDefCreateRequest request =
+          new ClothesAttributeDefCreateRequest("색상", List.of("빨강", "빨강"));
+
+      // when & then
+      assertThatThrownBy(() -> clothesAttributeDefService.create(request))
+          .isInstanceOf(ClothesAttributeDefValueInvalidException.class);
+      verify(clothesAttributeDefRepository, never()).existsByName(any());
     }
   }
 

@@ -22,6 +22,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesType;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesUpdateRequest;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
+import com.sprint.mission.otboo.domain.clothesrecommend.clothes.exception.ClothesAttributeDuplicatedException;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.exception.ClothesNotFoundException;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.mapper.ClothesMapper;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesAttributeRepository;
@@ -146,6 +147,27 @@ class ClothesServiceTest {
       // when & then
       assertThatThrownBy(() -> clothesService.create(request, null))
           .isInstanceOf(ClothesAttributeDefNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("중복된_속성_정의_ID를_전달하면_ClothesAttributeDuplicatedException이_발생한다")
+    void 중복된_속성_정의_ID를_전달하면_ClothesAttributeDuplicatedException이_발생한다() {
+      // given
+      UUID ownerId = UUID.randomUUID();
+      UUID definitionId = UUID.randomUUID();
+
+      ClothesCreateRequest request = new ClothesCreateRequest(
+          ownerId, "테스트 옷", ClothesType.TOP,
+          List.of(
+              new ClothesAttributeDto(definitionId, "빨강"),
+              new ClothesAttributeDto(definitionId, "파랑")));
+
+      Clothes savedClothes = Clothes.create(ownerId, "테스트 옷", ClothesType.TOP);
+      when(clothesRepository.save(any())).thenReturn(savedClothes);
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.create(request, null))
+          .isInstanceOf(ClothesAttributeDuplicatedException.class);
     }
   }
 
