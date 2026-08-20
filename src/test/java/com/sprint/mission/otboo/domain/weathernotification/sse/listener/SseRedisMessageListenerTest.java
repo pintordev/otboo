@@ -83,7 +83,9 @@ class SseRedisMessageListenerTest {
     @DisplayName("data가 NotificationDto여도 왕복 후 JSON 구조가 그대로 유지된다")
     void data가_NotificationDto여도_왕복_후_JSON_구조가_유지된다() throws Exception {
       // given
-      NotificationDto dto = fm.giveMeOne(NotificationDto.class);
+      NotificationDto dto = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", UUID.randomUUID())
+          .sample();
       SseMessage sseMessage = new SseMessage(Set.of(dto.receiverId()), "notifications", dto);
       byte[] body = objectMapper.writeValueAsBytes(sseMessage);
       Message message = new DefaultMessage("sse:notifications".getBytes(), body);
