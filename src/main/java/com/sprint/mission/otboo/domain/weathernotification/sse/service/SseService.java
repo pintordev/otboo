@@ -48,9 +48,9 @@ public class SseService {
 
   public SseEmitter connect(UUID userId, UUID lastEventId) {
     SseEmitter emitter = new SseEmitter(TIMEOUT);
-    emitter.onCompletion(() -> sseEmitterRepository.remove(userId, emitter));
-    emitter.onTimeout(() -> sseEmitterRepository.remove(userId, emitter));
-    emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
+    emitter.onCompletion(() -> disconnectAndCleanupLock(userId, emitter));
+    emitter.onTimeout(() -> disconnectAndCleanupLock(userId, emitter));
+    emitter.onError(e -> disconnectAndCleanupLock(userId, emitter));
 
     Instant snapshotAt;
     ReentrantLock lock = lockFor(userId);
@@ -113,6 +113,21 @@ public class SseService {
 
   private ReentrantLock lockFor(UUID userId) {
     return connectionLocks.computeIfAbsent(userId, id -> new ReentrantLock());
+  }
+
+  private void disconnectAndCleanupLock(UUID userId, SseEmitter emitter) {
+    sseEmitterRepository.remove(userId, emitter);
+
+    ReentrantLock lock = connectionLocks.get(userId);
+    if (lock == null) {
+      return;
+    }
+    lock.lock();
+    try {
+      connectionLocks.remove(userId, lock);
+    } finally {
+      lock.unlock();
+    }
   }
 
   public void disconnect(UUID userId) {
