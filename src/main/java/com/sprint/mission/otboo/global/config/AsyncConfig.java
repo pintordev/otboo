@@ -55,6 +55,21 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
+  @Bean(name = "sseListenerExecutor")
+  public Executor sseListenerExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    // RedisMessageListenerContainer 기본값(SimpleAsyncTaskExecutor, 호출마다 새 스레드)을
+    // 바운드 풀로 교체 — 구독 콜백에서 emitter IO가 지연돼도 무제한으로 스레드가 늘지 않게 함
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(4);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(100);
+    executor.setThreadNamePrefix("sse-listener-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
+    executor.initialize();
+    return executor;
+  }
+
   @Override
   public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
     return (throwable, method, params) -> {
