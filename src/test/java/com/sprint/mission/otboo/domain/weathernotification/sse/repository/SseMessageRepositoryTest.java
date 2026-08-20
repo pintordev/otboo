@@ -9,6 +9,7 @@ import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -89,6 +90,46 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       // then
       assertThat(redisTemplate.opsForZSet().score("sse:message-index", message.id().toString()))
           .isEqualTo((double) message.createdAt().toEpochMilli());
+    }
+  }
+
+  @Nested
+  @DisplayName("이후 메시지 조회")
+  class FindAllAfter {
+
+    @Test
+    @DisplayName("lastEventId 이후 저장된 메시지 중 수신 대상인 것만 반환한다")
+    void lastEventId_이후_저장된_메시지_중_수신_대상인_것만_반환한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      UUID otherId = UUID.randomUUID();
+      SseMessage anchor = new SseMessage(Set.of(userId), "notifications", "anchor");
+      sseMessageRepository.save(anchor);
+      SseMessage forOther = new SseMessage(Set.of(otherId), "notifications", "for-other");
+      sseMessageRepository.save(forOther);
+      SseMessage forUser = new SseMessage(Set.of(userId), "notifications", "for-user");
+      sseMessageRepository.save(forUser);
+
+      // when
+      List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
+
+      // then
+      assertThat(found).containsExactly(forUser);
+    }
+
+    @Test
+    @DisplayName("lastEventId가 null이면 빈 리스트를 반환한다")
+    void lastEventId가_null이면_빈_리스트를_반환한다() {
+      // when & then
+      assertThat(sseMessageRepository.findAllAfter(null, UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("lastEventId가 존재하지 않으면 빈 리스트를 반환한다")
+    void lastEventId가_존재하지_않으면_빈_리스트를_반환한다() {
+      // when & then
+      assertThat(sseMessageRepository.findAllAfter(UUID.randomUUID(), UUID.randomUUID()))
+          .isEmpty();
     }
   }
 }
