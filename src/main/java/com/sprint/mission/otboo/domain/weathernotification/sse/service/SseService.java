@@ -89,8 +89,12 @@ public class SseService {
 
   public void deliverLocally(SseMessage message) {
     message.receiverIds().forEach(receiverId -> {
-      Optional<SseEmitter> emitter = resolveTargetEmitter(receiverId, message);
-      emitter.ifPresent(e -> sendToEmitter(e, message));
+      try {
+        Optional<SseEmitter> emitter = resolveTargetEmitter(receiverId, message);
+        emitter.ifPresent(e -> sendToEmitter(e, message));
+      } catch (Exception e) {
+        log.error("SSE 로컬 전달 실패: messageId={}, receiverId={}", message.id(), receiverId, e);
+      }
     });
   }
 
