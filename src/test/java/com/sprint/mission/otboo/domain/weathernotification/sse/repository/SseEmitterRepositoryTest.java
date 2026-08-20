@@ -187,5 +187,19 @@ class SseEmitterRepositoryTest {
     void 존재하지_않는_유저를_조회하면_빈_Optional을_반환한다() {
       assertThat(sseEmitterRepository.findSnapshotAt(UUID.randomUUID())).isEmpty();
     }
+
+    @Test
+    @DisplayName("스냅샷_시각이_null로_저장되면_빈_Optional을_반환한다")
+    void 스냅샷_시각이_null로_저장되면_빈_Optional을_반환한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseEmitter emitter = new SseEmitter();
+
+      // when
+      sseEmitterRepository.save(userId, emitter, null);
+
+      // then
+      assertThat(sseEmitterRepository.findSnapshotAt(userId)).isEmpty();
+    }
   }
 }
