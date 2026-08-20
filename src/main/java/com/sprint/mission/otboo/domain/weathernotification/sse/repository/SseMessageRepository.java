@@ -92,7 +92,7 @@ public class SseMessageRepository {
     try {
       return objectMapper.readValue(json, SseMessage.class);
     } catch (JacksonException e) {
-      log.warn("SseMessage 역직렬화 실패, 해당 레코드는 건너뛴다: json={}", json, e);
+      log.warn("SseMessage 역직렬화 실패, 해당 레코드는 건너뛴다", e);
       return null;
     }
   }
