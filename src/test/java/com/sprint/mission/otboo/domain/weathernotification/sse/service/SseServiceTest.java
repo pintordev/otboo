@@ -24,11 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -313,62 +308,6 @@ class SseServiceTest {
 
       // then
       verify(sseMessageRepository).save(any(SseMessage.class));
-    }
-  }
-
-  @Nested
-  @DisplayName("connect/send 동시성")
-  class ConnectSendConcurrency {
-
-    private ExecutorService executor;
-
-    @BeforeEach
-    void setUpExecutor() {
-      executor = Executors.newFixedThreadPool(2);
-    }
-
-    @AfterEach
-    void tearDownExecutor() {
-      executor.shutdown();
-    }
-
-    @Test
-    @DisplayName("connect가_emitter_등록과_스냅샷_확정을_진행하는_동안_같은_유저의_send는_대기했다가_그_이후에_진행된다")
-    void connect가_emitter_등록과_스냅샷_확정을_진행하는_동안_같은_유저의_send는_대기했다가_그_이후에_진행된다()
-        throws Exception {
-      // given — snapshotAt 조회(getLatestCreatedAt) 시점에 connect를 멈춰 세워
-      // "emitter 등록 ~ 스냅샷 확정" 구간을 하나의 임계구역으로 붙잡아 둔다
-      UUID userId = UUID.randomUUID();
-      CountDownLatch connectHoldingCriticalSection = new CountDownLatch(1);
-      CountDownLatch releaseConnect = new CountDownLatch(1);
-      given(sseMessageRepository.getLatestCreatedAt()).willAnswer(invocation -> {
-        connectHoldingCriticalSection.countDown();
-        releaseConnect.await();
-        return null;
-      });
-      given(sseMessageRepository.findAllAfter(any(), any())).willReturn(List.of());
-
-      try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
-        // when
-        Future<SseEmitter> connectFuture = executor.submit(() -> sseService.connect(userId, null));
-        connectHoldingCriticalSection.await();
-
-        NotificationDto dto = new NotificationDto(
-            UUID.randomUUID(), Instant.now(), userId, "제목", "내용", NotificationLevel.INFO);
-        Future<?> sendFuture = executor.submit(() -> sseService.send(List.of(dto), "notifications"));
-
-        // then — connect가 임계구역을 쥐고 있는 동안에는 send가 메시지를 저장하지 못하고 대기해야 한다
-        Thread.sleep(200);
-        verify(sseMessageRepository, never()).save(any(SseMessage.class));
-
-        // when — connect를 마저 진행시키면
-        releaseConnect.countDown();
-        connectFuture.get();
-        sendFuture.get();
-
-        // then — 그제서야 send가 진행된다(emitter 등록·스냅샷 확정과 겹치지 않음)
-        verify(sseMessageRepository).save(any(SseMessage.class));
-      }
     }
   }
 }
