@@ -68,7 +68,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
     sseMessageRepository = new SseMessageRepository(redisTemplate,
         new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
-        new SseReplayBufferProperties(10));
+        new SseReplayBufferProperties(10, 1000));
   }
 
   @Nested
@@ -207,6 +207,45 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
       // then — m2가 m1보다 나중에 생성됐으므로 재생 대상에 포함돼야 한다
       assertThat(found).containsExactly(m2);
+    }
+  }
+
+  @Nested
+  @DisplayName("재생 조회 상한")
+  class ReplayCap {
+
+    @Test
+    @DisplayName("보관 기간 내 메시지가 상한을 넘으면 최신 N건만 재생한다")
+    void 보관_기간_내_메시지가_상한을_넘으면_최신_N건만_재생한다() {
+      // given — 상한을 3으로 좁힌 저장소를 별도로 구성해 상한 초과 상황을 재현한다
+      SseMessageRepository cappedRepository = new SseMessageRepository(redisTemplate,
+          new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
+          new SseReplayBufferProperties(10, 3));
+      UUID userId = UUID.randomUUID();
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", NOW.minusSeconds(10));
+      SseMessage m1 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "m1", NOW.minusSeconds(4));
+      SseMessage m2 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "m2", NOW.minusSeconds(3));
+      SseMessage m3 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "m3", NOW.minusSeconds(2));
+      SseMessage m4 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "m4", NOW.minusSeconds(1));
+      SseMessage m5 = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "m5", NOW);
+      cappedRepository.save(anchor);
+      cappedRepository.save(m1);
+      cappedRepository.save(m2);
+      cappedRepository.save(m3);
+      cappedRepository.save(m4);
+      cappedRepository.save(m5);
+
+      // when
+      List<SseMessage> found = cappedRepository.findAllAfter(anchor.id(), userId);
+
+      // then — anchor 이후 5건 중 상한(3건)을 넘는 가장 오래된 m1, m2는 재생에서 제외된다
+      assertThat(found).containsExactly(m3, m4, m5);
     }
   }
 

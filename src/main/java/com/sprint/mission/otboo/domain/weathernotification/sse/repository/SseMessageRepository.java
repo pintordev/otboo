@@ -30,6 +30,7 @@ public class SseMessageRepository {
   private final ObjectMapper objectMapper;
   private final Clock clock;
   private final Duration retention;
+  private final int maxReplaySize;
 
   public SseMessageRepository(StringRedisTemplate redisTemplate, ObjectMapper objectMapper,
       Clock clock, SseReplayBufferProperties replayBufferProperties) {
@@ -38,6 +39,7 @@ public class SseMessageRepository {
     this.objectMapper = objectMapper;
     this.clock = clock;
     this.retention = Duration.ofMinutes(replayBufferProperties.retentionMinutes());
+    this.maxReplaySize = replayBufferProperties.maxSize();
   }
 
   public UUID save(SseMessage message) {
@@ -67,7 +69,12 @@ public class SseMessageRepository {
     if (rank == null) {
       return List.of();
     }
-    Set<String> ids = zSetOps.range(INDEX_KEY, rank + 1, -1);
+    long from = rank + 1;
+    Long size = zSetOps.zCard(INDEX_KEY);
+    if (size != null && size - from > maxReplaySize) {
+      from = size - maxReplaySize;
+    }
+    Set<String> ids = zSetOps.range(INDEX_KEY, from, -1);
     if (ids == null || ids.isEmpty()) {
       return List.of();
     }
