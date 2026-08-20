@@ -77,7 +77,12 @@ public class SseMessageRepository {
   }
 
   public Instant getLatestCreatedAt() {
-    throw new UnsupportedOperationException("getLatestCreatedAt 미구현");
+    Set<ZSetOperations.TypedTuple<String>> latest = zSetOps.reverseRangeWithScores(INDEX_KEY, 0, 0);
+    if (latest == null || latest.isEmpty()) {
+      return null;
+    }
+    Double score = latest.iterator().next().getScore();
+    return score != null ? Instant.ofEpochMilli(score.longValue()) : null;
   }
 
   private String writeJson(SseMessage message) {

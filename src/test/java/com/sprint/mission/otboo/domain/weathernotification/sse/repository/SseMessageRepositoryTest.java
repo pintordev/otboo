@@ -9,6 +9,7 @@ import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -23,7 +24,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
-  private static final Instant NOW = Instant.now();
+  private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
   static LettuceConnectionFactory connectionFactory;
   static StringRedisTemplate redisTemplate;
@@ -46,6 +47,12 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
   @BeforeEach
   void setUp() {
+    Set<String> messageKeys = redisTemplate.keys("sse:message:*");
+    if (messageKeys != null && !messageKeys.isEmpty()) {
+      redisTemplate.delete(messageKeys);
+    }
+    redisTemplate.delete("sse:message-index");
+
     sseMessageRepository = new SseMessageRepository(redisTemplate,
         new ObjectMapper().findAndRegisterModules(), Clock.fixed(NOW, ZoneOffset.UTC),
         new SseReplayBufferProperties(10));
