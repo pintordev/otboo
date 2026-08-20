@@ -9,13 +9,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+@Slf4j
 @Repository
 public class SseMessageRepository {
 
@@ -72,9 +75,19 @@ public class SseMessageRepository {
         .multiGet(ids.stream().map(id -> MESSAGE_KEY_PREFIX + id).toList());
     return jsons.stream()
         .filter(Objects::nonNull)
-        .map(json -> objectMapper.readValue(json, SseMessage.class))
+        .map(this::readJsonSafely)
+        .filter(Objects::nonNull)
         .filter(message -> message.isTargetedTo(userId))
         .toList();
+  }
+
+  private SseMessage readJsonSafely(String json) {
+    try {
+      return objectMapper.readValue(json, SseMessage.class);
+    } catch (JacksonException e) {
+      log.warn("SseMessage 역직렬화 실패, 해당 레코드는 건너뛴다: json={}", json, e);
+      return null;
+    }
   }
 
   public Instant getLatestCreatedAt() {
