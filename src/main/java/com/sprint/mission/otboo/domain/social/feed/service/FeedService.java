@@ -12,7 +12,6 @@ import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
-import com.sprint.mission.otboo.domain.social.feed.exception.AuthorNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
 import com.sprint.mission.otboo.domain.social.feed.mapper.FeedMapper;
@@ -23,20 +22,16 @@ import com.sprint.mission.otboo.domain.social.follow.repository.FollowRepository
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -56,6 +51,7 @@ public class FeedService {
   private final ApplicationEventPublisher eventPublisher;
   private final FollowRepository followRepository;
   private final FeedSearchRepository feedSearchRepository;
+  private final FeedPageAssembler feedPageAssembler;
 
   @Transactional
   public FeedDto create(FeedCreateRequest request, UUID currentUserId) {
@@ -71,31 +67,11 @@ public class FeedService {
     return feedMapper.toDto(feed, author, false);
   }
 
-
+  // ES 검색은 외부 IO이므로 트랜잭션 밖에서 수행한다.
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public CursorPageResponse<FeedDto> getFeeds(FeedListParams params, UUID currentUserId) {
     FeedSearchResult searchResult = feedSearchRepository.search(params);
-    List<Feed> feeds = findFeedsInSearchOrder(searchResult.feedIds());
-
-    return toDtoPage(new CursorPageResponse<>(
-        feeds,
-        searchResult.nextCursor(),
-        searchResult.nextIdAfter(),
-        searchResult.hasNext(),
-        searchResult.totalCount(),
-        params.sortBy().name(),
-        params.sortDirection()), currentUserId);
-  }
-  
-  private List<Feed> findFeedsInSearchOrder(List<UUID> feedIds) {
-    if (feedIds.isEmpty()) {
-      return List.of();
-    }
-    Map<UUID, Feed> feedMap = feedRepository.findAllActiveByIds(feedIds).stream()
-        .collect(Collectors.toMap(Feed::getId, Function.identity()));
-    return feedIds.stream()
-        .map(feedMap::get)
-        .filter(Objects::nonNull)
-        .toList();
+    return feedPageAssembler.assemble(searchResult, params, currentUserId);
   }
 
   @Transactional
@@ -170,41 +146,6 @@ public class FeedService {
         ootdSnapshotProvider.readOotds(request.clothesIds(), currentUserId);
     return Feed.create(currentUserId, request.weatherId(), request.content(),
         weatherSnapshot, ootdSnapshots);
-  }
-
-  private CursorPageResponse<FeedDto> toDtoPage(CursorPageResponse<Feed> page, UUID currentUserId) {
-    List<Feed> feeds = page.data();
-
-    Map<UUID, UserSummary> authorMap = feeds.isEmpty() ? Map.of() :
-        userSummaryQueryRepository.findByUserIds(
-                feeds.stream().map(Feed::getAuthorId).distinct().toList()
-            ).stream()
-            .collect(Collectors.toMap(UserSummary::userId, Function.identity(),
-                (existing, replacement) -> existing));
-
-    Set<UUID> likedFeedIds = findLikedFeedIds(feeds, currentUserId);
-
-    List<FeedDto> data = feeds.stream()
-        .map(feed -> {
-          UserSummary author = authorMap.get(feed.getAuthorId());
-          if (author == null) {
-            log.warn("피드 작성자 정보를 조회할 수 없습니다: feedId={}", feed.getId());
-            throw AuthorNotFoundException.withNone();
-          }
-          return feedMapper.toDto(feed, author, likedFeedIds.contains(feed.getId()));
-        })
-        .toList();
-
-    return new CursorPageResponse<>(data, page.nextCursor(), page.nextIdAfter(),
-        page.hasNext(), page.totalCount(), page.sortBy(), page.sortDirection());
-  }
-
-  private Set<UUID> findLikedFeedIds(List<Feed> feeds, UUID currentUserId) {
-    if (feeds.isEmpty()) {
-      return Set.of();
-    }
-    List<UUID> feedIds = feeds.stream().map(Feed::getId).toList();
-    return new HashSet<>(feedLikeRepository.findLikedFeedIds(currentUserId, feedIds));
   }
 
   // 저장 성공 시 true, 동시성 충돌로 이미 존재하면 false

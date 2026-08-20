@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -25,6 +26,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FeedIndexEventListener")
@@ -92,16 +95,52 @@ class FeedIndexEventListenerTest {
     }
 
     @Test
-    @DisplayName("인덱싱에 실패해도 예외를 던지지 않는다")
-    void 인덱싱에_실패해도_예외를_던지지_않는다() {
+    @DisplayName("피드 조회에 실패해도 예외를 던지지 않는다")
+    void 피드_조회에_실패해도_예외를_던지지_않는다() {
       // given
       UUID feedId = UUID.randomUUID();
       given(feedRepository.findById(feedId))
-          .willThrow(new RuntimeException("ES 연결 실패"));
+          .willThrow(new DataAccessResourceFailureException("DB 연결 실패"));
 
       // when & then
       assertThatCode(() -> listener.handle(FeedIndexRequestedEvent.upsert(feedId)))
           .doesNotThrowAnyException();
+      verify(feedRepository).findById(feedId);
+      verify(feedSearchRepository, never()).save(any());
+      verify(feedSearchRepository, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("인덱스 저장에 실패해도 예외를 던지지 않는다")
+    void 인덱스_저장에_실패해도_예외를_던지지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
+          DUMMY_SNAPSHOT, List.of());
+      setFeedId(feed, feedId);
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+      willThrow(new DataAccessResourceFailureException("ES 연결 실패"))
+          .given(feedSearchRepository).save(any(FeedDocument.class));
+
+      // when & then
+      assertThatCode(() -> listener.handle(FeedIndexRequestedEvent.upsert(feedId)))
+          .doesNotThrowAnyException();
+      verify(feedSearchRepository).save(any(FeedDocument.class));
+    }
+
+    @Test
+    @DisplayName("인덱스 제거에 실패해도 예외를 던지지 않는다")
+    void 인덱스_제거에_실패해도_예외를_던지지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      willThrow(new DataAccessResourceFailureException("ES 연결 실패"))
+          .given(feedSearchRepository).deleteById(feedId.toString());
+
+      // when & then
+      assertThatCode(() -> listener.handle(FeedIndexRequestedEvent.delete(feedId)))
+          .doesNotThrowAnyException();
+      verify(feedSearchRepository).deleteById(feedId.toString());
+      verify(feedSearchRepository, never()).save(any());
     }
 
     @Test
@@ -121,6 +160,24 @@ class FeedIndexEventListenerTest {
       // then
       verify(feedSearchRepository).deleteById(feedId.toString());
       verify(feedSearchRepository, never()).save(any(FeedDocument.class));
+    }
+
+    @Test
+    @DisplayName("문서 처리 오류가 나도 예외를 던지지 않는다")
+    void 문서_처리_오류가_나도_예외를_던지지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
+          DUMMY_SNAPSHOT, List.of());
+      setFeedId(feed, feedId);
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+      willThrow(new InvalidDataAccessApiUsageException("문서 매핑 오류"))
+          .given(feedSearchRepository).save(any(FeedDocument.class));
+
+      // when & then
+      assertThatCode(() -> listener.handle(FeedIndexRequestedEvent.upsert(feedId)))
+          .doesNotThrowAnyException();
+      verify(feedSearchRepository).save(any(FeedDocument.class));
     }
   }
 }

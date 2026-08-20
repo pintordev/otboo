@@ -13,7 +13,7 @@ import org.springframework.data.elasticsearch.annotations.Setting;
 
 @Getter
 @Setting(settingPath = "elasticsearch/feed-settings.json")
-@Document(indexName = "feeds")
+@Document(indexName = "feeds", createIndex = false)
 public class FeedDocument {
 
   @Id
