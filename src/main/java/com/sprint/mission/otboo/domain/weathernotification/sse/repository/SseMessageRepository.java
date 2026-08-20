@@ -48,7 +48,7 @@ public class SseMessageRepository {
         operations.multi();
         operations.opsForValue().set(messageKey, json, retention);
         operations.opsForZSet().add(INDEX_KEY, message.id().toString(),
-            message.createdAt().toEpochMilli());
+            toEpochMicros(message.createdAt()));
         return operations.exec();
       }
     });
@@ -84,11 +84,21 @@ public class SseMessageRepository {
       return null;
     }
     Double score = latest.iterator().next().getScore();
-    return score != null ? Instant.ofEpochMilli(score.longValue()) : null;
+    return score != null ? fromEpochMicros(score.longValue()) : null;
   }
 
   private void evictExpired() {
     Instant threshold = Instant.now(clock).minus(retention);
-    zSetOps.removeRangeByScore(INDEX_KEY, 0, threshold.toEpochMilli());
+    zSetOps.removeRangeByScore(INDEX_KEY, 0, toEpochMicros(threshold));
+  }
+
+  private static double toEpochMicros(Instant instant) {
+    return instant.getEpochSecond() * 1_000_000L + instant.getNano() / 1_000L;
+  }
+
+  private static Instant fromEpochMicros(long micros) {
+    long seconds = Math.floorDiv(micros, 1_000_000L);
+    long nanos = Math.floorMod(micros, 1_000_000L) * 1_000L;
+    return Instant.ofEpochSecond(seconds, nanos);
   }
 }

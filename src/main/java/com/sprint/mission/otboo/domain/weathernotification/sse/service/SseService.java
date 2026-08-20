@@ -105,7 +105,7 @@ public class SseService {
   }
 
   private boolean isAfterSnapshot(Instant createdAt, Instant snapshotAt) {
-    return createdAt.truncatedTo(ChronoUnit.MILLIS).isAfter(snapshotAt);
+    return createdAt.truncatedTo(ChronoUnit.MICROS).isAfter(snapshotAt);
   }
 
   private ReentrantLock lockFor(UUID userId) {

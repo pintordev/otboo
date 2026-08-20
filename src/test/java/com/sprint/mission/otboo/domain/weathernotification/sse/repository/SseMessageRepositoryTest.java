@@ -102,8 +102,10 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       sseMessageRepository.save(message);
 
       // then
+      Instant createdAt = message.createdAt();
+      double expectedMicros = createdAt.getEpochSecond() * 1_000_000L + createdAt.getNano() / 1_000L;
       assertThat(redisTemplate.opsForZSet().score("sse:message-index", message.id().toString()))
-          .isEqualTo((double) message.createdAt().toEpochMilli());
+          .isEqualTo(expectedMicros);
     }
   }
 
