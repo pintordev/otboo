@@ -296,4 +296,45 @@ class SseServiceTest {
       verify(stringRedisTemplate, times(2)).convertAndSend(eq(SseConfig.SSE_CHANNEL), anyString());
     }
   }
+
+  @Nested
+  @DisplayName("로컬 전달(구독자 콜백)")
+  class DeliverLocally {
+
+    @Test
+    @DisplayName("로컬에_연결된_emitter로_전송한다")
+    void 로컬에_연결된_emitter로_전송한다() throws IOException {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseMessage message = new SseMessage(Set.of(userId), "notifications", "payload");
+      SseEmitter emitter = mock(SseEmitter.class);
+      given(sseEmitterRepository.findSnapshotAt(userId)).willReturn(Optional.empty());
+      given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
+
+      // when
+      sseService.deliverLocally(message);
+
+      // then
+      verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    }
+
+    @Test
+    @DisplayName("재생_스냅샷_이전_메시지는_중복_전송하지_않는다")
+    void 재생_스냅샷_이전_메시지는_중복_전송하지_않는다() {
+      // given — save()와 로컬 전송 사이 Pub/Sub 왕복 구간에 connect()가 끼어들어
+      // 이미 재생으로 처리된 것과 같은 메시지가 뒤늦게 도착하는 상황을 재현
+      UUID userId = UUID.randomUUID();
+      Instant snapshotAt = Instant.now();
+      SseMessage alreadyReplayed = new SseMessage(
+          UUID.randomUUID(), Set.of(userId), "notifications", "payload",
+          snapshotAt.minusSeconds(1));
+      given(sseEmitterRepository.findSnapshotAt(userId)).willReturn(Optional.of(snapshotAt));
+
+      // when
+      sseService.deliverLocally(alreadyReplayed);
+
+      // then
+      verify(sseEmitterRepository, never()).findByUserId(userId);
+    }
+  }
 }
