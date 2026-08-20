@@ -93,7 +93,7 @@ public class SseService {
         Optional<SseEmitter> emitter = resolveTargetEmitter(receiverId, message);
         emitter.ifPresent(e -> sendToEmitter(e, message));
       } catch (Exception e) {
-        log.error("SSE 로컬 전달 실패: messageId={}, receiverId={}", message.id(), receiverId, e);
+        log.error("SSE 로컬 전달 실패: messageId={}", message.id(), e);
       }
     });
   }
@@ -143,7 +143,7 @@ public class SseService {
           .data(message.data()));
       return true;
     } catch (IOException | IllegalStateException e) {
-      log.warn("sse send fail, closing emitter: messageId={}", message.id(), e);
+      log.warn("SSE 전송 실패, emitter를 종료한다: messageId={}", message.id(), e);
       emitter.completeWithError(e);
       return false;
     }
