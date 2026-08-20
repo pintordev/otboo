@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,22 +35,22 @@ public class SseService {
   // (X-Accel-Buffering: no 헤더 필요 여부도 nginx 경유 시 함께 확인)
   private static final long TIMEOUT = Duration.ofMinutes(30).toMillis();
   private static final String PING_EVENT_NAME = "ping";
+  private static final int LOCK_STRIPES = 256;
 
   private final SseEmitterRepository sseEmitterRepository;
   private final SseMessageRepository sseMessageRepository;
   private final StringRedisTemplate stringRedisTemplate;
   private final ObjectMapper objectMapper;
 
-  // 유저별 "emitter 등록 + 재생 스냅샷 확정"(connect)과 "메시지 저장 + 실시간 전송"(send)을
-  // 하나의 상태 전이로 묶기 위한 락. 이 락 없이 두 작업이 같은 유저에 대해 겹치면, 그 경계에
-  // 걸친 메시지가 실시간 전송과 재생에 모두 잡혀 중복 전송될 수 있다.
-  private final ConcurrentHashMap<UUID, ReentrantLock> connectionLocks = new ConcurrentHashMap<>();
+  private final ReentrantLock[] connectionLocks = Stream.generate(ReentrantLock::new)
+      .limit(LOCK_STRIPES)
+      .toArray(ReentrantLock[]::new);
 
   public SseEmitter connect(UUID userId, UUID lastEventId) {
     SseEmitter emitter = new SseEmitter(TIMEOUT);
-    emitter.onCompletion(() -> disconnectAndCleanupLock(userId, emitter));
-    emitter.onTimeout(() -> disconnectAndCleanupLock(userId, emitter));
-    emitter.onError(e -> disconnectAndCleanupLock(userId, emitter));
+    emitter.onCompletion(() -> sseEmitterRepository.remove(userId, emitter));
+    emitter.onTimeout(() -> sseEmitterRepository.remove(userId, emitter));
+    emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
     Instant snapshotAt;
     ReentrantLock lock = lockFor(userId);
@@ -109,22 +109,8 @@ public class SseService {
   }
 
   private ReentrantLock lockFor(UUID userId) {
-    return connectionLocks.computeIfAbsent(userId, id -> new ReentrantLock());
-  }
-
-  private void disconnectAndCleanupLock(UUID userId, SseEmitter emitter) {
-    sseEmitterRepository.remove(userId, emitter);
-
-    ReentrantLock lock = connectionLocks.get(userId);
-    if (lock == null) {
-      return;
-    }
-    lock.lock();
-    try {
-      connectionLocks.remove(userId, lock);
-    } finally {
-      lock.unlock();
-    }
+    int index = Math.floorMod(userId.hashCode(), LOCK_STRIPES);
+    return connectionLocks[index];
   }
 
   public void disconnect(UUID userId) {
