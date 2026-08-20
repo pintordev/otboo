@@ -8,10 +8,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -21,6 +24,7 @@ public class SseMessageRepository {
   private static final String MESSAGE_KEY_PREFIX = "sse:message:";
 
   private final StringRedisTemplate redisTemplate;
+  private final ZSetOperations<String, String> zSetOps;
   private final ObjectMapper objectMapper;
   private final Clock clock;
   private final Duration retention;
@@ -28,6 +32,7 @@ public class SseMessageRepository {
   public SseMessageRepository(StringRedisTemplate redisTemplate, ObjectMapper objectMapper,
       Clock clock, SseReplayBufferProperties replayBufferProperties) {
     this.redisTemplate = redisTemplate;
+    this.zSetOps = redisTemplate.opsForZSet();
     this.objectMapper = objectMapper;
     this.clock = clock;
     this.retention = Duration.ofMinutes(replayBufferProperties.retentionMinutes());
@@ -51,7 +56,24 @@ public class SseMessageRepository {
   }
 
   public List<SseMessage> findAllAfter(UUID lastEventId, UUID userId) {
-    throw new UnsupportedOperationException("findAllAfter 미구현");
+    if (lastEventId == null) {
+      return List.of();
+    }
+    Long rank = zSetOps.rank(INDEX_KEY, lastEventId.toString());
+    if (rank == null) {
+      return List.of();
+    }
+    Set<String> ids = zSetOps.range(INDEX_KEY, rank + 1, -1);
+    if (ids == null || ids.isEmpty()) {
+      return List.of();
+    }
+    List<String> jsons = redisTemplate.opsForValue()
+        .multiGet(ids.stream().map(id -> MESSAGE_KEY_PREFIX + id).toList());
+    return jsons.stream()
+        .filter(Objects::nonNull)
+        .map(this::readJson)
+        .filter(message -> message.isTargetedTo(userId))
+        .toList();
   }
 
   public Instant getLatestCreatedAt() {
@@ -63,6 +85,14 @@ public class SseMessageRepository {
       return objectMapper.writeValueAsString(message);
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("SseMessage 직렬화 실패", e);
+    }
+  }
+
+  private SseMessage readJson(String json) {
+    try {
+      return objectMapper.readValue(json, SseMessage.class);
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("SseMessage 역직렬화 실패", e);
     }
   }
 }
