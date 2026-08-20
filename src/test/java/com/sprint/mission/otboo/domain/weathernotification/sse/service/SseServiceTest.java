@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
@@ -29,6 +30,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -383,6 +389,43 @@ class SseServiceTest {
 
       // then — connect() 재생으로 이미 처리된 것으로 간주해 로컬 전송하지 않는다
       verify(sseEmitterRepository, never()).findByUserId(userId);
+    }
+
+    @Test
+    @DisplayName("emitter_전송_중에도_같은_유저의_다음_메시지_스냅샷_판정은_막히지_않는다")
+    void emitter_전송_중에도_같은_유저의_다음_메시지_스냅샷_판정은_막히지_않는다() throws Exception {
+      // given — message1의 emitter.send()를 인위적으로 블로킹시켜, 그 사이 message2의
+      // 스냅샷 판정(findSnapshotAt)이 락에 막히지 않고 진행되는지 확인한다
+      UUID userId = UUID.randomUUID();
+      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1");
+      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2");
+      SseEmitter emitter = mock(SseEmitter.class);
+      CountDownLatch sendStarted = new CountDownLatch(1);
+      CountDownLatch releaseSend = new CountDownLatch(1);
+      given(sseEmitterRepository.findSnapshotAt(userId)).willReturn(Optional.empty());
+      given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
+      doAnswer(invocation -> {
+        sendStarted.countDown();
+        releaseSend.await();
+        return null;
+      }).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
+
+      ExecutorService executor = Executors.newFixedThreadPool(2);
+      try {
+        Future<?> future1 = executor.submit(() -> sseService.deliverLocally(message1));
+        sendStarted.await();
+
+        // when — message1의 emitter.send()가 아직 블로킹 중인 상태에서 message2를 처리
+        Future<?> future2 = executor.submit(() -> sseService.deliverLocally(message2));
+
+        // then — 락이 send() 전에 이미 풀렸다면 타임아웃 없이 바로 완료된다
+        future2.get(2, TimeUnit.SECONDS);
+
+        releaseSend.countDown();
+        future1.get(2, TimeUnit.SECONDS);
+      } finally {
+        executor.shutdown();
+      }
     }
   }
 
