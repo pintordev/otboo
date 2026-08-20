@@ -20,8 +20,10 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmi
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -381,6 +383,28 @@ class SseServiceTest {
 
       // then — connect() 재생으로 이미 처리된 것으로 간주해 로컬 전송하지 않는다
       verify(sseEmitterRepository, never()).findByUserId(userId);
+    }
+  }
+
+  @Nested
+  @DisplayName("connectionLocks 스트라이핑")
+  class ConnectionLockStriping {
+
+    @Test
+    @DisplayName("유저_수가_많아도_락_인스턴스는_고정_개수_이하로만_생성된다")
+    void 유저_수가_많아도_락_인스턴스는_고정_개수_이하로만_생성된다() throws Exception {
+      // given
+      Method lockForMethod = SseService.class.getDeclaredMethod("lockFor", UUID.class);
+      lockForMethod.setAccessible(true);
+      Set<Object> distinctLocks = new HashSet<>();
+
+      // when
+      for (int i = 0; i < 1000; i++) {
+        distinctLocks.add(lockForMethod.invoke(sseService, UUID.randomUUID()));
+      }
+
+      // then
+      assertThat(distinctLocks.size()).isLessThanOrEqualTo(256);
     }
   }
 }
