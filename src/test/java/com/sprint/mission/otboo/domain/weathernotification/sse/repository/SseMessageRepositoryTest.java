@@ -203,6 +203,23 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
           .isNull();
     }
+
+    @Test
+    @DisplayName("findAllAfter/getLatestCreatedAt 없이 save만 반복해도 보관 기간이 지난 항목이 정리된다")
+    void save만_반복해도_보관_기간이_지난_항목이_정리된다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseMessage expired = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "old", NOW.minus(Duration.ofMinutes(11)));
+      sseMessageRepository.save(expired);
+
+      // when — 조회 메서드를 거치지 않고 save만 한 번 더 호출
+      sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "fresh"));
+
+      // then
+      assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
+          .isNull();
+    }
   }
 
   @Nested
