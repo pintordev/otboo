@@ -10,10 +10,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Repository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -24,6 +26,8 @@ public class SseMessageRepository {
 
   private static final String INDEX_KEY = "sse:message-index";
   private static final String MESSAGE_KEY_PREFIX = "sse:message:";
+  private static final RedisScript<List> FIND_REPLAY_IDS_SCRIPT = RedisScript.of(
+      new ClassPathResource("scripts/find-replay-ids.lua"), List.class);
 
   private final StringRedisTemplate redisTemplate;
   private final ZSetOperations<String, String> zSetOps;
@@ -65,16 +69,9 @@ public class SseMessageRepository {
     if (lastEventId == null) {
       return List.of();
     }
-    Long rank = zSetOps.rank(INDEX_KEY, lastEventId.toString());
-    if (rank == null) {
-      return List.of();
-    }
-    long from = rank + 1;
-    Long size = zSetOps.zCard(INDEX_KEY);
-    if (size != null && size - from > maxReplaySize) {
-      from = size - maxReplaySize;
-    }
-    Set<String> ids = zSetOps.range(INDEX_KEY, from, -1);
+    @SuppressWarnings("unchecked")
+    List<String> ids = redisTemplate.execute(FIND_REPLAY_IDS_SCRIPT, List.of(INDEX_KEY),
+        lastEventId.toString(), String.valueOf(maxReplaySize));
     if (ids == null || ids.isEmpty()) {
       return List.of();
     }
