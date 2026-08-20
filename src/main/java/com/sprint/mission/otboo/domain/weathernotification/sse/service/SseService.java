@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMes
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -67,7 +68,7 @@ public class SseService {
 
     List<SseMessage> missed = sseMessageRepository.findAllAfter(lastEventId, userId);
     for (SseMessage message : missed) {
-      if (snapshotAt != null && message.createdAt().isAfter(snapshotAt)) {
+      if (snapshotAt != null && isAfterSnapshot(message.createdAt(), snapshotAt)) {
         break;
       }
       if (!sendToEmitter(emitter, message)) {
@@ -92,7 +93,7 @@ public class SseService {
       lock.lock();
       try {
         Optional<Instant> snapshotAt = sseEmitterRepository.findSnapshotAt(receiverId);
-        if (snapshotAt.isPresent() && !message.createdAt().isAfter(snapshotAt.get())) {
+        if (snapshotAt.isPresent() && !isAfterSnapshot(message.createdAt(), snapshotAt.get())) {
           return;
         }
         sseEmitterRepository.findByUserId(receiverId)
@@ -101,6 +102,10 @@ public class SseService {
         lock.unlock();
       }
     });
+  }
+
+  private boolean isAfterSnapshot(Instant createdAt, Instant snapshotAt) {
+    return createdAt.truncatedTo(ChronoUnit.MILLIS).isAfter(snapshotAt);
   }
 
   private ReentrantLock lockFor(UUID userId) {
