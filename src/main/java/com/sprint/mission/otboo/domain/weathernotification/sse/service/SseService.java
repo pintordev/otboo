@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -86,7 +87,20 @@ public class SseService {
   }
 
   public void deliverLocally(SseMessage message) {
-    throw new UnsupportedOperationException("deliverLocally 미구현");
+    message.receiverIds().forEach(receiverId -> {
+      ReentrantLock lock = lockFor(receiverId);
+      lock.lock();
+      try {
+        Optional<Instant> snapshotAt = sseEmitterRepository.findSnapshotAt(receiverId);
+        if (snapshotAt.isPresent() && !message.createdAt().isAfter(snapshotAt.get())) {
+          return;
+        }
+        sseEmitterRepository.findByUserId(receiverId)
+            .ifPresent(emitter -> sendToEmitter(emitter, message));
+      } finally {
+        lock.unlock();
+      }
+    });
   }
 
   private String writeJson(SseMessage message) {
