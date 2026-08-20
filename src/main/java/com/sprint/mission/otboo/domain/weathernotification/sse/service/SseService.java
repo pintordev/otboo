@@ -86,6 +86,10 @@ public class SseService {
     });
   }
 
+  public void deliverLocally(SseMessage message) {
+    throw new UnsupportedOperationException("deliverLocally 미구현");
+  }
+
   private ReentrantLock lockFor(UUID userId) {
     return connectionLocks.computeIfAbsent(userId, id -> new ReentrantLock());
   }
