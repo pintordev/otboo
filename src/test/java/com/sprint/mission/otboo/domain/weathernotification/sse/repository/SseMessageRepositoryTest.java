@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
@@ -32,6 +34,10 @@ import tools.jackson.databind.ObjectMapper;
 class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
   private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+  private final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   static LettuceConnectionFactory connectionFactory;
   static StringRedisTemplate redisTemplate;
@@ -73,7 +79,9 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     @DisplayName("저장하면 메시지의 id를 반환한다")
     void 저장하면_메시지의_id를_반환한다() {
       // given
-      SseMessage message = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload");
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("data", "payload")
+          .sample();
 
       // when & then
       assertThat(sseMessageRepository.save(message)).isEqualTo(message.id());
@@ -83,7 +91,9 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     @DisplayName("저장한 메시지는 Redis에 JSON으로 기록된다")
     void 저장한_메시지는_Redis에_JSON으로_기록된다() {
       // given
-      SseMessage message = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload");
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("data", "payload")
+          .sample();
 
       // when
       sseMessageRepository.save(message);
@@ -96,7 +106,9 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     @DisplayName("저장한 메시지의 id가 인덱스에 생성 시각 score로 등록된다")
     void 저장한_메시지의_id가_인덱스에_등록된다() {
       // given
-      SseMessage message = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload");
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("data", "payload")
+          .sample();
 
       // when
       sseMessageRepository.save(message);
