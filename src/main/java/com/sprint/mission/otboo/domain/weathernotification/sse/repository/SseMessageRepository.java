@@ -1,7 +1,5 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import java.time.Clock;
@@ -16,6 +14,7 @@ import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 public class SseMessageRepository {
@@ -40,7 +39,7 @@ public class SseMessageRepository {
 
   public UUID save(SseMessage message) {
     String messageKey = MESSAGE_KEY_PREFIX + message.id();
-    String json = writeJson(message);
+    String json = objectMapper.writeValueAsString(message);
 
     redisTemplate.execute(new SessionCallback<Object>() {
       @Override
@@ -72,7 +71,7 @@ public class SseMessageRepository {
         .multiGet(ids.stream().map(id -> MESSAGE_KEY_PREFIX + id).toList());
     return jsons.stream()
         .filter(Objects::nonNull)
-        .map(this::readJson)
+        .map(json -> objectMapper.readValue(json, SseMessage.class))
         .filter(message -> message.isTargetedTo(userId))
         .toList();
   }
@@ -90,21 +89,5 @@ public class SseMessageRepository {
   private void evictExpired() {
     Instant threshold = Instant.now(clock).minus(retention);
     zSetOps.removeRangeByScore(INDEX_KEY, 0, threshold.toEpochMilli());
-  }
-
-  private String writeJson(SseMessage message) {
-    try {
-      return objectMapper.writeValueAsString(message);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("SseMessage 직렬화 실패", e);
-    }
-  }
-
-  private SseMessage readJson(String json) {
-    try {
-      return objectMapper.readValue(json, SseMessage.class);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("SseMessage 역직렬화 실패", e);
-    }
   }
 }

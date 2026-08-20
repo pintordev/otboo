@@ -1,7 +1,5 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.sse.config.SseConfig;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
@@ -22,6 +20,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -82,7 +81,8 @@ public class SseService {
     notificationDtos.forEach(dto -> {
       SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
       sseMessageRepository.save(message);
-      stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL, writeJson(message));
+      stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
+          objectMapper.writeValueAsString(message));
     });
   }
 
@@ -101,14 +101,6 @@ public class SseService {
         lock.unlock();
       }
     });
-  }
-
-  private String writeJson(SseMessage message) {
-    try {
-      return objectMapper.writeValueAsString(message);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("SseMessage 직렬화 실패", e);
-    }
   }
 
   private ReentrantLock lockFor(UUID userId) {

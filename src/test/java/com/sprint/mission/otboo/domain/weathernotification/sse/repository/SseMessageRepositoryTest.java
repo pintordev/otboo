@@ -2,7 +2,6 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
@@ -61,7 +61,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     redisTemplate.delete("sse:message-index");
 
     sseMessageRepository = new SseMessageRepository(redisTemplate,
-        new ObjectMapper().findAndRegisterModules(), Clock.fixed(NOW, ZoneOffset.UTC),
+        new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
         new SseReplayBufferProperties(10));
   }
 

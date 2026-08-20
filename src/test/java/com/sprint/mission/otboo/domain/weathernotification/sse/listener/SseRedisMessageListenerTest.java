@@ -3,7 +3,6 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.listener;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import java.util.Set;
@@ -13,10 +12,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.DefaultMessage;
 import org.springframework.data.redis.connection.Message;
+import tools.jackson.databind.ObjectMapper;
 
 class SseRedisMessageListenerTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+  private final ObjectMapper objectMapper = new ObjectMapper();
   private final SseService sseService = mock(SseService.class);
   private final SseRedisMessageListener listener =
       new SseRedisMessageListener(objectMapper, sseService);
