@@ -416,7 +416,7 @@ class SseServiceTest {
       ExecutorService executor = Executors.newFixedThreadPool(2);
       try {
         Future<?> future1 = executor.submit(() -> sseService.deliverLocally(message1));
-        sendStarted.await();
+        assertThat(sendStarted.await(2, TimeUnit.SECONDS)).isTrue();
 
         // when — message1의 emitter.send()가 아직 블로킹 중인 상태에서 message2를 처리
         Future<?> future2 = executor.submit(() -> sseService.deliverLocally(message2));
@@ -427,7 +427,9 @@ class SseServiceTest {
         releaseSend.countDown();
         future1.get(2, TimeUnit.SECONDS);
       } finally {
-        executor.shutdown();
+        releaseSend.countDown();
+        executor.shutdownNow();
+        assertThat(executor.awaitTermination(2, TimeUnit.SECONDS)).isTrue();
       }
     }
 
