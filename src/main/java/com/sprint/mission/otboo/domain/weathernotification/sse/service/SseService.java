@@ -49,8 +49,8 @@ public class SseService {
     ReentrantLock lock = lockFor(userId);
     lock.lock();
     try {
-      sseEmitterRepository.save(userId, emitter);
       snapshotAt = sseMessageRepository.getLatestCreatedAt();
+      sseEmitterRepository.save(userId, emitter, snapshotAt);
     } finally {
       lock.unlock();
     }

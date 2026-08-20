@@ -73,7 +73,7 @@ class SseServiceTest {
         // then
         SseEmitter createdEmitter = mocked.constructed().get(0);
         assertThat(result).isSameAs(createdEmitter);
-        verify(sseEmitterRepository).save(userId, createdEmitter);
+        verify(sseEmitterRepository).save(userId, createdEmitter, null);
       }
     }
 
