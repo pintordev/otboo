@@ -7,12 +7,19 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -166,6 +173,80 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
       // when & then
       assertThat(sseMessageRepository.getLatestCreatedAt()).isEqualTo(NOW);
+    }
+  }
+
+  @Nested
+  @DisplayName("보관 기간 초과 시 정리")
+  class Eviction {
+
+    @Test
+    @DisplayName("보관 기간이 지난 메시지는 조회 시점에 인덱스에서 제거된다")
+    void 보관_기간이_지난_메시지는_조회_시점에_인덱스에서_제거된다() {
+      // given — retention 10분, NOW를 "지금"으로 고정해둔 저장소를 그대로 쓴다
+      UUID userId = UUID.randomUUID();
+      SseMessage expired = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "old", NOW.minus(Duration.ofMinutes(11)));
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", NOW.minus(Duration.ofMinutes(6)));
+      SseMessage kept = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "kept", NOW.minus(Duration.ofMinutes(1)));
+      sseMessageRepository.save(expired);
+      sseMessageRepository.save(anchor);
+      sseMessageRepository.save(kept);
+
+      // when
+      List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
+
+      // then
+      assertThat(found).containsExactly(kept);
+      assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
+          .isNull();
+    }
+  }
+
+  @Nested
+  @DisplayName("동시성")
+  class Concurrency {
+
+    @Test
+    @DisplayName("save가 동시에 들어와도 MULTI/EXEC 원자성으로 유실 없이 전부 조회된다")
+    void save가_동시에_들어와도_유실_없이_전부_조회된다() throws Exception {
+      // given
+      UUID userId = UUID.randomUUID();
+      int concurrency = 20;
+      SseMessage anchor = new SseMessage(Set.of(userId), "notifications", "anchor");
+      sseMessageRepository.save(anchor);
+
+      ExecutorService executor = Executors.newFixedThreadPool(concurrency);
+      CountDownLatch ready = new CountDownLatch(concurrency);
+      CountDownLatch start = new CountDownLatch(1);
+      List<Callable<Void>> tasks = new ArrayList<>();
+      for (int i = 0; i < concurrency; i++) {
+        int index = i;
+        tasks.add(() -> {
+          ready.countDown();
+          start.await();
+          sseMessageRepository.save(
+              new SseMessage(Set.of(userId), "notifications", "payload-" + index));
+          return null;
+        });
+      }
+
+      // when
+      List<Future<Void>> futures = new ArrayList<>();
+      for (Callable<Void> task : tasks) {
+        futures.add(executor.submit(task));
+      }
+      ready.await();
+      start.countDown();
+      for (Future<Void> future : futures) {
+        future.get();
+      }
+      executor.shutdown();
+
+      // then
+      assertThat(sseMessageRepository.findAllAfter(anchor.id(), userId)).hasSize(concurrency);
     }
   }
 }
