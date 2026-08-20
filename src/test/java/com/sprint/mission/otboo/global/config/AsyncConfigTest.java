@@ -20,8 +20,13 @@ class AsyncConfigTest {
 
   @AfterEach
   void tearDown() {
-    executor.shutdown();
-    MDC.clear();
+    try {
+      if (executor != null) {
+        executor.shutdown();
+      }
+    } finally {
+      MDC.clear();
+    }
   }
 
   @Nested
