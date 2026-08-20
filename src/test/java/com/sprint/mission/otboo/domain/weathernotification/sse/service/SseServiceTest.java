@@ -186,15 +186,15 @@ class SseServiceTest {
     }
 
     @Test
-    @DisplayName("스냅샷을_만든_메시지_자신도_millis_절삭_오차로_재생에서_빠지지_않는다")
-    void 스냅샷을_만든_메시지_자신도_millis_절삭_오차로_재생에서_빠지지_않는다() throws IOException {
-      // given — Redis ZSet score는 millis라 getLatestCreatedAt()이 돌려주는 스냅샷은
-      // 원본 createdAt의 서브밀리초가 잘린 값이다. 그 메시지 자신을 재생 대상과 비교할 때
-      // 절삭 오차로 "스냅샷 이후"로 오판되면 안 된다.
+    @DisplayName("스냅샷을_만든_메시지_자신도_마이크로초_절삭_오차로_재생에서_빠지지_않는다")
+    void 스냅샷을_만든_메시지_자신도_마이크로초_절삭_오차로_재생에서_빠지지_않는다() throws IOException {
+      // given — Redis ZSet score는 마이크로초라 getLatestCreatedAt()이 돌려주는 스냅샷은
+      // 원본 createdAt의 서브마이크로초(나노초)가 잘린 값이다. 그 메시지 자신을 재생 대상과
+      // 비교할 때 절삭 오차로 "스냅샷 이후"로 오판되면 안 된다.
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
       Instant fullPrecision = Instant.parse("2026-01-01T00:00:00.123456789Z");
-      Instant truncatedSnapshot = fullPrecision.truncatedTo(ChronoUnit.MILLIS);
+      Instant truncatedSnapshot = fullPrecision.truncatedTo(ChronoUnit.MICROS);
       SseMessage boundaryMessage = new SseMessage(UUID.randomUUID(), Set.of(userId),
           "notifications", "payload", fullPrecision);
       given(sseMessageRepository.getLatestCreatedAt()).willReturn(truncatedSnapshot);
@@ -367,13 +367,13 @@ class SseServiceTest {
     }
 
     @Test
-    @DisplayName("스냅샷을_만든_메시지_자신은_millis_절삭_오차_없이_중복_전송하지_않는다")
-    void 스냅샷을_만든_메시지_자신은_millis_절삭_오차_없이_중복_전송하지_않는다() {
-      // given — snapshotAt은 Redis에서 복원된 millis 정밀도, message.createdAt()은
-      // 그 스냅샷을 만든 바로 그 메시지의 서브밀리초 포함 원본 시각
+    @DisplayName("스냅샷을_만든_메시지_자신은_마이크로초_절삭_오차_없이_중복_전송하지_않는다")
+    void 스냅샷을_만든_메시지_자신은_마이크로초_절삭_오차_없이_중복_전송하지_않는다() {
+      // given — snapshotAt은 Redis에서 복원된 마이크로초 정밀도, message.createdAt()은
+      // 그 스냅샷을 만든 바로 그 메시지의 서브마이크로초(나노초) 포함 원본 시각
       UUID userId = UUID.randomUUID();
       Instant fullPrecision = Instant.parse("2026-01-01T00:00:00.123456789Z");
-      Instant truncatedSnapshot = fullPrecision.truncatedTo(ChronoUnit.MILLIS);
+      Instant truncatedSnapshot = fullPrecision.truncatedTo(ChronoUnit.MICROS);
       SseMessage boundaryMessage = new SseMessage(
           UUID.randomUUID(), Set.of(userId), "notifications", "payload", fullPrecision);
       given(sseEmitterRepository.findSnapshotAt(userId)).willReturn(Optional.of(truncatedSnapshot));

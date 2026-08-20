@@ -116,14 +116,17 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     @Test
     @DisplayName("lastEventId 이후 저장된 메시지 중 수신 대상인 것만 반환한다")
     void lastEventId_이후_저장된_메시지_중_수신_대상인_것만_반환한다() {
-      // given
+      // given — createdAt을 명시적으로 서로 다르게 고정해 정렬 순서가 실행 타이밍에 좌우되지 않게 한다
       UUID userId = UUID.randomUUID();
       UUID otherId = UUID.randomUUID();
-      SseMessage anchor = new SseMessage(Set.of(userId), "notifications", "anchor");
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", NOW.minusSeconds(2));
       sseMessageRepository.save(anchor);
-      SseMessage forOther = new SseMessage(Set.of(otherId), "notifications", "for-other");
+      SseMessage forOther = new SseMessage(UUID.randomUUID(), Set.of(otherId), "notifications",
+          "for-other", NOW.minusSeconds(1));
       sseMessageRepository.save(forOther);
-      SseMessage forUser = new SseMessage(Set.of(userId), "notifications", "for-user");
+      SseMessage forUser = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "for-user", NOW);
       sseMessageRepository.save(forUser);
 
       // when
@@ -254,41 +257,45 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     @Test
     @DisplayName("save가 동시에 들어와도 MULTI/EXEC 원자성으로 유실 없이 전부 조회된다")
     void save가_동시에_들어와도_유실_없이_전부_조회된다() throws Exception {
-      // given
+      // given — anchor는 동시 저장되는 메시지들보다 명확히 이른 시각으로 고정한다
       UUID userId = UUID.randomUUID();
       int concurrency = 20;
-      SseMessage anchor = new SseMessage(Set.of(userId), "notifications", "anchor");
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", NOW.minusSeconds(1));
       sseMessageRepository.save(anchor);
 
       ExecutorService executor = Executors.newFixedThreadPool(concurrency);
-      CountDownLatch ready = new CountDownLatch(concurrency);
-      CountDownLatch start = new CountDownLatch(1);
-      List<Callable<Void>> tasks = new ArrayList<>();
-      for (int i = 0; i < concurrency; i++) {
-        int index = i;
-        tasks.add(() -> {
-          ready.countDown();
-          start.await();
-          sseMessageRepository.save(
-              new SseMessage(Set.of(userId), "notifications", "payload-" + index));
-          return null;
-        });
-      }
+      try {
+        CountDownLatch ready = new CountDownLatch(concurrency);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int i = 0; i < concurrency; i++) {
+          int index = i;
+          tasks.add(() -> {
+            ready.countDown();
+            start.await();
+            sseMessageRepository.save(
+                new SseMessage(Set.of(userId), "notifications", "payload-" + index));
+            return null;
+          });
+        }
 
-      // when
-      List<Future<Void>> futures = new ArrayList<>();
-      for (Callable<Void> task : tasks) {
-        futures.add(executor.submit(task));
-      }
-      ready.await();
-      start.countDown();
-      for (Future<Void> future : futures) {
-        future.get();
-      }
-      executor.shutdown();
+        // when
+        List<Future<Void>> futures = new ArrayList<>();
+        for (Callable<Void> task : tasks) {
+          futures.add(executor.submit(task));
+        }
+        ready.await();
+        start.countDown();
+        for (Future<Void> future : futures) {
+          future.get();
+        }
 
-      // then
-      assertThat(sseMessageRepository.findAllAfter(anchor.id(), userId)).hasSize(concurrency);
+        // then
+        assertThat(sseMessageRepository.findAllAfter(anchor.id(), userId)).hasSize(concurrency);
+      } finally {
+        executor.shutdown();
+      }
     }
   }
 }
