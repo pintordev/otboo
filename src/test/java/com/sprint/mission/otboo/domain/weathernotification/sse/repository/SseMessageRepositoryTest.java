@@ -145,6 +145,29 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       assertThat(sseMessageRepository.findAllAfter(UUID.randomUUID(), UUID.randomUUID()))
           .isEmpty();
     }
+
+    @Test
+    @DisplayName("같은 밀리초 안에서도 마이크로초 정밀도로 실제 생성 순서를 따른다")
+    void 같은_밀리초_안에서도_마이크로초_정밀도로_실제_생성_순서를_따른다() {
+      // given — m1이 m2보다 먼저 생성됐지만(같은 밀리초, 마이크로초만 다름) m1의 id가
+      // m2의 id보다 사전순으로 크다 — 밀리초 단위 score라면 둘이 동점이라 사전순(m2, m1)으로
+      // tie-break되어, lastEventId=m1일 때 ZRANK가 m1을 m2보다 뒤로 잡아 m2가 재생에서 빠진다
+      UUID userId = UUID.randomUUID();
+      Instant m1CreatedAt = NOW.plusNanos(100_000);
+      Instant m2CreatedAt = NOW.plusNanos(900_000);
+      SseMessage m1 = new SseMessage(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+          Set.of(userId), "notifications", "m1", m1CreatedAt);
+      SseMessage m2 = new SseMessage(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+          Set.of(userId), "notifications", "m2", m2CreatedAt);
+      sseMessageRepository.save(m1);
+      sseMessageRepository.save(m2);
+
+      // when
+      List<SseMessage> found = sseMessageRepository.findAllAfter(m1.id(), userId);
+
+      // then — m2가 m1보다 나중에 생성됐으므로 재생 대상에 포함돼야 한다
+      assertThat(found).containsExactly(m2);
+    }
   }
 
   @Nested
