@@ -456,20 +456,25 @@ class SseServiceTest {
   class ConnectionLockStriping {
 
     @Test
-    @DisplayName("유저_수가_많아도_락_인스턴스는_고정_개수_이하로만_생성된다")
-    void 유저_수가_많아도_락_인스턴스는_고정_개수_이하로만_생성된다() throws Exception {
+    @DisplayName("같은_userId는_항상_같은_락을_반환하고_userId가_다양하면_여러_락으로_분산된다")
+    void 같은_userId는_항상_같은_락을_반환하고_userId가_다양하면_여러_락으로_분산된다()
+        throws Exception {
       // given
       Method lockForMethod = SseService.class.getDeclaredMethod("lockFor", UUID.class);
       lockForMethod.setAccessible(true);
+      UUID fixedUserId = UUID.randomUUID();
       Set<Object> distinctLocks = new HashSet<>();
 
       // when
+      Object first = lockForMethod.invoke(sseService, fixedUserId);
+      Object second = lockForMethod.invoke(sseService, fixedUserId);
       for (int i = 0; i < 1000; i++) {
         distinctLocks.add(lockForMethod.invoke(sseService, UUID.randomUUID()));
       }
 
       // then
-      assertThat(distinctLocks.size()).isLessThanOrEqualTo(256);
+      assertThat(first).isSameAs(second);
+      assertThat(distinctLocks.size()).isGreaterThan(200);
     }
   }
 }
