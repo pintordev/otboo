@@ -15,12 +15,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.sse.config.SseConfig;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
-import com.sprint.mission.otboo.global.event.NotificationLevel;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -60,6 +61,9 @@ class SseServiceTest {
   @Mock
   private StringRedisTemplate stringRedisTemplate;
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   @BeforeEach
   void setUp() {
@@ -318,8 +322,9 @@ class SseServiceTest {
     void 메시지를_저장하고_Redis_채널에_발행한다() {
       // given
       UUID receiverId = UUID.randomUUID();
-      NotificationDto dto = new NotificationDto(
-          UUID.randomUUID(), Instant.now(), receiverId, "제목", "내용", NotificationLevel.INFO);
+      NotificationDto dto = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", receiverId)
+          .sample();
 
       // when
       sseService.send(List.of(dto), "notifications");
@@ -335,10 +340,12 @@ class SseServiceTest {
       // given
       UUID receiverId1 = UUID.randomUUID();
       UUID receiverId2 = UUID.randomUUID();
-      NotificationDto dto1 = new NotificationDto(
-          UUID.randomUUID(), Instant.now(), receiverId1, "제목1", "내용1", NotificationLevel.INFO);
-      NotificationDto dto2 = new NotificationDto(
-          UUID.randomUUID(), Instant.now(), receiverId2, "제목2", "내용2", NotificationLevel.INFO);
+      NotificationDto dto1 = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", receiverId1)
+          .sample();
+      NotificationDto dto2 = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", receiverId2)
+          .sample();
 
       // when
       sseService.send(List.of(dto1, dto2), "notifications");
