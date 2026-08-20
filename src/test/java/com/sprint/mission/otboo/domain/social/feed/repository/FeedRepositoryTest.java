@@ -306,6 +306,26 @@ class FeedRepositoryTest {
       assertThat(found.getTemperatureMin()).isEqualTo(16.0);
       assertThat(found.getTemperatureMax()).isEqualTo(31.0);
     }
+
+    @Test
+    @DisplayName("어제 비교 데이터가 없어 temperatureCompared가 null이어도 저장된다")
+    void 어제_비교_데이터가_없어_temperatureCompared가_null이어도_저장된다() {
+      // given
+      WeatherSnapshot snapshot = new WeatherSnapshot(
+          SkyStatus.CLEAR, PrecipitationType.NONE,
+          0.0, 0.0, 28.0, null, 16.0, 31.0);
+      User author = persistUser("작성자");
+
+      // when
+      Feed feed = feedRepository.save(
+          Feed.create(author.getId(), UUID.randomUUID(), "비교 불가 날씨", snapshot, List.of()));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // then
+      Feed found = feedRepository.findById(feed.getId()).orElseThrow();
+      assertThat(found.getTemperatureCompared()).isNull();
+    }
   }
 
   @Nested

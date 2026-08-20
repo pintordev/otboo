@@ -78,7 +78,7 @@ public class Feed {
   @Column(name = "temperature_current", nullable = false)
   private Double temperatureCurrent;
 
-  @Column(name = "temperature_compared", nullable = false)
+  @Column(name = "temperature_compared")
   private Double temperatureCompared;
 
   @Column(name = "temperature_min", nullable = false)
