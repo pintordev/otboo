@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -428,6 +429,25 @@ class SseServiceTest {
       } finally {
         executor.shutdown();
       }
+    }
+
+    @Test
+    @DisplayName("한_수신자_처리가_실패해도_예외를_전파하지_않고_나머지_수신자는_계속_전달한다")
+    void 한_수신자_처리가_실패해도_나머지_수신자는_계속_전달한다() throws IOException {
+      // given
+      UUID failingReceiverId = UUID.randomUUID();
+      UUID okReceiverId = UUID.randomUUID();
+      SseMessage message = new SseMessage(
+          Set.of(failingReceiverId, okReceiverId), "notifications", "payload");
+      SseEmitter okEmitter = mock(SseEmitter.class);
+      given(sseEmitterRepository.findSnapshotAt(failingReceiverId))
+          .willThrow(new RuntimeException("redis 장애"));
+      given(sseEmitterRepository.findSnapshotAt(okReceiverId)).willReturn(Optional.empty());
+      given(sseEmitterRepository.findByUserId(okReceiverId)).willReturn(Optional.of(okEmitter));
+
+      // when & then
+      assertThatCode(() -> sseService.deliverLocally(message)).doesNotThrowAnyException();
+      verify(okEmitter).send(any(SseEmitter.SseEventBuilder.class));
     }
   }
 
