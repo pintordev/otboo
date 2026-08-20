@@ -1,6 +1,9 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.sse.config.SseConfig;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
@@ -14,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -33,6 +37,8 @@ public class SseService {
 
   private final SseEmitterRepository sseEmitterRepository;
   private final SseMessageRepository sseMessageRepository;
+  private final StringRedisTemplate stringRedisTemplate;
+  private final ObjectMapper objectMapper;
 
   // 유저별 "emitter 등록 + 재생 스냅샷 확정"(connect)과 "메시지 저장 + 실시간 전송"(send)을
   // 하나의 상태 전이로 묶기 위한 락. 이 락 없이 두 작업이 같은 유저에 대해 겹치면, 그 경계에
@@ -74,20 +80,21 @@ public class SseService {
   public void send(List<NotificationDto> notificationDtos, String eventName) {
     notificationDtos.forEach(dto -> {
       SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
-      ReentrantLock lock = lockFor(dto.receiverId());
-      lock.lock();
-      try {
-        sseMessageRepository.save(message);
-        sseEmitterRepository.findByUserId(dto.receiverId())
-            .ifPresent(emitter -> sendToEmitter(emitter, message));
-      } finally {
-        lock.unlock();
-      }
+      sseMessageRepository.save(message);
+      stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL, writeJson(message));
     });
   }
 
   public void deliverLocally(SseMessage message) {
     throw new UnsupportedOperationException("deliverLocally 미구현");
+  }
+
+  private String writeJson(SseMessage message) {
+    try {
+      return objectMapper.writeValueAsString(message);
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("SseMessage 직렬화 실패", e);
+    }
   }
 
   private ReentrantLock lockFor(UUID userId) {
