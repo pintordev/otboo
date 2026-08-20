@@ -152,6 +152,29 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     }
 
     @Test
+    @DisplayName("역직렬화에 실패한 레코드는 건너뛰고 나머지는 정상 반환한다")
+    void 역직렬화에_실패한_레코드는_건너뛰고_나머지는_정상_반환한다() {
+      // given — corrupted의 String 레코드만 직접 손상시킨다(인덱스 항목은 그대로 남아있음)
+      UUID userId = UUID.randomUUID();
+      SseMessage anchor = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "anchor", NOW.minusSeconds(2));
+      sseMessageRepository.save(anchor);
+      SseMessage corrupted = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "corrupted", NOW.minusSeconds(1));
+      sseMessageRepository.save(corrupted);
+      redisTemplate.opsForValue().set("sse:message:" + corrupted.id(), "not-valid-json");
+      SseMessage valid = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "valid", NOW);
+      sseMessageRepository.save(valid);
+
+      // when
+      List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
+
+      // then
+      assertThat(found).containsExactly(valid);
+    }
+
+    @Test
     @DisplayName("같은 밀리초 안에서도 마이크로초 정밀도로 실제 생성 순서를 따른다")
     void 같은_밀리초_안에서도_마이크로초_정밀도로_실제_생성_순서를_따른다() {
       // given — m1이 m2보다 먼저 생성됐지만(같은 밀리초, 마이크로초만 다름) m1의 id가
