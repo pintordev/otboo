@@ -132,4 +132,33 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
           .isEmpty();
     }
   }
+
+  @Nested
+  @DisplayName("최신 생성 시각 조회")
+  class GetLatestCreatedAt {
+
+    @Test
+    @DisplayName("메시지가 없으면 null을 반환한다")
+    void 메시지가_없으면_null을_반환한다() {
+      // when & then
+      assertThat(sseMessageRepository.getLatestCreatedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("가장 최근 저장한 메시지의 생성 시각을 반환한다")
+    void 가장_최근_저장한_메시지의_생성_시각을_반환한다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      Instant earlier = NOW.minusSeconds(10);
+      SseMessage first = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "first", earlier);
+      SseMessage second = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
+          "second", NOW);
+      sseMessageRepository.save(first);
+      sseMessageRepository.save(second);
+
+      // when & then
+      assertThat(sseMessageRepository.getLatestCreatedAt()).isEqualTo(NOW);
+    }
+  }
 }
