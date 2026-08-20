@@ -89,19 +89,26 @@ public class SseService {
 
   public void deliverLocally(SseMessage message) {
     message.receiverIds().forEach(receiverId -> {
-      ReentrantLock lock = lockFor(receiverId);
-      lock.lock();
-      try {
-        Optional<Instant> snapshotAt = sseEmitterRepository.findSnapshotAt(receiverId);
-        if (snapshotAt.isPresent() && !isAfterSnapshot(message.createdAt(), snapshotAt.get())) {
-          return;
-        }
-        sseEmitterRepository.findByUserId(receiverId)
-            .ifPresent(emitter -> sendToEmitter(emitter, message));
-      } finally {
-        lock.unlock();
-      }
+      Optional<SseEmitter> emitter = resolveTargetEmitter(receiverId, message);
+      emitter.ifPresent(e -> sendToEmitter(e, message));
     });
+  }
+
+  private Optional<SseEmitter> resolveTargetEmitter(UUID receiverId, SseMessage message) {
+    ReentrantLock lock = lockFor(receiverId);
+    lock.lock();
+    try {
+      Optional<Instant> snapshotAt = sseEmitterRepository.findSnapshotAt(receiverId);
+      boolean alreadyReplayed = snapshotAt
+          .filter(s -> !isAfterSnapshot(message.createdAt(), s))
+          .isPresent();
+      if (alreadyReplayed) {
+        return Optional.empty();
+      }
+      return sseEmitterRepository.findByUserId(receiverId);
+    } finally {
+      lock.unlock();
+    }
   }
 
   private boolean isAfterSnapshot(Instant createdAt, Instant snapshotAt) {

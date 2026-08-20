@@ -399,16 +399,18 @@ class SseServiceTest {
       UUID userId = UUID.randomUUID();
       SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1");
       SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2");
-      SseEmitter emitter = mock(SseEmitter.class);
+      SseEmitter blockingEmitter = mock(SseEmitter.class);
+      SseEmitter fastEmitter = mock(SseEmitter.class);
       CountDownLatch sendStarted = new CountDownLatch(1);
       CountDownLatch releaseSend = new CountDownLatch(1);
       given(sseEmitterRepository.findSnapshotAt(userId)).willReturn(Optional.empty());
-      given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
+      given(sseEmitterRepository.findByUserId(userId))
+          .willReturn(Optional.of(blockingEmitter), Optional.of(fastEmitter));
       doAnswer(invocation -> {
         sendStarted.countDown();
         releaseSend.await();
         return null;
-      }).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
+      }).when(blockingEmitter).send(any(SseEmitter.SseEventBuilder.class));
 
       ExecutorService executor = Executors.newFixedThreadPool(2);
       try {
