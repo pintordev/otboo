@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class SseEmitterRepositoryTest {
+
+  private static final Instant SNAPSHOT_AT = Instant.now();
 
   private SseEmitterRepository sseEmitterRepository;
 
@@ -34,7 +37,7 @@ class SseEmitterRepositoryTest {
       SseEmitter emitter = new SseEmitter();
 
       // when
-      sseEmitterRepository.save(userId, emitter);
+      sseEmitterRepository.save(userId, emitter, SNAPSHOT_AT);
       Optional<SseEmitter> found = sseEmitterRepository.findByUserId(userId);
 
       // then
@@ -57,10 +60,10 @@ class SseEmitterRepositoryTest {
       UUID userId = UUID.randomUUID();
       SseEmitter previous = new SseEmitter();
       SseEmitter next = new SseEmitter();
-      sseEmitterRepository.save(userId, previous);
+      sseEmitterRepository.save(userId, previous, SNAPSHOT_AT);
 
       // when
-      sseEmitterRepository.save(userId, next);
+      sseEmitterRepository.save(userId, next, SNAPSHOT_AT);
 
       // then
       assertThat(sseEmitterRepository.findByUserId(userId)).contains(next);
@@ -78,10 +81,10 @@ class SseEmitterRepositoryTest {
       UUID userId = UUID.randomUUID();
       SseEmitter previous = mock(SseEmitter.class);
       SseEmitter next = new SseEmitter();
-      sseEmitterRepository.save(userId, previous);
+      sseEmitterRepository.save(userId, previous, SNAPSHOT_AT);
 
       // when
-      sseEmitterRepository.save(userId, next);
+      sseEmitterRepository.save(userId, next, SNAPSHOT_AT);
 
       // then
       verify(previous).complete();
@@ -95,7 +98,7 @@ class SseEmitterRepositoryTest {
       SseEmitter emitter = mock(SseEmitter.class);
 
       // when
-      sseEmitterRepository.save(userId, emitter);
+      sseEmitterRepository.save(userId, emitter, SNAPSHOT_AT);
 
       // then
       verify(emitter, never()).complete();
@@ -112,7 +115,7 @@ class SseEmitterRepositoryTest {
       // given
       UUID userId = UUID.randomUUID();
       SseEmitter emitter = new SseEmitter();
-      sseEmitterRepository.save(userId, emitter);
+      sseEmitterRepository.save(userId, emitter, SNAPSHOT_AT);
 
       // when
       sseEmitterRepository.remove(userId, emitter);
@@ -128,8 +131,8 @@ class SseEmitterRepositoryTest {
       UUID userId = UUID.randomUUID();
       SseEmitter previous = new SseEmitter();
       SseEmitter next = new SseEmitter();
-      sseEmitterRepository.save(userId, previous);
-      sseEmitterRepository.save(userId, next);
+      sseEmitterRepository.save(userId, previous, SNAPSHOT_AT);
+      sseEmitterRepository.save(userId, next, SNAPSHOT_AT);
 
       // when
       sseEmitterRepository.remove(userId, previous);
@@ -151,13 +154,38 @@ class SseEmitterRepositoryTest {
       UUID userId2 = UUID.randomUUID();
       SseEmitter emitter1 = new SseEmitter();
       SseEmitter emitter2 = new SseEmitter();
-      sseEmitterRepository.save(userId1, emitter1);
-      sseEmitterRepository.save(userId2, emitter2);
+      sseEmitterRepository.save(userId1, emitter1, SNAPSHOT_AT);
+      sseEmitterRepository.save(userId2, emitter2, SNAPSHOT_AT);
 
       // when & then
       assertThat(sseEmitterRepository.findAll())
           .containsEntry(userId1, emitter1)
           .containsEntry(userId2, emitter2);
+    }
+  }
+
+  @Nested
+  @DisplayName("재생 스냅샷 조회")
+  class FindSnapshotAt {
+
+    @Test
+    @DisplayName("저장한_스냅샷_시각을_그대로_조회할_수_있다")
+    void 저장한_스냅샷_시각을_그대로_조회할_수_있다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseEmitter emitter = new SseEmitter();
+
+      // when
+      sseEmitterRepository.save(userId, emitter, SNAPSHOT_AT);
+
+      // then
+      assertThat(sseEmitterRepository.findSnapshotAt(userId)).contains(SNAPSHOT_AT);
+    }
+
+    @Test
+    @DisplayName("존재하지_않는_유저를_조회하면_빈_Optional을_반환한다")
+    void 존재하지_않는_유저를_조회하면_빈_Optional을_반환한다() {
+      assertThat(sseEmitterRepository.findSnapshotAt(UUID.randomUUID())).isEmpty();
     }
   }
 }
