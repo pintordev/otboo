@@ -243,12 +243,39 @@ def create_new_card(issue, project_item, milestones, sprint_page_by_title):
     return resp.json()["id"]
 
 
+DISCORD_MESSAGE_LIMIT = 2000
+
+
+def split_message(message, limit=DISCORD_MESSAGE_LIMIT):
+    """Discord 메시지 본문 상한(2000자)에 맞춰 줄 단위로 분할한다.
+
+    누락 필드가 많이 쌓인 수신자는 build_message()가 만든 메시지가 상한을 넘을 수 있어
+    (issue_field_check.py), 그대로 보내면 Discord API가 400으로 거절한다. 한 줄이 상한보다
+    길어 자체로 분할이 안 되는 경우는 없다고 가정한다(현재 호출부는 이슈/PR 한 줄 요약이라
+    2000자를 넘지 않음)."""
+    if len(message) <= limit:
+        return [message]
+    chunks = []
+    current = ""
+    for line in message.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def send_webhook(message):
     if not DISCORD_WEBHOOK_URL:
         print(f"[webhook 미설정, 콘솔 출력]\n{message}\n")
         return
-    resp = requests.post(DISCORD_WEBHOOK_URL, json={"content": message}, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
+    for chunk in split_message(message):
+        resp = requests.post(DISCORD_WEBHOOK_URL, json={"content": chunk}, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
 
 
 def send_dm_to_discord_id(discord_id, message):
@@ -263,12 +290,13 @@ def send_dm_to_discord_id(discord_id, message):
     )
     resp.raise_for_status()
     channel_id = resp.json()["id"]
-    requests.post(
-        f"https://discord.com/api/v10/channels/{channel_id}/messages",
-        headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-        json={"content": message},
-        timeout=REQUEST_TIMEOUT,
-    ).raise_for_status()
+    for chunk in split_message(message):
+        requests.post(
+            f"https://discord.com/api/v10/channels/{channel_id}/messages",
+            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            json={"content": chunk},
+            timeout=REQUEST_TIMEOUT,
+        ).raise_for_status()
 
 
 def archive_card(page_id):
