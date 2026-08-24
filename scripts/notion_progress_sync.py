@@ -252,7 +252,9 @@ def split_message(message, limit=DISCORD_MESSAGE_LIMIT):
     누락 필드가 많이 쌓인 수신자는 build_message()가 만든 메시지가 상한을 넘을 수 있어
     (issue_field_check.py), 그대로 보내면 Discord API가 400으로 거절한다. 기본은 줄 단위로
     묶어서 분할하되, 한 줄 자체가 상한을 넘으면 그 줄을 limit 단위로 추가 분할한다. 빈 청크는
-    만들지 않는다."""
+    만들지 않는다(빈 입력은 빈 리스트)."""
+    if not message:
+        return []
     if len(message) <= limit:
         return [message]
     chunks = []
