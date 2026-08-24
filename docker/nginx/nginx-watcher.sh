@@ -10,7 +10,7 @@ NGINX_CONF="/opt/otboo/nginx.conf"
 # nginx는 ECS 태스크로 뜨므로 컨테이너 이름이 매번 자동 생성된다 — 고정 이름 대신
 # 이 호스트에서 nginx 이미지로 뜬 컨테이너를 이미지 기준으로 찾는다(이 인스턴스엔 nginx 태스크가
 # desiredCount:1로 하나만 배치되므로 이 필터로 충분히 유일하게 식별된다).
-CONTAINER_ID=$(docker ps --filter "ancestor=nginx:1.27-alpine" --format '{{.ID}}' | head -n1)
+CONTAINER_ID=$(docker ps --filter "ancestor=464079169729.dkr.ecr.ap-northeast-2.amazonaws.com/otboo-nginx:latest" --format '{{.ID}}' | head -n1)
 if [ -z "$CONTAINER_ID" ]; then
   echo "$(date -Iseconds) nginx container not found on this host yet, skip this cycle" >&2
   exit 0
