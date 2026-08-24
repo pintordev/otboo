@@ -53,6 +53,18 @@ if ! docker run --rm -v "$TMP_CONF:/etc/nginx/nginx.conf:ro" nginx:1.27-alpine n
   exit 1
 fi
 
+BACKUP_CONF="${NGINX_CONF}.bak"
+cp "$NGINX_CONF" "$BACKUP_CONF"
 mv "$TMP_CONF" "$NGINX_CONF"
-docker exec "$CONTAINER_ID" nginx -s reload
+
+if ! docker exec "$CONTAINER_ID" nginx -s reload; then
+  # reload가 실패해도 mv는 이미 끝난 뒤라, 여기서 원상복구하지 않으면 다음 15초 주기의
+  # diff가 "변경 없음"으로 판단해 재시도조차 걸리지 않는다 — 이전 설정으로 되돌려 다음 주기에
+  # 다시 "변경 있음"으로 잡히도록 한다.
+  echo "$(date -Iseconds) nginx -s reload failed, restoring previous config so the next cycle retries" >&2
+  mv "$BACKUP_CONF" "$NGINX_CONF"
+  exit 1
+fi
+
+rm -f "$BACKUP_CONF"
 echo "$(date -Iseconds) upstream reloaded: $(echo "$INSTANCES" | jq -c '[.[] | "\(.AWS_INSTANCE_IPV4):\(.AWS_INSTANCE_PORT)"]')"
