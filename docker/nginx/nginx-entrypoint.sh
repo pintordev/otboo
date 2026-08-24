@@ -14,11 +14,19 @@ SLEEP_SECONDS=3
 attempt=1
 UPSTREAM_MEMBERS=""
 while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-  INSTANCES=$(aws servicediscovery discover-instances \
+  # set -e 아래서는 대입식의 명령 치환이 실패해도 스크립트가 그대로 죽는다 —
+  # discover-instances 호출 자체가 실패하는 경우도 "인스턴스가 아직 없는" 경우와 동일하게
+  # 재시도 대상으로 다뤄야 한다.
+  if ! INSTANCES=$(aws servicediscovery discover-instances \
     --namespace-name otboo.local \
     --service-name app \
     --region "$REGION" \
-    --query 'Instances[].Attributes' --output json)
+    --query 'Instances[].Attributes' --output json); then
+    echo "$(date -Iseconds) discover-instances call failed, retry ${attempt}/${MAX_ATTEMPTS}" >&2
+    attempt=$((attempt + 1))
+    sleep "$SLEEP_SECONDS"
+    continue
+  fi
 
   UPSTREAM_MEMBERS=$(echo "$INSTANCES" | jq -r '.[] | "\(.AWS_INSTANCE_IPV4):\(.AWS_INSTANCE_PORT)"' | sort | \
     sed 's/^/        server /; s/$/ max_fails=3 fail_timeout=30s;/')
