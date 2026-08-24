@@ -3,7 +3,7 @@ package com.sprint.mission.otboo.global.config;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
 import com.sprint.mission.otboo.global.interceptor.MdcLoggingInterceptor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -11,18 +11,17 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@EnableConfigurationProperties(CorsProperties.class)
 @RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
   private final MdcLoggingInterceptor mdcLoggingInterceptor;
-
-  @Value("${otboo.cors.allowed-origins}")
-  private String[] allowedOrigins;
+  private final CorsProperties corsProperties;
 
   @Override
   public void addCorsMappings(CorsRegistry registry) {
     registry.addMapping("/**")
-        .allowedOrigins(allowedOrigins)
+        .allowedOrigins(corsProperties.allowedOrigins())
         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .allowedHeaders("*")
         .allowCredentials(true)
