@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesAttributeRepository;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdDto;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,6 +21,7 @@ public class RecommendationOotdAssembler {
 
   private final ClothesAttributeRepository clothesAttributeRepository;
   private final ClothesAttributeDefValueRepository clothesAttributeDefValueRepository;
+  private final FileUrlResolver fileUrlResolver;
 
   public List<OotdDto> toOotdDtoList(List<Clothes> selectedClothes) {
     if (selectedClothes.isEmpty()) {
@@ -68,7 +70,7 @@ public class RecommendationOotdAssembler {
           return new OotdDto(
               clothes.getId(),
               clothes.getName(),
-              clothes.getImageUrl(),
+              fileUrlResolver.resolve(clothes.getImageUrl()),
               clothes.getType(),
               attrDtos);
         })

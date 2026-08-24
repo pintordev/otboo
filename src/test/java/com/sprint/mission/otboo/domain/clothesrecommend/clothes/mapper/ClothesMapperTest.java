@@ -8,8 +8,12 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesDto;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesType;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,11 +24,14 @@ import com.sprint.mission.otboo.external.purchase.dto.PurchasePageResponse;
 
 class ClothesMapperTest {
 
+  private final FileProperties fileProperties = new FileProperties(
+      FileImplType.LOCAL, "http://localhost:8080/uploads", 5242880, Set.of("jpg"), null, null);
+
   ClothesMapper clothesMapper;
 
   @BeforeEach
   void setUp() {
-    clothesMapper = new ClothesMapper();
+    clothesMapper = new ClothesMapper(new FileUrlResolver(fileProperties));
   }
 
   @Nested
@@ -88,6 +95,22 @@ class ClothesMapperTest {
       // then
       assertThat(result.imageUrl()).isNull();
     }
+
+    @Test
+    @DisplayName("imageUrl에 저장 키가 담긴 의상을 DTO로 변환하면 완전한 URL을 반환한다")
+    void imageUrl에_저장_키가_담긴_의상을_DTO로_변환하면_완전한_URL을_반환한다() {
+      // given
+      Clothes clothes = Clothes.create(UUID.randomUUID(), "가디건", ClothesType.OUTER);
+      clothes.changeImageUrl("clothes/0e1f2a3b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.jpg");
+
+      // when
+      ClothesDto result = clothesMapper.toDto(clothes, List.of(), Map.of());
+
+      // then
+      assertThat(result.imageUrl()).isEqualTo(
+          "http://localhost:8080/uploads/clothes/0e1f2a3b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.jpg");
+    }
+
     @Test
     @DisplayName("PurchasePageResponse를_ClothesDto로_변환한다")
     void PurchasePageResponse를_ClothesDto로_변환한다() {

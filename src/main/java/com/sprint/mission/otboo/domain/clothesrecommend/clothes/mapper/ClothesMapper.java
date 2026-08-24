@@ -6,16 +6,21 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesAttri
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.dto.ClothesDto;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.ClothesAttribute;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import com.sprint.mission.otboo.external.llm.dto.LlmExtractedClothesInfo;
 import com.sprint.mission.otboo.external.purchase.dto.PurchasePageResponse;
 
 @Component
+@RequiredArgsConstructor
 public class ClothesMapper {
+
+  private final FileUrlResolver fileUrlResolver;
 
   public ClothesDto toDto(Clothes clothes, List<ClothesAttribute> attributes,
       Map<UUID, List<ClothesAttributeDefValue>> defValuesByDefId) {
@@ -27,12 +32,13 @@ public class ClothesMapper {
         clothes.getId(),
         clothes.getOwnerId(),
         clothes.getName(),
-        clothes.getImageUrl(),
+        fileUrlResolver.resolve(clothes.getImageUrl()),
         clothes.getType(),
         attributeDtos
     );
   }
 
+  // 구매 링크 추출 결과는 외부 사이트의 절대 URL이므로 FileUrlResolver를 거치지 않는다
   public ClothesDto toDto(PurchasePageResponse ogResult) {
     return new ClothesDto(null, null, ogResult.title(), ogResult.imageUrl(), null, List.of());
   }

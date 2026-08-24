@@ -18,6 +18,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.Cloth
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,19 +44,21 @@ public class ClothesService {
   private final ClothesAttributeDefRepository clothesAttributeDefRepository;
   private final ClothesAttributeDefValueRepository clothesAttributeDefValueRepository;
   private final ClothesMapper clothesMapper;
+  private final FileStorageService fileStorageService;
+
+  private static final String IMAGE_DOMAIN = "clothes";
 
   @Transactional
   public ClothesDto create(ClothesCreateRequest request, MultipartFile image) {
     Clothes clothes = clothesRepository.save(
         Clothes.create(request.ownerId(), request.name(), request.type()));
 
-    if (image != null && !image.isEmpty()) {
-      // TODO: S3 연동 후 이미지 업로드 구현
-      log.info("이미지 파일 수신됨 (아직 저장 미구현) size={}", image.getSize());
-    }
-
     List<ClothesAttribute> savedAttributes = saveAttributes(clothes.getId(),
         request.attributes());
+
+    if (image != null && !image.isEmpty()) {
+      clothes.changeImageUrl(fileStorageService.store(image, IMAGE_DOMAIN));
+    }
 
     Map<UUID, List<ClothesAttributeDefValue>> defValuesByDefId =
         loadDefValues(savedAttributes);
@@ -138,11 +141,6 @@ public class ClothesService {
       clothes.changeType(request.type());
     }
 
-    if (image != null && !image.isEmpty()) {
-      // TODO: S3 연동 후 이미지 업로드 구현
-      log.info("이미지 파일 수신됨 (아직 저장 미구현) size={}", image.getSize());;
-    }
-
     List<ClothesAttribute> savedAttributes;
     if (request.attributes() != null) {
       clothesAttributeRepository.deleteAllByClothesId(clothesId);
@@ -150,6 +148,12 @@ public class ClothesService {
     } else {
       savedAttributes = clothesAttributeRepository
           .findAllByClothesIdWithDefinition(clothesId);
+    }
+
+    if (image != null && !image.isEmpty()) {
+      String oldImageUrl = clothes.getImageUrl();
+      clothes.changeImageUrl(fileStorageService.store(image, IMAGE_DOMAIN));
+      fileStorageService.delete(oldImageUrl);
     }
 
     Map<UUID, List<ClothesAttributeDefValue>> defValuesByDefId =

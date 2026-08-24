@@ -29,6 +29,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.Cloth
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesRepository;
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
+import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,7 +40,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class ClothesServiceTest {
@@ -61,6 +64,9 @@ class ClothesServiceTest {
 
   @Mock
   ClothesMapper clothesMapper;
+
+  @Mock
+  FileStorageService fileStorageService;
 
   @Nested
   @DisplayName("의상 등록")
@@ -130,6 +136,56 @@ class ClothesServiceTest {
     }
 
     @Test
+    @DisplayName("이미지를 첨부해 등록하면 저장소에 저장하고 저장 키를 의상에 반영한다")
+    void 이미지를_첨부해_등록하면_저장소에_저장하고_저장_키를_의상에_반영한다() {
+      // given
+      UUID ownerId = UUID.randomUUID();
+      ClothesCreateRequest request = new ClothesCreateRequest(
+          ownerId, "가디건", ClothesType.OUTER, List.of());
+
+      Clothes savedClothes = Clothes.create(ownerId, "가디건", ClothesType.OUTER);
+      when(clothesRepository.save(any())).thenReturn(savedClothes);
+
+      MultipartFile image = new MockMultipartFile(
+          "image", "cardigan.jpg", "image/jpeg", "dummy".getBytes());
+      when(fileStorageService.store(image, "clothes")).thenReturn("clothes/cardigan.jpg");
+
+      ClothesDto expectedDto = new ClothesDto(
+          savedClothes.getId(), ownerId, "가디건", null, ClothesType.OUTER, List.of());
+      when(clothesMapper.toDto(any(), anyList(), anyMap())).thenReturn(expectedDto);
+
+      // when
+      clothesService.create(request, image);
+
+      // then
+      verify(fileStorageService).store(image, "clothes");
+      assertThat(savedClothes.getImageUrl()).isEqualTo("clothes/cardigan.jpg");
+    }
+
+    @Test
+    @DisplayName("이미지를 첨부하지 않으면 저장소를 호출하지 않는다")
+    void 이미지를_첨부하지_않으면_저장소를_호출하지_않는다() {
+      // given
+      UUID ownerId = UUID.randomUUID();
+      ClothesCreateRequest request = new ClothesCreateRequest(
+          ownerId, "가디건", ClothesType.OUTER, List.of());
+
+      Clothes savedClothes = Clothes.create(ownerId, "가디건", ClothesType.OUTER);
+      when(clothesRepository.save(any())).thenReturn(savedClothes);
+
+      ClothesDto expectedDto = new ClothesDto(
+          savedClothes.getId(), ownerId, "가디건", null, ClothesType.OUTER, List.of());
+      when(clothesMapper.toDto(any(), anyList(), anyMap())).thenReturn(expectedDto);
+
+      // when
+      clothesService.create(request, null);
+
+      // then
+      verify(fileStorageService, never()).store(any(), any());
+      assertThat(savedClothes.getImageUrl()).isNull();
+    }
+
+    @Test
     @DisplayName("존재하지 않는 속성 정의 ID를 전달하면 예외가 발생한다")
     void 존재하지_않는_속성_정의_ID를_전달하면_예외가_발생한다() {
       // given
@@ -168,6 +224,29 @@ class ClothesServiceTest {
       // when & then
       assertThatThrownBy(() -> clothesService.create(request, null))
           .isInstanceOf(ClothesAttributeDuplicatedException.class);
+    }
+
+    @Test
+    @DisplayName("속성 검증에 실패하면 이미지를 저장하지 않는다")
+    void 속성_검증에_실패하면_이미지를_저장하지_않는다() {
+      // given
+      UUID ownerId = UUID.randomUUID();
+      UUID invalidDefId = UUID.randomUUID();
+      ClothesCreateRequest request = new ClothesCreateRequest(
+          ownerId, "테스트 옷", ClothesType.TOP,
+          List.of(new ClothesAttributeDto(invalidDefId, "빨강")));
+
+      Clothes savedClothes = Clothes.create(ownerId, "테스트 옷", ClothesType.TOP);
+      when(clothesRepository.save(any())).thenReturn(savedClothes);
+      when(clothesAttributeDefRepository.findAllById(anyList())).thenReturn(List.of());
+
+      MultipartFile image = new MockMultipartFile(
+          "image", "cardigan.jpg", "image/jpeg", "dummy".getBytes());
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.create(request, image))
+          .isInstanceOf(ClothesAttributeDefNotFoundException.class);
+      verify(fileStorageService, never()).store(any(), any());
     }
   }
 
@@ -306,6 +385,68 @@ class ClothesServiceTest {
     }
 
     @Test
+    @DisplayName("이미지를 첨부해 수정하면 새 이미지를 저장하고 기존 이미지를 삭제한다")
+    void 이미지를_첨부해_수정하면_새_이미지를_저장하고_기존_이미지를_삭제한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      UUID ownerId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(ownerId, "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+      clothes.changeImageUrl("clothes/old.jpg");
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+      given(clothesAttributeRepository.findAllByClothesIdWithDefinition(clothesId))
+          .willReturn(List.of());
+
+      MultipartFile image = new MockMultipartFile(
+          "image", "new.jpg", "image/jpeg", "dummy".getBytes());
+      given(fileStorageService.store(image, "clothes")).willReturn("clothes/new.jpg");
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest(null, null, null);
+
+      ClothesDto expectedDto = new ClothesDto(
+          clothesId, ownerId, "반팔티", null, ClothesType.TOP, List.of());
+      given(clothesMapper.toDto(any(), anyList(), anyMap())).willReturn(expectedDto);
+
+      // when
+      clothesService.update(clothesId, request, image);
+
+      // then
+      verify(fileStorageService).store(image, "clothes");
+      verify(fileStorageService).delete("clothes/old.jpg");
+      assertThat(clothes.getImageUrl()).isEqualTo("clothes/new.jpg");
+    }
+
+    @Test
+    @DisplayName("이미지를 첨부하지 않으면 기존 이미지를 그대로 유지한다")
+    void 이미지를_첨부하지_않으면_기존_이미지를_그대로_유지한다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      UUID ownerId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(ownerId, "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+      clothes.changeImageUrl("clothes/old.jpg");
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+      given(clothesAttributeRepository.findAllByClothesIdWithDefinition(clothesId))
+          .willReturn(List.of());
+
+      ClothesUpdateRequest request = new ClothesUpdateRequest("긴팔티", null, null);
+
+      ClothesDto expectedDto = new ClothesDto(
+          clothesId, ownerId, "긴팔티", null, ClothesType.TOP, List.of());
+      given(clothesMapper.toDto(any(), anyList(), anyMap())).willReturn(expectedDto);
+
+      // when
+      clothesService.update(clothesId, request, null);
+
+      // then
+      verify(fileStorageService, never()).store(any(), any());
+      verify(fileStorageService, never()).delete(any());
+      assertThat(clothes.getImageUrl()).isEqualTo("clothes/old.jpg");
+    }
+
+    @Test
     @DisplayName("존재하지 않는 옷이면 예외가 발생한다")
     void 존재하지_않는_옷이면_예외가_발생한다() {
       // given
@@ -335,6 +476,32 @@ class ClothesServiceTest {
       // when & then
       assertThatThrownBy(() -> clothesService.update(clothesId, request, null))
           .isInstanceOf(ClothesNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("속성 검증에 실패하면 기존 이미지를 삭제하지 않고 새 이미지도 저장하지 않는다")
+    void 속성_검증에_실패하면_기존_이미지를_삭제하지_않고_새_이미지도_저장하지_않는다() {
+      // given
+      UUID clothesId = UUID.randomUUID();
+      UUID invalidDefId = UUID.randomUUID();
+      Clothes clothes = Clothes.create(UUID.randomUUID(), "반팔티", ClothesType.TOP);
+      ReflectionTestUtils.setField(clothes, "id", clothesId);
+      clothes.changeImageUrl("clothes/old.jpg");
+
+      given(clothesRepository.findById(clothesId)).willReturn(Optional.of(clothes));
+      given(clothesAttributeDefRepository.findAllById(anyList())).willReturn(List.of());
+
+      MultipartFile image = new MockMultipartFile(
+          "image", "new.jpg", "image/jpeg", "dummy".getBytes());
+      ClothesUpdateRequest request = new ClothesUpdateRequest(
+          null, null, List.of(new ClothesAttributeDto(invalidDefId, "빨강")));
+
+      // when & then
+      assertThatThrownBy(() -> clothesService.update(clothesId, request, image))
+          .isInstanceOf(ClothesAttributeDefNotFoundException.class);
+      verify(fileStorageService, never()).store(any(), any());
+      verify(fileStorageService, never()).delete(any());
+      assertThat(clothes.getImageUrl()).isEqualTo("clothes/old.jpg");
     }
   }
 
