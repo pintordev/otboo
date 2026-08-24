@@ -1,0 +1,70 @@
+name: CD
+
+on:
+  push:
+    branches: [ dev, main ]
+
+permissions: { }
+
+jobs:
+  deploy:
+    name: Build & deploy to ECS
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-24.04-arm   # 배포 대상 EC2가 t4g(Graviton, arm64)라 빌드도 arm64 네이티브로 — QEMU/buildx 크로스 컴파일 불필요
+    permissions:
+      id-token: write   # AWS OIDC
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ secrets.AWS_CD_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2.1.5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build & push app image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: docker/app/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ vars.ECR_REPOSITORY_URI }}:${{ github.sha }}
+            ${{ vars.ECR_REPOSITORY_URI }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ vars.ECS_TASK_DEFINITION }} \
+            --query taskDefinition > task-definition.json
+
+      - name: Render new image into task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@06472d439cb66af6210a6709bfc842c26b053706 # v1.8.2
+        with:
+          task-definition: task-definition.json
+          container-name: otboo-app
+          image: ${{ vars.ECR_REPOSITORY_URI }}:${{ github.sha }}
+
+      - name: Deploy to ECS (rolling, start-first)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@7b5ba17dae98c8fd463ddf2cef977d3be43322c5 # v2.5.0
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          wait-for-service-stability: true   # 새 태스크가 헬스체크를 통과해 정상 기동할 때까지(구버전 종료 포함) 대기
