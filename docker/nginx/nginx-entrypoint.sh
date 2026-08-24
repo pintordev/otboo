@@ -55,7 +55,12 @@ awk -v block="$NEW_BLOCK" '
   !skip { print }
 ' "$NGINX_CONF" > "$TMP_CONF"
 
-mv "$TMP_CONF" "$NGINX_CONF"
+# NGINX_CONF는 Docker 바인드 마운트로 연결된 단일 파일이라, 그 경로 자체에 mv(rename)를 걸면
+# 마운트 지점 inode를 rename으로 교체하게 돼 "Resource busy"로 실패한다(호스트에서 직접
+# 파일을 다루는 nginx-watcher.sh의 mv와 다른 점 — 거기는 바인드 마운트 경계가 없다).
+# 내용만 그대로 덮어써서 마운트된 inode 자체는 유지한다.
+cat "$TMP_CONF" > "$NGINX_CONF"
+rm -f "$TMP_CONF"
 echo "$(date -Iseconds) initial upstream populated before nginx start: $(echo "$INSTANCES" | jq -c '[.[] | "\(.AWS_INSTANCE_IPV4):\(.AWS_INSTANCE_PORT)"]')"
 
 exec nginx -g "daemon off;"
