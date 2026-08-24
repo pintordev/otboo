@@ -53,16 +53,24 @@ if ! docker run --rm -v "$TMP_CONF:/etc/nginx/nginx.conf:ro" nginx:1.27-alpine n
   exit 1
 fi
 
+# NGINX_CONF는 컨테이너가 단일 파일로 바인드 마운트한 대상이라, mv(rename)로 교체하면 호스트
+# 경로는 새 inode를 가리키게 되지만 이미 떠 있는 컨테이너의 마운트는 원래 inode에 그대로 고정된
+# 채로 남는다 — 그 결과 reload를 아무리 걸어도 컨테이너 안에서는 옛 내용을 계속 읽는다(실측
+# 확인됨: 같은 EC2에서 mv로 교체 후 컨테이너 재조회 시 inode가 서로 달라지고 내용도 그대로였음).
+# mv 대신 내용만 그대로 덮어써서 inode를 유지해야 살아있는 컨테이너에도 실제로 반영된다.
 BACKUP_CONF="${NGINX_CONF}.bak"
 cp "$NGINX_CONF" "$BACKUP_CONF"
-mv "$TMP_CONF" "$NGINX_CONF"
+cat "$TMP_CONF" > "$NGINX_CONF"
+rm -f "$TMP_CONF"
 
 if ! docker exec "$CONTAINER_ID" nginx -s reload; then
-  # reload가 실패해도 mv는 이미 끝난 뒤라, 여기서 원상복구하지 않으면 다음 15초 주기의
-  # diff가 "변경 없음"으로 판단해 재시도조차 걸리지 않는다 — 이전 설정으로 되돌려 다음 주기에
-  # 다시 "변경 있음"으로 잡히도록 한다.
+  # reload가 실패해도 위 in-place 쓰기는 이미 끝난 뒤라, 여기서 원상복구하지 않으면 다음 15초
+  # 주기의 diff가 "변경 없음"으로 판단해 재시도조차 걸리지 않는다 — 이전 설정으로 되돌려 다음
+  # 주기에 다시 "변경 있음"으로 잡히도록 한다. 복원도 반드시 in-place로 해야 한다(mv로 복원하면
+  # 같은 이유로 컨테이너 마운트가 다시 끊어진다).
   echo "$(date -Iseconds) nginx -s reload failed, restoring previous config so the next cycle retries" >&2
-  mv "$BACKUP_CONF" "$NGINX_CONF"
+  cat "$BACKUP_CONF" > "$NGINX_CONF"
+  rm -f "$BACKUP_CONF"
   exit 1
 fi
 
