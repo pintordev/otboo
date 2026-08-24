@@ -6,6 +6,10 @@ on:
 
 permissions: { }
 
+concurrency:
+  group: ecs-${{ vars.ECS_CLUSTER }}-${{ vars.ECS_SERVICE }}   # dev/main이 같은 ECS 클러스터·서비스를 배포 대상으로 삼으므로, 겹쳐 실행되면 이전 SHA가 최신 SHA 뒤에 배포될 수 있어 대상별로 직렬화한다
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Build & deploy to ECS
