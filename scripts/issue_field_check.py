@@ -290,7 +290,7 @@ def send_all(recipients):
             else:
                 entry = s.DISCORD_USER_MAP[key]
                 s.send_dm_to_discord_id(entry["discord_id"], message)
-        except requests.RequestException as exc:
+        except (requests.RequestException, KeyError) as exc:
             print(f"FAIL notify {key or '(webhook)'}: {exc}")
 
 

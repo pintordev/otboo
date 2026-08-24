@@ -247,23 +247,33 @@ DISCORD_MESSAGE_LIMIT = 2000
 
 
 def split_message(message, limit=DISCORD_MESSAGE_LIMIT):
-    """Discord 메시지 본문 상한(2000자)에 맞춰 줄 단위로 분할한다.
+    """Discord 메시지 본문 상한(2000자)에 맞춰 분할한다.
 
     누락 필드가 많이 쌓인 수신자는 build_message()가 만든 메시지가 상한을 넘을 수 있어
-    (issue_field_check.py), 그대로 보내면 Discord API가 400으로 거절한다. 한 줄이 상한보다
-    길어 자체로 분할이 안 되는 경우는 없다고 가정한다(현재 호출부는 이슈/PR 한 줄 요약이라
-    2000자를 넘지 않음)."""
+    (issue_field_check.py), 그대로 보내면 Discord API가 400으로 거절한다. 기본은 줄 단위로
+    묶어서 분할하되, 한 줄 자체가 상한을 넘으면 그 줄을 limit 단위로 추가 분할한다. 빈 청크는
+    만들지 않는다."""
     if len(message) <= limit:
         return [message]
     chunks = []
     current = ""
     for line in message.split("\n"):
         candidate = f"{current}\n{line}" if current else line
-        if len(candidate) > limit:
-            chunks.append(current)
-            current = line
-        else:
+        if len(candidate) <= limit:
             current = candidate
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if len(line) <= limit:
+            current = line
+            continue
+        for i in range(0, len(line), limit):
+            piece = line[i:i + limit]
+            if len(piece) == limit:
+                chunks.append(piece)
+            else:
+                current = piece
     if current:
         chunks.append(current)
     return chunks
