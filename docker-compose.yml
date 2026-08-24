@@ -73,6 +73,10 @@ services:
 
   nginx:
     image: nginx:1.27-alpine   # 설정 파일 하나만 얹으면 되므로 커스텀 이미지 빌드 없이 공식 이미지 + 마운트로 충분
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535   # nginx.conf worker_connections 8192 상향과 짝 — 컨테이너 자체 ulimit이 낮으면 그 한도에 그대로 걸림
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
