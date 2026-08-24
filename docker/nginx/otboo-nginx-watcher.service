@@ -1,0 +1,8 @@
+[Unit]
+Description=otboo nginx upstream watcher (Cloud Map -> nginx.conf reload)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/otboo/nginx-watcher.sh
