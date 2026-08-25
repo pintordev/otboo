@@ -68,6 +68,7 @@ class NotificationServiceTest {
     @DisplayName("이벤트의_receiverIds_각각에_대해_Notification을_생성해_저장하고_dto로_반환한다")
     void 이벤트의_receiverIds_각각에_대해_Notification을_생성해_저장하고_dto로_반환한다() {
       // given
+      UUID eventId = UUID.randomUUID();
       UUID receiverId1 = UUID.randomUUID();
       UUID receiverId2 = UUID.randomUUID();
       NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
@@ -77,6 +78,10 @@ class NotificationServiceTest {
           .set("content", "내용")
           .set("level", NotificationLevel.INFO)
           .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId1))
+          .willReturn(false);
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId2))
+          .willReturn(false);
 
       Notification saved1 = entityFixtureMonkey.giveMeBuilder(Notification.class)
           .set("receiverId", receiverId1)
@@ -100,7 +105,7 @@ class NotificationServiceTest {
       given(notificationMapper.toDto(saved2)).willReturn(dto2);
 
       // when
-      List<NotificationDto> result = notificationService.create(event);
+      List<NotificationDto> result = notificationService.create(eventId, event);
 
       // then
       assertThat(result).containsExactlyInAnyOrder(dto1, dto2);
@@ -124,6 +129,7 @@ class NotificationServiceTest {
     @DisplayName("receiverIds_수만큼_Notification_엔티티를_생성해_saveAll에_전달한다")
     void receiverIds_수만큼_Notification_엔티티를_생성해_saveAll에_전달한다() {
       // given
+      UUID eventId = UUID.randomUUID();
       UUID receiverId = UUID.randomUUID();
       NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
               NotificationRequestedEvent.class)
@@ -132,10 +138,12 @@ class NotificationServiceTest {
           .set("content", "내용")
           .set("level", NotificationLevel.WARNING)
           .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
+          .willReturn(false);
       given(notificationRepository.saveAll(anyList())).willReturn(List.of());
 
       // when
-      notificationService.create(event);
+      notificationService.create(eventId, event);
 
       // then
       @SuppressWarnings("unchecked")
@@ -147,6 +155,63 @@ class NotificationServiceTest {
       assertThat(captured.getTitle()).isEqualTo("제목");
       assertThat(captured.getContent()).isEqualTo("내용");
       assertThat(captured.getLevel()).isEqualTo(NotificationLevel.WARNING);
+    }
+
+    @Test
+    @DisplayName("이미_처리된_eventId와_receiverId_조합은_건너뛰고_저장하지_않는다")
+    void 이미_처리된_eventId와_receiverId_조합은_건너뛰고_저장하지_않는다() {
+      // given
+      UUID eventId = UUID.randomUUID();
+      UUID processedReceiverId = UUID.randomUUID();
+      UUID newReceiverId = UUID.randomUUID();
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
+              NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(processedReceiverId, newReceiverId))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, processedReceiverId))
+          .willReturn(true);
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, newReceiverId))
+          .willReturn(false);
+      given(notificationRepository.saveAll(anyList())).willReturn(List.of());
+
+      // when
+      notificationService.create(eventId, event);
+
+      // then
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<List<Notification>> captor = ArgumentCaptor.forClass(List.class);
+      verify(notificationRepository).saveAll(captor.capture());
+      assertThat(captor.getValue())
+          .hasSize(1)
+          .extracting(Notification::getReceiverId)
+          .containsExactly(newReceiverId);
+    }
+
+    @Test
+    @DisplayName("모든_receiverId가_이미_처리됐으면_저장을_생략하고_빈_목록을_반환한다")
+    void 모든_receiverId가_이미_처리됐으면_저장을_생략하고_빈_목록을_반환한다() {
+      // given
+      UUID eventId = UUID.randomUUID();
+      UUID receiverId = UUID.randomUUID();
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
+              NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(receiverId))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
+          .willReturn(true);
+
+      // when
+      List<NotificationDto> result = notificationService.create(eventId, event);
+
+      // then
+      assertThat(result).isEmpty();
+      verify(notificationRepository, never()).saveAll(anyList());
     }
   }
 
