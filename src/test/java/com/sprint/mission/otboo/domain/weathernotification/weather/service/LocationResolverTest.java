@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -13,6 +14,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Locati
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.singleflight.SingleFlightRegistry;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
 import com.sprint.mission.otboo.external.kakao.KakaoRegionFetcher;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -48,6 +51,8 @@ class LocationResolverTest {
   private KakaoRegionFetcher kakaoRegionFetcher;
   @Mock
   private LocationCacheProvider locationCacheProvider;
+  @Mock
+  private SingleFlightRegistry singleFlightRegistry;
 
   private LocationBlockCalculator locationBlockCalculator;
   private LocationResolver locationResolver;
@@ -57,7 +62,7 @@ class LocationResolverTest {
     locationBlockCalculator = new LocationBlockCalculator(new LocationBlockProperties(500.0));
     locationResolver = new LocationResolver(weatherGridRepository, weatherGridWriter,
         locationRepository, locationWriter, kakaoRegionFetcher, locationBlockCalculator,
-        locationCacheProvider);
+        locationCacheProvider, singleFlightRegistry);
   }
 
   @Nested
@@ -152,43 +157,70 @@ class LocationResolverTest {
   @DisplayName("비동기 조회(single-flight)")
   class ResolveLocationNamesAsync {
 
+    private final Executor directExecutor = Runnable::run;
+
     @Test
-    @DisplayName("같은_블록_동시_호출은_콜드미스여도_카카오를_한_번만_부른다")
-    void 같은_블록_동시_호출은_콜드미스여도_카카오를_한_번만_부른다() throws Exception {
+    @DisplayName("같은_블록_동시_호출은_콜드미스여도_SingleFlightRegistry를_한_번만_호출한다")
+    void 같은_블록_동시_호출은_콜드미스여도_SingleFlightRegistry를_한_번만_호출한다() throws Exception {
       // given
       double latitude = 37.5674783;
       double longitude = 126.9884121;
       BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
       given(locationCacheProvider.findCachedLocationNames(block.latBlock(), block.lonBlock()))
           .willReturn(Optional.empty());
-      CountDownLatch fetchStarted = new CountDownLatch(1);
-      CountDownLatch releaseFetch = new CountDownLatch(1);
-      given(kakaoRegionFetcher.fetch(latitude, longitude)).willAnswer(invocation -> {
-        fetchStarted.countDown();
-        releaseFetch.await();
-        return List.of("서울특별시", "중구");
-      });
-      given(locationWriter.save(eq(block.latBlock()), eq(block.lonBlock()), any()))
-          .willReturn(Location.create(block.latBlock(), block.lonBlock(),
-              List.of("서울특별시", "중구")));
-
+      CountDownLatch executeStarted = new CountDownLatch(1);
+      CountDownLatch releaseExecute = new CountDownLatch(1);
       ExecutorService pool = Executors.newFixedThreadPool(2);
+      given(singleFlightRegistry.execute(anyString(), any(), any(), any())).willAnswer(
+          invocation -> {
+            executeStarted.countDown();
+            return CompletableFuture.supplyAsync(() -> {
+              try {
+                releaseExecute.await();
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+              return List.<String>of();
+            }, pool);
+          });
+
       try {
         // when - 두 스레드가 동시에 같은 블록으로 resolveLocationNamesAsync 호출
         Future<?> first = pool.submit(() ->
             locationResolver.resolveLocationNamesAsync(latitude, longitude, pool));
-        assertThat(fetchStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(executeStarted.await(2, TimeUnit.SECONDS)).isTrue();
         CompletableFuture<List<String>> second =
             locationResolver.resolveLocationNamesAsync(latitude, longitude, pool);
-        releaseFetch.countDown();
+        releaseExecute.countDown();
         first.get(2, TimeUnit.SECONDS);
         second.get(2, TimeUnit.SECONDS);
 
         // then
-        verify(kakaoRegionFetcher, times(1)).fetch(latitude, longitude);
+        verify(singleFlightRegistry, times(1)).execute(anyString(), any(), any(), any());
       } finally {
         pool.shutdownNow();
       }
+    }
+
+    @Test
+    @DisplayName("로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다")
+    void 로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
+      given(locationCacheProvider.findCachedLocationNames(block.latBlock(), block.lonBlock()))
+          .willReturn(Optional.empty());
+      given(singleFlightRegistry.execute(anyString(), any(), any(), any()))
+          .willReturn(CompletableFuture.completedFuture(List.of()));
+
+      // when
+      locationResolver.resolveLocationNamesAsync(latitude, longitude, directExecutor);
+
+      // then - 락 키는 블록 좌표 기준(로컬 in-flight의 BlockIndex 키와 동일 granularity)
+      verify(singleFlightRegistry).execute(
+          eq("location:" + block.latBlock() + ":" + block.lonBlock()),
+          any(), eq(directExecutor), any());
     }
   }
 }
