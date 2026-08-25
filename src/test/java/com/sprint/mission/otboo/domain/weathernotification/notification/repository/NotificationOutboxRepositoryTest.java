@@ -16,6 +16,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -32,8 +33,8 @@ class NotificationOutboxRepositoryTest {
   private TestEntityManager testEntityManager;
 
   @Nested
-  @DisplayName("findTop100ByStatusOrderByCreatedAtAsc")
-  class FindTop100ByStatusOrderByCreatedAtAsc {
+  @DisplayName("findByStatusOrderByCreatedAtAsc")
+  class FindByStatusOrderByCreatedAtAsc {
 
     @Test
     @DisplayName("PENDING_상태만_생성_순서대로_반환한다")
@@ -53,7 +54,7 @@ class NotificationOutboxRepositoryTest {
 
       // when
       List<NotificationOutbox> result = notificationOutboxRepository
-          .findTop100ByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING);
+          .findByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING, PageRequest.of(0, 100));
 
       // then
       assertThat(result)
@@ -66,10 +67,31 @@ class NotificationOutboxRepositoryTest {
     void PENDING_상태가_없으면_빈_목록을_반환한다() {
       // when
       List<NotificationOutbox> result = notificationOutboxRepository
-          .findTop100ByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING);
+          .findByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING, PageRequest.of(0, 100));
 
       // then
       assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PENDING_상태가_페이지_크기보다_많으면_페이지_크기만큼만_반환한다")
+    void PENDING_상태가_페이지_크기보다_많으면_페이지_크기만큼만_반환한다() {
+      // given
+      NotificationOutbox pending1 = notificationOutboxRepository.save(
+          NotificationOutbox.create("topic", "payload1"));
+      testEntityManager.flush();
+      notificationOutboxRepository.save(NotificationOutbox.create("topic", "payload2"));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // when
+      List<NotificationOutbox> result = notificationOutboxRepository
+          .findByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING, PageRequest.of(0, 1));
+
+      // then
+      assertThat(result)
+          .extracting(NotificationOutbox::getId)
+          .containsExactly(pending1.getId());
     }
   }
 }
