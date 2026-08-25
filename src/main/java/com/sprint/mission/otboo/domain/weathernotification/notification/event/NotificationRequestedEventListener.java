@@ -1,27 +1,36 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 
-import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
-import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
-import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
+import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class NotificationRequestedEventListener {
 
-  private final NotificationService notificationService;
-  private final SseService sseService;
+  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final ObjectMapper objectMapper;
 
-  @Async("notificationExecutor")
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void on(NotificationRequestedEvent event) {
-    List<NotificationDto> notificationDtos = notificationService.create(event);
-    sseService.send(notificationDtos, "notifications");
+    try {
+      String payload = objectMapper.writeValueAsString(event);
+      kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload)
+          .whenComplete((result, ex) -> {
+            if (ex != null) {
+              log.error("알림 요청 이벤트 Kafka 발행 실패: event={}", event, ex);
+            }
+          });
+    } catch (JacksonException e) {
+      log.error("알림 요청 이벤트 직렬화 실패: event={}", event, e);
+    }
   }
 }
