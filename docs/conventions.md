@@ -1143,3 +1143,179 @@ data(notificationDto));
 
 - AI co-author 커밋 금지 — `Co-authored-by: Claude` 등 AI 귀속 문구를 커밋 메시지에 포함하지 않습니다.
 - `.gitignore` 대상 파일 커밋 금지 — `git add` 전 반드시 확인.
+
+---
+
+## 15. Kafka 이벤트 발행/소비
+
+기존 Spring 이벤트(`ApplicationEventPublisher`/`@TransactionalEventListener`) 뒤에 얹는 **릴레이 구조**가 기본입니다 — 발행
+지점 코드는 그대로 두고, 리스너가 하던 일(DB 저장 등)만 Kafka 컨슈머로 옮깁니다.
+
+### 패키지 위치
+
+```
+global/
+  config/
+    KafkaConfig.java                          # 공용 에러 핸들러(재시도+DLT), 모든 @KafkaListener에 자동 적용
+domain/
+  weathernotification/
+    notification/
+      kafka/
+        NotificationKafkaTopics.java          # 토픽 상수
+      event/
+        NotificationRequestedEventListener.java   # @TransactionalEventListener → Kafka 발행만
+        NotificationRequestedKafkaConsumer.java   # @KafkaListener → 기존 리스너가 하던 일 그대로 수행
+```
+
+토픽 상수는 도메인 유닛 하위 `kafka/` 패키지에 둡니다. 발행 리스너와 소비 컨슈머는 기존 Spring 이벤트가 있던 `event/`
+패키지에 나란히 둡니다 — 같은 이벤트 흐름의 발행/소비 양쪽이라 한 패키지가 자연스럽습니다.
+
+### 필수 의존성 — Spring Boot 4는 `spring-boot-starter-kafka`
+
+```gradle
+implementation 'org.springframework.boot:spring-boot-starter-kafka'
+testImplementation 'org.springframework.kafka:spring-kafka-test'
+```
+
+Boot 4부터 자동구성이 기능별로 모듈화돼서, `org.springframework.kafka:spring-kafka`만 넣으면(Boot 2/3와 달리)
+`KafkaAutoConfiguration`이 활성화되지 않습니다 — `KafkaTemplate`/`@KafkaListener` 컨테이너 팩토리가 아예 안 만들어져서
+`@KafkaListener`가 조용히 아무 일도 안 합니다. 다른 모든 통합(`spring-boot-starter-data-jpa` 등)과 같은 패턴으로
+`spring-boot-starter-kafka`를 씁니다.
+
+### 공용 에러 핸들러 — `KafkaConfig`
+
+```java
+// global/config/KafkaConfig.java
+@Configuration
+public class KafkaConfig {
+
+  private static final long RETRY_INTERVAL_MILLIS = 1000L;
+  private static final long RETRY_COUNT = 2L;
+  private static final String DLT_SUFFIX = "-dlt";
+
+  @Bean
+  public CommonErrorHandler kafkaCommonErrorHandler(KafkaTemplate<Object, Object> kafkaTemplate) {
+    DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
+        (record, exception) -> new TopicPartition(record.topic() + DLT_SUFFIX,
+            record.partition()));
+    return new DefaultErrorHandler(recoverer, new FixedBackOff(RETRY_INTERVAL_MILLIS, RETRY_COUNT));
+  }
+}
+```
+
+Spring Boot는 컨텍스트에 `CommonErrorHandler` 빈이 하나만 있으면 **모든** `@KafkaListener` 컨테이너 팩토리에 자동으로
+세팅해줍니다 — 도메인마다 재시도/DLT 로직을 따로 만들 필요 없이 이 빈 하나를 재사용합니다. 재시도 2회(최초 1회 + 재시도
+2회 = 총 3번 시도) 후 실패하면 `{원본토픽}-dlt`로 전달됩니다 — `-dlt` 접미사는 Spring Kafka 공식 예제 그대로입니다(임의로
+바꾸지 않음).
+
+**`KafkaTemplate<Object, Object>`로 받아야 합니다** — Spring Boot가 자동구성하는 기본 `KafkaTemplate` 빈의 실제 제네릭
+타입이 `<Object, Object>`라, `<String, String>`으로 주입받으면 `NoSuchBeanDefinitionException`이 납니다.
+
+### 발행 측 — 기존 리스너를 Kafka 릴레이로 교체
+
+```java
+// domain/weathernotification/notification/event/NotificationRequestedEventListener.java
+@Slf4j
+@RequiredArgsConstructor
+@Component
+public class NotificationRequestedEventListener {
+
+  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final ObjectMapper objectMapper;
+
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void on(NotificationRequestedEvent event) {
+    try {
+      String payload = objectMapper.writeValueAsString(event);
+      kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload)
+          .whenComplete((result, ex) -> {
+            if (ex != null) {
+              log.error("알림 요청 이벤트 Kafka 발행 실패: event={}", event, ex);
+            }
+          });
+    } catch (JacksonException e) {
+      log.error("알림 요청 이벤트 직렬화 실패: event={}", event, e);
+    }
+  }
+}
+```
+
+- 원래 있던 `@Async` 실행기는 제거합니다 — `kafkaTemplate.send()` 자체가 논블로킹이라, `@Async`로 얻으려던 "트랜잭션
+  스레드를 막지 않음" 효과를 Kafka 클라이언트가 대신 줍니다.
+- `.send()` 결과는 fire-and-forget으로 버리지 않고 `.whenComplete()`로 실패를 로깅합니다 — Spring Kafka 공식 문서가
+  권장하는 패턴입니다.
+- `ObjectMapper`는 이 프로젝트의 Jackson 3(`tools.jackson.databind.ObjectMapper`) 기준이라 `writeValueAsString`
+  /`readValue`가 **unchecked** `tools.jackson.core.JacksonException`을 던집니다(Jackson 2의 checked
+  `JsonProcessingException`이 아님 — 외부 자료 예제를 그대로 옮기지 않도록 주의).
+
+### 소비 측 — `@KafkaListener`
+
+```java
+// domain/weathernotification/notification/event/NotificationRequestedKafkaConsumer.java
+@RequiredArgsConstructor
+@Component
+public class NotificationRequestedKafkaConsumer {
+
+  private final NotificationService notificationService;
+  private final SseService sseService;
+  private final ObjectMapper objectMapper;
+
+  @KafkaListener(id = "notificationRequestedConsumer",
+      topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED,
+      groupId = "notification-requested-consumer")
+  public void consume(String payload) {
+    NotificationRequestedEvent event = objectMapper.readValue(payload, NotificationRequestedEvent.class);
+    List<NotificationDto> notificationDtos = notificationService.create(event);
+    sseService.send(notificationDtos, "notifications");
+  }
+}
+```
+
+- `id`를 명시적으로 붙입니다 — 테스트에서 `KafkaListenerEndpointRegistry.getListenerContainer(id)`로 컨테이너를 조회할
+  때 필요합니다(아래 테스트 참고).
+- 역직렬화 실패는 여기서 잡지 않고 그대로 던집니다 — `KafkaConfig`의 공용 에러 핸들러(재시도 2회 후 DLT)가 처리하도록
+  위임합니다. 개별 컨슈머마다 재시도 로직을 중복 구현하지 않는 게 이 공용 인프라의 목적입니다.
+
+### 네이밍
+
+| 대상 | 규칙 | 예시 |
+|---|---|---|
+| 토픽 | `<도메인>.<이벤트>.v<버전>` | `notification.requested.v1` |
+| 컨슈머 그룹 | `<도메인>-<목적>-consumer` | `notification-requested-consumer` |
+| DLT | `{원본토픽}-dlt`(Spring 기본값) | `notification.requested.v1-dlt` |
+
+토픽/컨슈머 그룹 이름에 앱 이름(`otboo` 등) 프리픽스를 붙이지 않습니다 — 이 클러스터는 otboo 프로젝트 전용이라
+멀티테넌시 사유가 없고, Confluent 공식 토픽 네이밍 가이드도 도메인이 맨 앞에 오는 계층 구조(`finance.transactions.v1`
+등)를 예시로 듭니다.
+
+### 테스트 — `@EmbeddedKafka`
+
+```java
+@SpringBootTest
+@ActiveProfiles("test")
+@EmbeddedKafka(partitions = 1, topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED)
+class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
+
+  @Autowired
+  private KafkaListenerEndpointRegistry registry;
+
+  @BeforeEach
+  void waitForConsumerAssignment() {
+    MessageListenerContainer container = registry.getListenerContainer("notificationRequestedConsumer");
+    ContainerTestUtils.waitForAssignment(container, 1);
+  }
+
+  // ...
+}
+```
+
+- `@EmbeddedKafka`는 **필요한 테스트 클래스에 개별 선언**합니다 — `IntegrationTestSupport`(전체 `@SpringBootTest`의
+  공용 베이스)처럼 널리 상속되는 클래스에는 얹지 않습니다. 얹으면 Kafka와 무관한 테스트까지 전부 임베디드 브로커를
+  띄우게 됩니다.
+- **⚠️ 발행 전에 반드시 `ContainerTestUtils.waitForAssignment(container, partitions)`로 컨슈머 그룹의 파티션
+  할당(리밸런스)이 끝났는지 확인합니다.** 리밸런스가 끝나기 전에 발행하면 `auto.offset.reset=latest` 기본값 탓에
+  메시지가 조용히 스킵됩니다 — 테스트 클래스를 단독 실행할 땐 컨텍스트 부팅 시간 덕에 우연히 안 드러나다가, 다른
+  테스트 클래스와 같이 돌리면 타이밍이 어긋나 간헐적으로 실패합니다. 원인 특정이 매우 어려운 종류의 flaky 테스트라,
+  Kafka 발행을 검증하는 테스트에는 처음부터 넣습니다.
+- DLT 등 추가 토픽이 필요하면 클래스 레벨 `topics` 배열을 계속 늘리지 말고, 필요한 테스트 안에서
+  `embeddedKafkaBroker.addTopics(new NewTopic(...))`로 그때그때 추가합니다.
