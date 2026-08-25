@@ -73,4 +73,28 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
         .orElseThrow();
     assertThat(saved.getForecastedAt()).isEqualTo(newerForecastedAt);
   }
+
+  @Test
+  @DisplayName("가드로_건너뛴_슬롯도_saveSlots_반환값에_현재_상태_그대로_포함된다")
+  void 가드로_건너뛴_슬롯도_saveSlots_반환값에_현재_상태_그대로_포함된다() {
+    // given
+    WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+    Instant slotAt = Instant.parse("2026-08-24T12:00:00Z");
+    Instant olderForecastedAt = Instant.parse("2026-08-24T05:00:00Z");
+    Instant newerForecastedAt = Instant.parse("2026-08-24T08:00:00Z");
+    WeatherForecastSlotDto slotDto = new WeatherForecastSlotDto(
+        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
+        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0);
+    weatherWriter.saveSlots(weatherGrid, newerForecastedAt, List.of(slotDto), Map.of());
+
+    // when - 이미 반영된 최신값보다 오래된 forecastedAt으로 같은 슬롯을 다시 저장 시도(가드에 걸려
+    // 실제 upsert는 안 됨)
+    List<Weather> result = weatherWriter.saveSlots(weatherGrid, olderForecastedAt,
+        List.of(slotDto), Map.of());
+
+    // then - 가드로 건너뛴 슬롯도 결과에서 빠지지 않고 현재(최신) 상태로 반환된다 - 호출부가
+    // 빈 리스트로 오판해 재조회 실패로 처리하는 것을 방지한다
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getForecastedAt()).isEqualTo(newerForecastedAt);
+  }
 }

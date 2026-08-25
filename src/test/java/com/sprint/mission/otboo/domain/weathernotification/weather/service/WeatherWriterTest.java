@@ -136,8 +136,8 @@ class WeatherWriterTest {
       Instant slotAt = slot.slotAt();
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willReturn(new int[]{1});
-      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
-          eq(weatherGrid), eq(forecastedAt), eq(List.of(slotAt))))
+      given(weatherRepository.findAllByWeatherGridAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(List.of(slotAt))))
           .willReturn(List.of());
 
       // when
@@ -173,8 +173,8 @@ class WeatherWriterTest {
       Instant slotAt = slot.slotAt();
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willReturn(new int[]{1});
-      given(weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
-          eq(weatherGrid), eq(forecastedAt), eq(List.of(slotAt))))
+      given(weatherRepository.findAllByWeatherGridAndForecastAtInOrderByForecastAt(
+          eq(weatherGrid), eq(List.of(slotAt))))
           .willReturn(List.of());
 
       // when

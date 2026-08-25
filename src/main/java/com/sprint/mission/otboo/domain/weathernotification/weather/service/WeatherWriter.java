@@ -128,8 +128,8 @@ public class WeatherWriter {
     });
 
     List<Instant> forecastAts = built.stream().map(Weather::getForecastAt).toList();
-    return weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
-        weatherGrid, forecastedAt, forecastAts);
+    return weatherRepository.findAllByWeatherGridAndForecastAtInOrderByForecastAt(
+        weatherGrid, forecastAts);
   }
 
   private WindStrength toWindStrength(double speed) {
