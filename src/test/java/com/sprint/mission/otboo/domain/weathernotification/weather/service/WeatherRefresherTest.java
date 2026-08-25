@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -18,6 +19,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.singleflight.SingleFlightRegistry;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
@@ -61,6 +63,10 @@ class WeatherRefresherTest {
   private KmaForecastFetcher kmaForecastFetcher;
   @Mock
   private WeatherWriter weatherWriter;
+  @Mock
+  private SingleFlightRegistry singleFlightRegistry;
+  @Mock
+  private WeatherCacheProvider weatherCacheProvider;
 
   private WeatherRefresher weatherRefresher;
   private ListAppender<ILoggingEvent> appender;
@@ -71,7 +77,7 @@ class WeatherRefresherTest {
     // 2026-07-27 18:00 KST 고정 - 17시 발표가 최신
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
     weatherRefresher = new WeatherRefresher(weatherRepository, kmaForecastFetcher, weatherWriter,
-        clock);
+        clock, singleFlightRegistry, weatherCacheProvider);
     logger = (Logger) LoggerFactory.getLogger(WeatherRefresher.class);
     appender = new ListAppender<>();
     appender.start();
@@ -177,36 +183,55 @@ class WeatherRefresherTest {
     private final Executor directExecutor = Runnable::run;
 
     @Test
-    @DisplayName("같은_격자_같은_baseTime_동시_호출은_기상청을_한_번만_부른다")
-    void 같은_격자_같은_baseTime_동시_호출은_기상청을_한_번만_부른다() throws Exception {
+    @DisplayName("같은_격자_같은_baseTime_동시_호출은_SingleFlightRegistry를_한_번만_호출한다")
+    void 같은_격자_같은_baseTime_동시_호출은_SingleFlightRegistry를_한_번만_호출한다() throws Exception {
       // given
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
-      CountDownLatch fetchStarted = new CountDownLatch(1);
-      CountDownLatch releaseFetch = new CountDownLatch(1);
-      given(kmaForecastFetcher.fetchSlots(any(), any())).willAnswer(invocation -> {
-        fetchStarted.countDown();
-        releaseFetch.await();
-        return List.of();
-      });
-      given(weatherWriter.saveSlots(any(), any(), any(), any())).willReturn(List.of());
+      List<Weather> dbSlots = List.of();
+      CountDownLatch executeStarted = new CountDownLatch(1);
+      CountDownLatch releaseExecute = new CountDownLatch(1);
+      given(singleFlightRegistry.execute(anyString(), any(), any(), any())).willAnswer(
+          invocation -> {
+            executeStarted.countDown();
+            releaseExecute.await();
+            return CompletableFuture.completedFuture(List.of());
+          });
 
       ExecutorService pool = Executors.newFixedThreadPool(2);
       try {
         // when - 두 스레드가 동시에 같은 키로 refreshSlotsAsync 호출
         Future<?> first = pool.submit(() ->
-            weatherRefresher.refreshSlotsAsync(weatherGrid, GRID, BASE_TIME, pool));
-        assertThat(fetchStarted.await(2, TimeUnit.SECONDS)).isTrue();
+            weatherRefresher.refreshSlotsAsync(weatherGrid, GRID, BASE_TIME, dbSlots, pool));
+        assertThat(executeStarted.await(2, TimeUnit.SECONDS)).isTrue();
         CompletableFuture<List<Weather>> second =
-            weatherRefresher.refreshSlotsAsync(weatherGrid, GRID, BASE_TIME, pool);
-        releaseFetch.countDown();
+            weatherRefresher.refreshSlotsAsync(weatherGrid, GRID, BASE_TIME, dbSlots, pool);
+        releaseExecute.countDown();
         first.get(2, TimeUnit.SECONDS);
         second.get(2, TimeUnit.SECONDS);
 
         // then
-        verify(kmaForecastFetcher, times(1)).fetchSlots(any(), any());
+        verify(singleFlightRegistry, times(1)).execute(anyString(), any(), any(), any());
       } finally {
         pool.shutdownNow();
       }
+    }
+
+    @Test
+    @DisplayName("로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다")
+    void 로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다() {
+      // given
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      List<Weather> dbSlots = List.of();
+      given(singleFlightRegistry.execute(anyString(), any(), any(), any()))
+          .willReturn(CompletableFuture.completedFuture(List.of()));
+
+      // when
+      weatherRefresher.refreshSlotsAsync(weatherGrid, GRID, BASE_TIME, dbSlots, directExecutor);
+
+      // then - 락 키에 baseTime까지 포함(로컬 InFlightKey와 동일 granularity)
+      verify(singleFlightRegistry).execute(
+          eq("weather:" + weatherGrid.getId() + ":" + BASE_TIME.baseDate() + BASE_TIME.baseTime()),
+          any(), eq(directExecutor), any());
     }
   }
 
