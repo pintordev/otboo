@@ -101,7 +101,10 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
     long unknownCount = Arrays.stream(results)
         .filter(result -> result == Statement.SUCCESS_NO_INFO)
         .count();
-    log.info("WeatherFetchWriter chunk 저장 완료: 격자수={}, 시도={}, 삽입={}, 결과불명={}",
-        chunk.size(), all.size(), insertedCount, unknownCount);
+    // UPSERT_SQL의 forecasted_at 역행 방지 가드(WHERE절)에 안 걸려 갱신되지 않은 행은 영향 행
+    // 수가 0으로 온다 - 실패가 아니라 가드가 정상 작동한 결과이므로 실패와 구분해 집계한다.
+    long skippedCount = Arrays.stream(results).filter(result -> result == 0).count();
+    log.info("WeatherFetchWriter chunk 저장 완료: 격자수={}, 시도={}, 삽입={}, 결과불명={}, 가드스킵={}",
+        chunk.size(), all.size(), insertedCount, unknownCount, skippedCount);
   }
 }
