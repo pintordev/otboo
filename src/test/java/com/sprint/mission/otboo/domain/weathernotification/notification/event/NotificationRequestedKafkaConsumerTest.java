@@ -3,7 +3,6 @@ package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,6 +12,7 @@ import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitra
 import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
+import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationOutboxPayload;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
@@ -92,14 +92,15 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
           .set("content", "내용")
           .set("level", NotificationLevel.INFO)
           .sample();
+      UUID eventId = UUID.randomUUID();
       List<NotificationDto> notificationDtos = List.of(new NotificationDto(
           UUID.randomUUID(), Instant.now(), event.receiverIds().iterator().next(), "제목", "내용",
           NotificationLevel.INFO));
-      given(notificationService.create(any(), eq(event))).willReturn(notificationDtos);
+      given(notificationService.create(eventId, event)).willReturn(notificationDtos);
 
       // when
       kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
-          objectMapper.writeValueAsString(event));
+          objectMapper.writeValueAsString(new NotificationOutboxPayload(eventId, event)));
 
       // then
       await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
@@ -122,7 +123,8 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
           .set("content", "내용")
           .set("level", NotificationLevel.INFO)
           .sample();
-      String payload = objectMapper.writeValueAsString(event);
+      String payload = objectMapper.writeValueAsString(
+          new NotificationOutboxPayload(UUID.randomUUID(), event));
 
       embeddedKafkaBroker.addTopics(new NewTopic(DLT_TOPIC, 1, (short) 1));
       Map<String, Object> consumerProps =
