@@ -1,51 +1,43 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
-import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
-import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
-import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
+import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
-import java.time.Instant;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
+import tools.jackson.databind.ObjectMapper;
 
-@ExtendWith(MockitoExtension.class)
+@DisplayName("NotificationRequestedEventListener")
 class NotificationRequestedEventListenerTest {
 
-  private static final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
+  private final FixtureMonkey fixtureMonkey = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
       .plugin(new JakartaValidationPlugin())
       .build();
-
-  @InjectMocks
-  private NotificationRequestedEventListener notificationRequestedEventListener;
-
-  @Mock
-  private NotificationService notificationService;
-  @Mock
-  private SseService sseService;
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+  private final NotificationRequestedEventListener notificationRequestedEventListener =
+      new NotificationRequestedEventListener(kafkaTemplate, objectMapper);
 
   @Nested
   @DisplayName("on")
   class On {
 
     @Test
-    @DisplayName("이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다")
-    void 이벤트를_받으면_알림을_생성하고_그_결과를_notifications_이벤트명으로_SSE_발행한다() {
+    @DisplayName("이벤트를_받으면_알림_요청_토픽으로_발행한다")
+    void 이벤트를_받으면_알림_요청_토픽으로_발행한다() {
       // given
       NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(NotificationRequestedEvent.class)
           .set("receiverIds", Set.of(UUID.randomUUID()))
@@ -53,15 +45,15 @@ class NotificationRequestedEventListenerTest {
           .set("content", "내용")
           .set("level", NotificationLevel.INFO)
           .sample();
-      List<NotificationDto> notificationDtos = List.of(new NotificationDto(
-          UUID.randomUUID(), Instant.now(), UUID.randomUUID(), "제목", "내용", NotificationLevel.INFO));
-      given(notificationService.create(event)).willReturn(notificationDtos);
+      String payload = objectMapper.writeValueAsString(event);
+      given(kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload))
+          .willReturn(CompletableFuture.completedFuture(null));
 
       // when
       notificationRequestedEventListener.on(event);
 
       // then
-      verify(sseService).send(notificationDtos, "notifications");
+      verify(kafkaTemplate).send(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload);
     }
   }
 }
