@@ -371,11 +371,11 @@ class WeatherSuddenChangeChunkProcessorTest {
   class HandleD1 {
 
     @Test
-    @DisplayName("기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다")
-    void 기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장한다() {
+    @DisplayName("기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장하고_슬롯이_없는_그리드는_경고만_남긴다")
+    void 기존_baseline이_없는_그리드는_D2_슬롯을_일괄_저장하고_슬롯이_없는_그리드는_경고만_남긴다() {
       // given
       WeatherGrid gridA = gridWithId(60, 127);
-      WeatherGrid gridB = gridWithId(61, 128);
+      WeatherGrid gridB = gridWithId(61, 128); // 슬롯 없음(빈 스냅샷 케이스)
       LocalDate d2Date = LocalDate.parse("2026-07-29");
       Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
       Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
@@ -388,20 +388,14 @@ class WeatherSuddenChangeChunkProcessorTest {
       // when
       processor.captureD2Snapshot(List.of(gridA, gridB), d2Date);
 
-      // then
+      // then - gridB(빈 스냅샷)는 저장 대상에서 빠지고 gridA만 저장된다
       ArgumentCaptor<List<WeatherD1Baseline>> captor = ArgumentCaptor.forClass(List.class);
       verify(weatherD1BaselineRepository).saveAll(captor.capture());
-      assertThat(captor.getValue()).hasSize(2);
-      assertThat(captor.getValue())
-          .anySatisfy(baseline -> {
-            assertThat(baseline.getWeatherGrid()).isEqualTo(gridA);
-            assertThat(baseline.getHourlySnapshot())
-                .containsExactlyEntriesOf(Map.of(hour0, WeatherChangeSnapshot.currentOf(slotA)));
-          })
-          .anySatisfy(baseline -> {
-            assertThat(baseline.getWeatherGrid()).isEqualTo(gridB);
-            assertThat(baseline.getHourlySnapshot()).isEmpty();
-          });
+      assertThat(captor.getValue()).hasSize(1);
+      assertThat(captor.getValue().get(0).getWeatherGrid()).isEqualTo(gridA);
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anyMatch(message -> message.contains("슬롯이 없어 D2 스냅샷 캡처를 건너뜀"));
     }
 
     @Test
