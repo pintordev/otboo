@@ -2,11 +2,10 @@ package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
+import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationOutboxPayload;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
-import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -24,8 +23,9 @@ public class NotificationRequestedKafkaConsumer {
       topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED,
       groupId = "notification-requested-consumer")
   public void consume(String payload) {
-    NotificationRequestedEvent event = objectMapper.readValue(payload, NotificationRequestedEvent.class);
-    List<NotificationDto> notificationDtos = notificationService.create(UUID.randomUUID(), event);
+    NotificationOutboxPayload outboxPayload = objectMapper.readValue(payload, NotificationOutboxPayload.class);
+    List<NotificationDto> notificationDtos =
+        notificationService.create(outboxPayload.eventId(), outboxPayload.event());
     sseService.send(notificationDtos, "notifications");
   }
 }
