@@ -5,12 +5,13 @@
 -- 실제 기존 로컬 DB(notifications 2건, event_id=NULL)에 이 마이그레이션을 적용해 확인함.
 CREATE TABLE notification_outboxes
 (
-    id           UUID         NOT NULL,
-    topic        VARCHAR(255) NOT NULL,
-    payload      TEXT         NOT NULL,
-    status       VARCHAR(20)  NOT NULL,
-    created_at   TIMESTAMP    NOT NULL,
-    published_at TIMESTAMP,
+    id           UUID                     NOT NULL,
+    topic        VARCHAR(255)             NOT NULL,
+    payload      TEXT                     NOT NULL,
+    status       VARCHAR(20)              NOT NULL,
+    created_at   TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at   TIMESTAMP WITH TIME ZONE NOT NULL,
+    published_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT PK_notification_outboxes PRIMARY KEY (id)
 );
 
