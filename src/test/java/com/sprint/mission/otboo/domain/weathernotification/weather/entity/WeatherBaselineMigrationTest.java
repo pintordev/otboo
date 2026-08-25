@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.global.testcontainers.IntegrationTestSupport;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class WeatherBaselineMigrationTest {
+class WeatherBaselineMigrationTest extends IntegrationTestSupport {
 
   @Autowired
   private JdbcTemplate jdbcTemplate;

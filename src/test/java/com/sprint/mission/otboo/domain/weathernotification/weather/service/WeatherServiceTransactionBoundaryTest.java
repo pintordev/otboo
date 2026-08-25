@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
+import com.sprint.mission.otboo.global.testcontainers.IntegrationTestSupport;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -21,7 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @SpringBootTest
 @ActiveProfiles("test")
-class WeatherServiceTransactionBoundaryTest {
+class WeatherServiceTransactionBoundaryTest extends IntegrationTestSupport {
 
   @Autowired
   private WeatherService weatherService;

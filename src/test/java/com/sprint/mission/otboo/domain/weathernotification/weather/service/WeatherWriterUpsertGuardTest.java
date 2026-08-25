@@ -9,6 +9,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.external.kma.dto.WeatherForecastSlotDto;
+import com.sprint.mission.otboo.global.testcontainers.IntegrationTestSupport;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class WeatherWriterUpsertGuardTest {
+class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
 
   @Autowired
   private WeatherWriter weatherWriter;
