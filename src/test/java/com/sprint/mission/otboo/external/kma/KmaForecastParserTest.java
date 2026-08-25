@@ -252,6 +252,23 @@ class KmaForecastParserTest {
             assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
           });
     }
+
+    @Test
+    @DisplayName("당일_늦은_시각_base_time으로_남은_슬롯이_3개뿐이어도_버려지지_않는다")
+    void 당일_늦은_시각_base_time으로_남은_슬롯이_3개뿐이어도_버려지지_않는다() {
+      // given - 20시 base_time 조회 시 오늘 남은 슬롯은 21·22·23시 3개뿐(기존 MIN_SLOT_COUNT=4 미달)
+      List<Item> items = new ArrayList<>();
+      for (int hour = 21; hour <= 23; hour++) {
+        items.add(item("TMP", "20260824", "%02d00".formatted(hour), String.valueOf(20 + hour)));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).hasSize(3);
+    }
   }
 
   private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
