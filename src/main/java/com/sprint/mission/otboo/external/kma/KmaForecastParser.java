@@ -36,7 +36,7 @@ public class KmaForecastParser {
     List<WeatherForecastSlotDto> result = new ArrayList<>();
     for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
       List<Item> dayItems = entry.getValue();
-      if (!hasEnoughSlots(dayItems) || !hasTemperatureData(dayItems)) {
+      if (!hasTemperatureData(dayItems)) {
         continue;
       }
       LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
