@@ -4,6 +4,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Locati
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherGridRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.singleflight.SingleFlightRegistry;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.util.LocationBlockCalculator.BlockIndex;
 import com.sprint.mission.otboo.external.kakao.KakaoRegionFetcher;
@@ -26,6 +27,7 @@ public class LocationResolver {
   private final KakaoRegionFetcher kakaoRegionFetcher;
   private final LocationBlockCalculator locationBlockCalculator;
   private final LocationCacheProvider locationCacheProvider;
+  private final SingleFlightRegistry singleFlightRegistry;
 
   private final ConcurrentHashMap<BlockIndex, CompletableFuture<List<String>>> inFlight =
       new ConcurrentHashMap<>();
@@ -35,16 +37,22 @@ public class LocationResolver {
         .orElseGet(() -> weatherGridWriter.save(grid.nx(), grid.ny()));
   }
 
-  // 로컬 in-flight single-flight - 이후 SingleFlightRegistry(분산 락)가 한 겹 더 붙는다.
+  // 로컬 in-flight 다음에 SingleFlightRegistry(분산 락)까지 태우는 2단 방어.
   public CompletableFuture<List<String>> resolveLocationNamesAsync(double latitude,
       double longitude, Executor executor) {
     BlockIndex blockIndex = locationBlockCalculator.toBlock(latitude, longitude);
+    String lockKey = "location:" + blockIndex.latBlock() + ":" + blockIndex.lonBlock();
     return locationCacheProvider
         .findCachedLocationNames(blockIndex.latBlock(), blockIndex.lonBlock())
         .map(CompletableFuture::completedFuture)
         .orElseGet(() -> inFlight.computeIfAbsent(blockIndex, k ->
-            CompletableFuture.supplyAsync(() -> fetchAndSave(blockIndex, latitude, longitude),
-                executor).whenComplete((r, e) -> inFlight.remove(k))));
+            singleFlightRegistry.execute(
+                    lockKey,
+                    () -> fetchAndSave(blockIndex, latitude, longitude),
+                    executor,
+                    () -> locationCacheProvider.findCachedLocationNames(
+                        blockIndex.latBlock(), blockIndex.lonBlock()))
+                .whenComplete((r, e) -> inFlight.remove(k))));
   }
 
   private List<String> fetchAndSave(BlockIndex blockIndex, double latitude, double longitude) {
