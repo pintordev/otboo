@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.global.config.RetryConfig;
 import com.sprint.mission.otboo.global.mail.exception.MailSendErrorException;
+import com.sprint.mission.otboo.global.mail.properties.MailImplType;
+import com.sprint.mission.otboo.global.mail.properties.MailProperties;
 import com.sprint.mission.otboo.global.mail.service.impl.GoogleSmtpMailService;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
@@ -52,7 +54,8 @@ class GoogleSmtpMailServiceRetryTest {
     @Bean
     GoogleSmtpMailService googleSmtpMailService(JavaMailSender mailSender,
         TemplateEngine templateEngine) {
-      return new GoogleSmtpMailService(mailSender, templateEngine);
+      return new GoogleSmtpMailService(mailSender, templateEngine,
+          new MailProperties(MailImplType.GOOGLE, "no-reply@otboo.cc"));
     }
   }
 

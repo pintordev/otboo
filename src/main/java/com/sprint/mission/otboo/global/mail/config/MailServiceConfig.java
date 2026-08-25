@@ -17,7 +17,7 @@ public class MailServiceConfig {
   public MailService mailService(MailProperties mailProperties, JavaMailSender mailSender,
       TemplateEngine templateEngine) {
     return switch (mailProperties.impl()) {
-      case GOOGLE -> new GoogleSmtpMailService(mailSender, templateEngine);
+      case GOOGLE -> new GoogleSmtpMailService(mailSender, templateEngine, mailProperties);
     };
   }
 }

@@ -13,6 +13,7 @@ import com.sprint.mission.otboo.security.cookie.provider.RefreshTokenCookieProvi
 import com.sprint.mission.otboo.security.details.CustomUserDetailsService;
 import com.sprint.mission.otboo.security.oauth2.handler.OAuth2LoginFailureHandler;
 import com.sprint.mission.otboo.security.oauth2.handler.OAuth2LoginSuccessHandler;
+import com.sprint.mission.otboo.security.oauth2.repository.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +68,9 @@ class AuthControllerCsrfTest {
 
   @MockitoBean
   private OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
+
+  @MockitoBean
+  private HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
   @Nested
   @DisplayName("CSRF 토큰 발급 - GET /api/auth/csrf-token")

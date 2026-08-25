@@ -67,3 +67,6 @@ docs/draft
 
 ### File ###
 /uploads
+
+### Performance test ###
+/k6/results

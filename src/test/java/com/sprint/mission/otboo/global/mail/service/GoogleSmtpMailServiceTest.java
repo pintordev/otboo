@@ -1,15 +1,17 @@
 package com.sprint.mission.otboo.global.mail.service;
 
 import com.sprint.mission.otboo.global.mail.exception.MailSendErrorException;
+import com.sprint.mission.otboo.global.mail.properties.MailImplType;
+import com.sprint.mission.otboo.global.mail.properties.MailProperties;
 import com.sprint.mission.otboo.global.mail.service.impl.GoogleSmtpMailService;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
@@ -31,7 +33,6 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class GoogleSmtpMailServiceTest {
 
-  @InjectMocks
   GoogleSmtpMailService mailService;
 
   @Mock
@@ -39,6 +40,12 @@ class GoogleSmtpMailServiceTest {
 
   @Mock
   TemplateEngine mockTemplateEngine;
+
+  @BeforeEach
+  void setUp() {
+    mailService = new GoogleSmtpMailService(mockMailSender, mockTemplateEngine,
+        new MailProperties(MailImplType.GOOGLE, "no-reply@otboo.cc"));
+  }
 
   private MimeMessage realMimeMessage() {
     return new MimeMessage(Session.getDefaultInstance(new Properties()));
@@ -65,6 +72,8 @@ class GoogleSmtpMailServiceTest {
       assertThat(mimeMessage.getAllRecipients()).extracting(Object::toString)
           .containsExactly("hong@test.com");
       assertThat(mimeMessage.getSubject()).isEqualTo("[옷장을 부탁해] 임시 비밀번호 안내");
+      assertThat(mimeMessage.getFrom()).extracting(Object::toString)
+          .containsExactly("no-reply@otboo.cc");
     }
 
     @Test

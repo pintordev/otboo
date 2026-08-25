@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.security.exception.ErrorResponseWriter;
 import com.sprint.mission.otboo.security.filter.TokenAuthenticationFilter;
 import com.sprint.mission.otboo.security.oauth2.handler.OAuth2LoginFailureHandler;
 import com.sprint.mission.otboo.security.oauth2.handler.OAuth2LoginSuccessHandler;
+import com.sprint.mission.otboo.security.oauth2.repository.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
 import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import org.springframework.context.annotation.Bean;
@@ -63,7 +64,8 @@ public class SecurityConfig {
       TokenProvider tokenProvider,
       UserSessionRegistry userSessionRegistry,
       OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler,
-      OAuth2LoginFailureHandler oAuth2LoginFailureHandler
+      OAuth2LoginFailureHandler oAuth2LoginFailureHandler,
+      HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository
   ) throws Exception {
 
     http.formLogin(AbstractHttpConfigurer::disable);
@@ -129,6 +131,8 @@ public class SecurityConfig {
     );
 
     http.oauth2Login(oauth2 -> oauth2
+        .authorizationEndpoint(endpoint -> endpoint
+            .authorizationRequestRepository(httpCookieOAuth2AuthorizationRequestRepository))
         .successHandler(oAuth2LoginSuccessHandler)
         .failureHandler(oAuth2LoginFailureHandler)
     );

@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.global.mail.service.impl;
 
 import com.sprint.mission.otboo.global.mail.exception.MailSendErrorException;
+import com.sprint.mission.otboo.global.mail.properties.MailProperties;
 import com.sprint.mission.otboo.global.mail.service.MailService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -16,10 +17,13 @@ public class GoogleSmtpMailService implements MailService {
 
   private final JavaMailSender mailSender;
   private final TemplateEngine templateEngine;
+  private final MailProperties mailProperties;
 
-  public GoogleSmtpMailService(JavaMailSender mailSender, TemplateEngine templateEngine) {
+  public GoogleSmtpMailService(JavaMailSender mailSender, TemplateEngine templateEngine,
+      MailProperties mailProperties) {
     this.mailSender = mailSender;
     this.templateEngine = templateEngine;
+    this.mailProperties = mailProperties;
   }
 
   @Override
@@ -37,6 +41,7 @@ public class GoogleSmtpMailService implements MailService {
 
       MimeMessage message = mailSender.createMimeMessage();
       MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+      helper.setFrom(mailProperties.from());
       helper.setTo(toEmail);
       helper.setSubject("[옷장을 부탁해] 임시 비밀번호 안내");
       helper.setText(html, true);

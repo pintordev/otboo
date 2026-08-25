@@ -1,0 +1,147 @@
+{
+  "title": "otboo k6 실시간 부하 테스트",
+  "uid": "otboo-k6",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "VUs (동시 사용자 수)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT mean(\"value\") FROM \"vus\" WHERE $timeFilter GROUP BY time($__interval) fill(previous)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "VUs"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "요청 처리량 (초당 요청 수 근사치)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT count(\"value\") FROM \"http_reqs\" WHERE $timeFilter GROUP BY time($__interval) fill(0)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "requests/interval"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "전체 응답시간 (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT percentile(\"value\", 50) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "p50"
+        },
+        {
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "p95"
+        },
+        {
+          "query": "SELECT percentile(\"value\", 99) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "에러율 (http_req_failed)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT mean(\"value\") FROM \"http_req_failed\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "error rate"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "엔드포인트별 응답시간 p95 (name 태그)",
+      "type": "timeseries",
+      "description": "각 스크립트에서 tags:{name:'GET /feeds'} 식으로 붙인 태그 기준. 어떤 API가 부하 중 제일 먼저/많이 튀는지 한눈에 비교.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY time($__interval), \"name\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_name"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "흐름별(browse vs write) 그룹 소요시간 p95",
+      "type": "timeseries",
+      "description": "phase2_scenario.js의 group('browse'/'write') 기준. 조회 흐름과 쓰기 흐름 중 어느 쪽이 더 무거운지 비교.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT percentile(\"value\", 95) FROM \"group_duration\" WHERE $timeFilter GROUP BY time($__interval), \"group\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_group"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "이터레이션 소요시간 (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT percentile(\"value\", 95) FROM \"iteration_duration\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "iteration p95"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "엔드포인트별 p95 랭킹 (현재 시간창 기준)",
+      "type": "table",
+      "description": "이번 실행 구간에서 가장 느린 API 순위. 병목 후보를 바로 지목하는 용도.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 32 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "query": "SELECT percentile(\"value\", 95) FROM \"http_req_duration\" WHERE $timeFilter GROUP BY \"name\"",
+          "rawQuery": true,
+          "resultFormat": "table",
+          "alias": ""
+        }
+      ]
+    }
+  ]
+}

@@ -2,10 +2,14 @@ package com.sprint.mission.otboo.domain.social.feed.repository.elasticsearch.imp
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.social.feed.document.FeedDocument;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedListParams;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSearchResult;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
+import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.social.feed.repository.elasticsearch.FeedSearchRepository;
@@ -30,6 +34,11 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @DisplayName("FeedSearchCustomRepository")
 class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSupport {
+
+  private static final FixtureMonkey fm = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .plugin(new JakartaValidationPlugin())
+      .build();
 
   @Autowired
   private FeedSearchRepository feedSearchRepository;
@@ -65,11 +74,12 @@ class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSuppo
 
   // 인덱싱 후 즉시 검색되도록 refresh한다. ES는 기본 1초 주기로 인덱스를 갱신한다.
   private UUID indexFeed(UUID authorId, String content, SkyStatus sky,
-      PrecipitationType precipitation, Instant createdAt, long likeCount) {
+      PrecipitationType precipitation, Instant createdAt, long likeCount,
+      List<OotdSnapshot> ootds) {
     UUID feedId = UUID.randomUUID();
     WeatherSnapshot snapshot = new WeatherSnapshot(
         sky, precipitation, 0.0, 0.0, 28.0, 2.0, 16.0, 31.0);
-    Feed feed = Feed.create(authorId, UUID.randomUUID(), content, snapshot, List.of());
+    Feed feed = Feed.create(authorId, UUID.randomUUID(), content, snapshot, ootds);
     setField(feed, "id", feedId);
     setField(feed, "createdAt", createdAt);
     setField(feed, "likeCount", likeCount);
@@ -79,9 +89,22 @@ class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSuppo
     return feedId;
   }
 
+  private UUID indexFeed(UUID authorId, String content, SkyStatus sky,
+      PrecipitationType precipitation, Instant createdAt, long likeCount) {
+    return indexFeed(authorId, content, sky, precipitation, createdAt, likeCount, List.of());
+  }
+
   private UUID indexFeed(String content, SkyStatus sky, PrecipitationType precipitation,
       Instant createdAt, long likeCount) {
     return indexFeed(UUID.randomUUID(), content, sky, precipitation, createdAt, likeCount);
+  }
+
+  private UUID indexFeedWithOotds(String content, List<String> ootdNames, Instant createdAt) {
+    List<OotdSnapshot> ootds = ootdNames.stream()
+        .map(name -> fm.giveMeBuilder(OotdSnapshot.class).set("name", name).sample())
+        .toList();
+    return indexFeed(UUID.randomUUID(), content, SkyStatus.CLEAR,
+        PrecipitationType.NONE, createdAt, 0L, ootds);
   }
 
   private FeedListParams params(String keywordLike) {
@@ -173,6 +196,59 @@ class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSuppo
       assertThat(result.totalCount()).isZero();
       assertThat(result.hasNext()).isFalse();
       assertThat(result.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("검색어의 모든 토큰이 있는 피드만 반환한다")
+    void 검색어의_모든_토큰이_있는_피드만_반환한다() {
+      // given
+      UUID matched = indexFeed("민트색 후드티 코디", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-01T00:00:00Z"), 0L);
+      indexFeed("카키색 야상 가을룩", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-02T00:00:00Z"), 0L);
+      indexFeed("검은색 트렌치코트 데일리룩", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-03T00:00:00Z"), 0L);
+
+      // when
+      FeedSearchResult result = feedSearchRepository.search(params("민트색"));
+
+      // then
+      assertThat(result.feedIds()).containsExactly(matched);
+      assertThat(result.totalCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("검색어 토큰의 75% 이상을 가진 피드만 반환한다")
+    void 검색어_토큰의_75퍼센트_이상을_가진_피드만_반환한다() {
+      // given
+      UUID matched = indexFeed("니트에 야상 걸쳤어요", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-01T00:00:00Z"), 0L);
+      indexFeed("민트색 후드티 코디", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-02T00:00:00Z"), 0L);
+      indexFeed("따뜻한 니트를 입었어요", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-03T00:00:00Z"), 0L);
+
+      // when
+      FeedSearchResult result = feedSearchRepository.search(params("니트 야상 코디"));
+
+      // then
+      assertThat(result.feedIds()).containsExactly(matched);
+    }
+
+    @Test
+    @DisplayName("복합명사는 분해된 토큰으로도 조회된다")
+    void 복합명사는_분해된_토큰으로도_조회된다() {
+      // given
+      UUID first = indexFeed("니트에 청바지 조합", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-02T00:00:00Z"), 0L);
+      UUID second = indexFeed("베이지색 반팔티에 청바지 입었어요", SkyStatus.CLEAR,
+          PrecipitationType.NONE, Instant.parse("2026-08-01T00:00:00Z"), 0L);
+
+      // when
+      FeedSearchResult result = feedSearchRepository.search(params("바지"));
+
+      // then
+      assertThat(result.feedIds()).containsExactlyInAnyOrder(first, second);
     }
   }
 
@@ -538,6 +614,41 @@ class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSuppo
       // then
       assertThat(page2.feedIds()).containsExactly(third);
       assertThat(page2.hasNext()).isFalse();
+    }
+  }
+
+  @Nested
+  @DisplayName("착장 검색")
+  class SearchByOotd {
+
+    @Test
+    @DisplayName("본문에 없어도 착장 이름으로 검색된다")
+    void 본문에_없어도_착장_이름으로_검색된다() {
+      // given
+      UUID matched = indexFeedWithOotds("오늘의 기록", List.of("민트색 후드티"),
+          Instant.parse("2026-08-01T00:00:00Z"));
+      indexFeedWithOotds("다른 기록", List.of("청바지"),
+          Instant.parse("2026-08-02T00:00:00Z"));
+
+      // when
+      FeedSearchResult result = feedSearchRepository.search(params("후드티"));
+
+      // then
+      assertThat(result.feedIds()).containsExactly(matched);
+    }
+
+    @Test
+    @DisplayName("착장이 없어도 본문으로 검색된다")
+    void 착장이_없어도_본문으로_검색된다() {
+      // given
+      UUID matched = indexFeedWithOotds("민트색 후드티 코디", List.of(),
+          Instant.parse("2026-08-01T00:00:00Z"));
+
+      // when
+      FeedSearchResult result = feedSearchRepository.search(params("후드티"));
+
+      // then
+      assertThat(result.feedIds()).containsExactly(matched);
     }
   }
 }

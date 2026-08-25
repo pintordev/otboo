@@ -24,7 +24,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class FeedSearchCustomRepositoryImpl implements FeedSearchCustomRepository {
 
-  private static final String FIELD_CONTENT = "content";
+  private static final String FIELD_SEARCH_TEXT = "searchText";
   private static final String FIELD_SKY_STATUS = "skyStatus";
   private static final String FIELD_PRECIPITATION_TYPE = "precipitationType";
   private static final String FIELD_AUTHOR_ID = "authorId";
@@ -102,7 +102,11 @@ public class FeedSearchCustomRepositoryImpl implements FeedSearchCustomRepositor
     if (!StringUtils.hasText(keywordLike)) {
       return Query.of(q -> q.matchAll(m -> m));
     }
-    return Query.of(q -> q.match(m -> m.field(FIELD_CONTENT).query(keywordLike)));
+    // 토큰 2개 이하면 전부 요구하고, 3개 이상이면 75%만 요구한다.
+    return Query.of(q -> q.match(m -> m
+        .field(FIELD_SEARCH_TEXT)
+        .query(keywordLike)
+        .minimumShouldMatch("2<75%")));
   }
 
   private List<Query> buildFilters(FeedListParams params) {

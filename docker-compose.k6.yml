@@ -1,0 +1,50 @@
+services:
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./k6/scripts:/scripts
+      - ./k6/results:/results
+    working_dir: /scripts
+    environment:
+      - BASE_URL=http://nginx
+      # k6 오픈소스 내장 output은 InfluxDB v1 라인 프로토콜 기준(v2는 별도 xk6 확장 필요) — influxdb 서비스도 1.8로 고정
+      - K6_OUT=influxdb=http://influxdb:8086/k6
+    depends_on:
+      influxdb:
+        condition: service_started
+
+  influxdb:
+    image: influxdb:1.8-alpine
+    ports:
+      - "127.0.0.1:8086:8086"   # 필요 시 호스트에서 직접 쿼리하려고 열어둠, 다른 서비스처럼 loopback만 노출
+    environment:
+      - INFLUXDB_DB=k6
+      - INFLUXDB_HTTP_FLUX_ENABLED=false
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    healthcheck:
+      # alpine 이미지엔 curl이 없음 — busybox wget으로 대체
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "127.0.0.1:3002:3000"   # 로컬 3000을 다른 용도로 쓰고 있을 수 있어 회피
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=true   # 팀원이 로그인 없이 바로 대시보드만 보게
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - ./k6/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+volumes:
+  influxdb_data:
+  grafana_data:
