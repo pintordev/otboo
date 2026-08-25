@@ -74,6 +74,36 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
+  @Bean(name = "weatherRefreshExecutor")
+  public Executor weatherRefreshExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(4);
+    executor.setMaxPoolSize(8);
+    executor.setQueueCapacity(50);
+    executor.setThreadNamePrefix("weather-refresh-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    executor.initialize();
+    return executor;
+  }
+
+  @Bean(name = "kakaoLocationExecutor")
+  public Executor kakaoLocationExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    // weatherRefreshExecutor와 분리 - 기상청/카카오는 서로 다른 외부 시스템(응답 속도·쿼터·장애
+    // 패턴이 다름)이라 한쪽이 느려지거나 막혀도 다른 쪽 처리 능력까지 잠식되지 않게 한다
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(4);
+    executor.setMaxPoolSize(8);
+    executor.setQueueCapacity(50);
+    executor.setThreadNamePrefix("kakao-location-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    executor.initialize();
+    return executor;
+  }
+
   @Override
   public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
     return (throwable, method, params) -> {
