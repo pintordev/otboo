@@ -13,6 +13,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +39,22 @@ public class WeatherRefresher {
   private final KmaForecastFetcher kmaForecastFetcher;
   private final WeatherWriter weatherWriter;
   private final Clock clock;
+
+  private final ConcurrentHashMap<InFlightKey, CompletableFuture<List<Weather>>> inFlight =
+      new ConcurrentHashMap<>();
+
+  // 로컬 in-flight single-flight - 이후 SingleFlightRegistry(분산 락)가 한 겹 더 붙는다.
+  public CompletableFuture<List<Weather>> refreshSlotsAsync(WeatherGrid weatherGrid,
+      KmaGridPoint grid, BaseTime baseTime, Executor executor) {
+    InFlightKey key = new InFlightKey(weatherGrid.getId(), baseTime);
+    return inFlight.computeIfAbsent(key, k ->
+        CompletableFuture.supplyAsync(() -> refreshSlots(weatherGrid, grid, baseTime), executor)
+            .whenComplete((r, e) -> inFlight.remove(k)));
+  }
+
+  private record InFlightKey(UUID weatherGridId, BaseTime baseTime) {
+
+  }
 
   public List<Weather> refreshSlots(WeatherGrid weatherGrid, KmaGridPoint grid,
       BaseTime baseTime) {
