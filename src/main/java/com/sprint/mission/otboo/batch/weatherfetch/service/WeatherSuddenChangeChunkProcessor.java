@@ -93,9 +93,8 @@ public class WeatherSuddenChangeChunkProcessor {
     return notified;
   }
 
-  // 정상 쓰기 경로(WeatherWriter.buildSlots())에서는 baseline_*이 첫 insert 때 항상 함께
-  // 채워지므로 실제로는 도달하지 않지만, WeatherChangeSnapshot.baselineOf()의 언박싱
-  // NPE를 방어한다.
+  // baseline_* 컬럼이 DB 레벨 NOT NULL이라 이론상 도달 불가능하지만, WeatherChangeSnapshot
+  // .baselineOf()의 언박싱 NPE를 막는 값싼 방어선이라 남겨둔다.
   private boolean hasCompleteBaseline(Weather weather) {
     return weather.getBaselineTemperatureCurrent() != null
         && weather.getBaselinePrecipitationType() != null
