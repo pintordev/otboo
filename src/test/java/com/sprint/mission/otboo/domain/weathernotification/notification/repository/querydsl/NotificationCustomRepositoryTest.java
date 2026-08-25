@@ -37,7 +37,7 @@ class NotificationCustomRepositoryTest {
 
   private Notification saveNotification(UUID receiverId) {
     return notificationRepository.save(
-        Notification.create(receiverId, "제목", "내용", NotificationLevel.INFO));
+        Notification.create(UUID.randomUUID(), receiverId, "제목", "내용", NotificationLevel.INFO));
   }
 
   private void setCreatedAt(UUID notificationId, Instant createdAt) {

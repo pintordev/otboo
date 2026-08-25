@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface NotificationRepository
     extends JpaRepository<Notification, UUID>, NotificationCustomRepository {
 
+  boolean existsByEventIdAndReceiverId(UUID eventId, UUID receiverId);
 }

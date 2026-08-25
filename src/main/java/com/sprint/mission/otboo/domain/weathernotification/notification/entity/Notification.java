@@ -34,6 +34,9 @@ public class Notification {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
+  @Column(name = "event_id", updatable = false)
+  private UUID eventId;
+
   @Column(name = "receiver_id", nullable = false, updatable = false)
   private UUID receiverId;
 
@@ -47,14 +50,17 @@ public class Notification {
   @Column(name = "level", nullable = false, updatable = false)
   private NotificationLevel level;
 
-  private Notification(UUID receiverId, String title, String content, NotificationLevel level) {
+  private Notification(
+      UUID eventId, UUID receiverId, String title, String content, NotificationLevel level) {
+    this.eventId = eventId;
     this.receiverId = receiverId;
     this.title = title;
     this.content = content;
     this.level = level;
   }
 
-  public static Notification create(UUID receiverId, String title, String content, NotificationLevel level) {
-    return new Notification(receiverId, title, content, level);
+  public static Notification create(
+      UUID eventId, UUID receiverId, String title, String content, NotificationLevel level) {
+    return new Notification(eventId, receiverId, title, content, level);
   }
 }

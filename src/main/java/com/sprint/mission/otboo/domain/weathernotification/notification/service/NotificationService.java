@@ -28,7 +28,7 @@ public class NotificationService {
   @Transactional
   public List<NotificationDto> create(NotificationRequestedEvent event) {
     List<Notification> notifications = event.receiverIds().stream()
-        .map(receiverId -> Notification.create(receiverId, event.title(), event.content(), event.level()))
+        .map(receiverId -> Notification.create(null, receiverId, event.title(), event.content(), event.level()))
         .toList();
     return notificationRepository.saveAll(notifications).stream()
         .map(notificationMapper::toDto)
