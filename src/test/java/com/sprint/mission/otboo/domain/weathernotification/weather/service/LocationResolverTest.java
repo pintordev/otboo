@@ -1,8 +1,10 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -17,6 +19,12 @@ import com.sprint.mission.otboo.external.kakao.KakaoRegionFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,6 +46,8 @@ class LocationResolverTest {
   private LocationWriter locationWriter;
   @Mock
   private KakaoRegionFetcher kakaoRegionFetcher;
+  @Mock
+  private LocationCacheProvider locationCacheProvider;
 
   private LocationBlockCalculator locationBlockCalculator;
   private LocationResolver locationResolver;
@@ -46,7 +56,8 @@ class LocationResolverTest {
   void setUp() {
     locationBlockCalculator = new LocationBlockCalculator(new LocationBlockProperties(500.0));
     locationResolver = new LocationResolver(weatherGridRepository, weatherGridWriter,
-        locationRepository, locationWriter, kakaoRegionFetcher, locationBlockCalculator);
+        locationRepository, locationWriter, kakaoRegionFetcher, locationBlockCalculator,
+        locationCacheProvider);
   }
 
   @Nested
@@ -134,6 +145,50 @@ class LocationResolverTest {
       assertThat(result).containsExactly("서울특별시", "중구", "명동", "");
       verify(locationWriter).save(block.latBlock(), block.lonBlock(),
           List.of("서울특별시", "중구", "명동", ""));
+    }
+  }
+
+  @Nested
+  @DisplayName("비동기 조회(single-flight)")
+  class ResolveLocationNamesAsync {
+
+    @Test
+    @DisplayName("같은_블록_동시_호출은_콜드미스여도_카카오를_한_번만_부른다")
+    void 같은_블록_동시_호출은_콜드미스여도_카카오를_한_번만_부른다() throws Exception {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
+      given(locationCacheProvider.findCachedLocationNames(block.latBlock(), block.lonBlock()))
+          .willReturn(Optional.empty());
+      CountDownLatch fetchStarted = new CountDownLatch(1);
+      CountDownLatch releaseFetch = new CountDownLatch(1);
+      given(kakaoRegionFetcher.fetch(latitude, longitude)).willAnswer(invocation -> {
+        fetchStarted.countDown();
+        releaseFetch.await();
+        return List.of("서울특별시", "중구");
+      });
+      given(locationWriter.save(eq(block.latBlock()), eq(block.lonBlock()), any()))
+          .willReturn(Location.create(block.latBlock(), block.lonBlock(),
+              List.of("서울특별시", "중구")));
+
+      ExecutorService pool = Executors.newFixedThreadPool(2);
+      try {
+        // when - 두 스레드가 동시에 같은 블록으로 resolveLocationNamesAsync 호출
+        Future<?> first = pool.submit(() ->
+            locationResolver.resolveLocationNamesAsync(latitude, longitude, pool));
+        assertThat(fetchStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        CompletableFuture<List<String>> second =
+            locationResolver.resolveLocationNamesAsync(latitude, longitude, pool);
+        releaseFetch.countDown();
+        first.get(2, TimeUnit.SECONDS);
+        second.get(2, TimeUnit.SECONDS);
+
+        // then
+        verify(kakaoRegionFetcher, times(1)).fetch(latitude, longitude);
+      } finally {
+        pool.shutdownNow();
+      }
     }
   }
 }
