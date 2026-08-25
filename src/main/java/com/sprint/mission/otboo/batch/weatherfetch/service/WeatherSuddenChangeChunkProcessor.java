@@ -52,7 +52,7 @@ public class WeatherSuddenChangeChunkProcessor {
   @Transactional
   public ChunkResult process(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today,
       boolean shouldHandleD0, boolean shouldHandleD1) {
-    int d0Notified = shouldHandleD0 ? handleD0(chunk, baseTime) : 0;
+    int d0Notified = shouldHandleD0 ? handleD0(chunk, baseTime, today) : 0;
     int d1Notified = shouldHandleD1 ? handleD1(chunk, today) : 0;
     return new ChunkResult(d0Notified, d1Notified);
   }
@@ -60,7 +60,7 @@ public class WeatherSuddenChangeChunkProcessor {
   // baseTime과 정확히 일치하는 슬롯만 청크 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
   // 따로 조회하지 않으므로 N+1이 없다(#163). RepresentativeSlotSelector는 여기서 필요 없다 -
   // baseTime은 근접일 그리드와 항상 거리 0으로 정확히 일치한다.
-  int handleD0(List<WeatherGrid> chunk, BaseTime baseTime) {
+  int handleD0(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today) {
     List<UUID> gridIds = chunk.stream().map(WeatherGrid::getId).toList();
     List<Weather> targets = weatherRepository
         .findAllByWeatherGridIdInAndForecastAt(gridIds, baseTime.toInstant());
