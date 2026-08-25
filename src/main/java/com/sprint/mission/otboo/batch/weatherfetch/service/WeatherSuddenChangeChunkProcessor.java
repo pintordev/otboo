@@ -169,8 +169,16 @@ public class WeatherSuddenChangeChunkProcessor {
 
     List<WeatherD1Baseline> newBaselines = new ArrayList<>();
     for (WeatherGrid grid : chunk) {
-      Map<Instant, WeatherChangeSnapshot> hourlySnapshot = slotsByGridId
-          .getOrDefault(grid.getId(), List.of()).stream()
+      List<Weather> slots = slotsByGridId.getOrDefault(grid.getId(), List.of());
+      if (slots.isEmpty()) {
+        // 빈 스냅샷을 그대로 저장하면 다음 날 compareD1AndNotify()가 "row는 있는데 전부
+        // null"이라는 걸 구분 못 해 경고 없이 조용히 스킵된다 - 아예 저장하지 않고 원인이
+        // 로그에 드러나게 한다.
+        log.warn("당일 슬롯이 없어 D2 스냅샷 캡처를 건너뜀: weatherGridId={}, d2Date={}",
+            grid.getId(), d2Date);
+        continue;
+      }
+      Map<Instant, WeatherChangeSnapshot> hourlySnapshot = slots.stream()
           .collect(Collectors.toMap(Weather::getForecastAt, WeatherChangeSnapshot::currentOf));
       WeatherD1Baseline existing = existingByGridId.get(grid.getId());
       if (existing != null) {
