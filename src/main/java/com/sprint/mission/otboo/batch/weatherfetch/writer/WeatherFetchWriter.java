@@ -48,6 +48,7 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
           temperature_max = EXCLUDED.temperature_max,
           wind_speed = EXCLUDED.wind_speed,
           wind_as_word = EXCLUDED.wind_as_word
+      WHERE weathers.forecasted_at < EXCLUDED.forecasted_at
       """;
 
   private final JdbcTemplate jdbcTemplate;

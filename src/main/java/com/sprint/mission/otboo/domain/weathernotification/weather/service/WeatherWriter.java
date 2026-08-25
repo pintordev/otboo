@@ -54,6 +54,7 @@ public class WeatherWriter {
           temperature_max = EXCLUDED.temperature_max,
           wind_speed = EXCLUDED.wind_speed,
           wind_as_word = EXCLUDED.wind_as_word
+      WHERE weathers.forecasted_at < EXCLUDED.forecasted_at
       """;
 
   private final WeatherRepository weatherRepository;
