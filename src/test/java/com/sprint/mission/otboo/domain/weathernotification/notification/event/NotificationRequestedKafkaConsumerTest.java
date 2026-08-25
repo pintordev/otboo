@@ -23,17 +23,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -41,8 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@EmbeddedKafka(partitions = 1, topics = {NotificationKafkaTopics.NOTIFICATION_REQUESTED,
-    NotificationRequestedKafkaConsumerTest.DLT_TOPIC})
+@EmbeddedKafka(partitions = 1, topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED)
 class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
 
   static final String DLT_TOPIC = NotificationKafkaTopics.NOTIFICATION_REQUESTED + "-dlt";
@@ -58,10 +62,20 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
   private ObjectMapper objectMapper;
   @Autowired
   private EmbeddedKafkaBroker embeddedKafkaBroker;
+  @Autowired
+  private KafkaListenerEndpointRegistry registry;
   @MockitoBean
   private NotificationService notificationService;
   @MockitoBean
   private SseService sseService;
+
+  @BeforeEach
+  void waitForConsumerAssignment() {
+    // 컨슈머 그룹 리밸런스(파티션 할당)가 끝나기 전에 발행하면 auto.offset.reset=latest 기본값 탓에
+    // 메시지가 조용히 스킵된다 — 발행 전에 반드시 할당 완료를 기다린다.
+    MessageListenerContainer container = registry.getListenerContainer("notificationRequestedConsumer");
+    ContainerTestUtils.waitForAssignment(container, 1);
+  }
 
   @Nested
   @DisplayName("consume")
@@ -109,6 +123,7 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
           .sample();
       String payload = objectMapper.writeValueAsString(event);
 
+      embeddedKafkaBroker.addTopics(new NewTopic(DLT_TOPIC, 1, (short) 1));
       Map<String, Object> consumerProps =
           KafkaTestUtils.consumerProps(embeddedKafkaBroker, "dlt-verify-consumer", false);
       DefaultKafkaConsumerFactory<String, String> consumerFactory =

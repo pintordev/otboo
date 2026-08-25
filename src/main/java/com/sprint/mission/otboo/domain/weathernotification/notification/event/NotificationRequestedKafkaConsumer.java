@@ -19,7 +19,8 @@ public class NotificationRequestedKafkaConsumer {
   private final SseService sseService;
   private final ObjectMapper objectMapper;
 
-  @KafkaListener(topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED,
+  @KafkaListener(id = "notificationRequestedConsumer",
+      topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED,
       groupId = "notification-requested-consumer")
   public void consume(String payload) {
     NotificationRequestedEvent event = objectMapper.readValue(payload, NotificationRequestedEvent.class);

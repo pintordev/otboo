@@ -18,6 +18,7 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.authuser.user.repository.UserRepository;
+import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
@@ -59,6 +60,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -66,6 +71,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest
 @ActiveProfiles("test")
 @SpringBatchTest
+@EmbeddedKafka(partitions = 1, topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED)
 class WeatherFetchJobIntegrationTest extends IntegrationTestSupport {
 
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
@@ -90,8 +96,15 @@ class WeatherFetchJobIntegrationTest extends IntegrationTestSupport {
   @MockitoBean
   private KmaForecastFetcher kmaForecastFetcher;
 
+  @Autowired
+  private KafkaListenerEndpointRegistry registry;
+
   @BeforeEach
   void setUp() {
+    // 컨슈머 그룹 리밸런스(파티션 할당)가 끝나기 전에 발행하면 auto.offset.reset=latest 기본값 탓에
+    // 메시지가 조용히 스킵된다 — 발행 전에 반드시 할당 완료를 기다린다.
+    MessageListenerContainer container = registry.getListenerContainer("notificationRequestedConsumer");
+    ContainerTestUtils.waitForAssignment(container, 1);
     cleanUpWeatherTables();
     jobOperatorTestUtils.setJob(weatherFetchJob);
   }
