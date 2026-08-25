@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.NotificationOutbox;
 import com.sprint.mission.otboo.domain.weathernotification.notification.entity.NotificationOutboxStatus;
+import com.sprint.mission.otboo.domain.weathernotification.notification.properties.NotificationOutboxRelayProperties;
 import com.sprint.mission.otboo.domain.weathernotification.notification.repository.NotificationOutboxRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
@@ -37,12 +39,14 @@ class NotificationOutboxRelayServiceTest {
   @Mock
   private KafkaTemplate<String, String> kafkaTemplate;
 
+  private final NotificationOutboxRelayProperties notificationOutboxRelayProperties =
+      new NotificationOutboxRelayProperties(100);
   private final Clock clock = Clock.fixed(Instant.parse("2026-08-25T00:00:00Z"), ZoneOffset.UTC);
 
   @BeforeEach
   void setUp() {
-    notificationOutboxRelayService =
-        new NotificationOutboxRelayService(notificationOutboxRepository, kafkaTemplate, clock);
+    notificationOutboxRelayService = new NotificationOutboxRelayService(
+        notificationOutboxRepository, kafkaTemplate, notificationOutboxRelayProperties, clock);
   }
 
   @Nested
@@ -54,8 +58,8 @@ class NotificationOutboxRelayServiceTest {
     void PENDING_outbox를_발행하고_PUBLISHED로_마킹한다() {
       // given
       NotificationOutbox outbox = NotificationOutbox.create("topic", "payload");
-      given(notificationOutboxRepository.findTop100ByStatusOrderByCreatedAtAsc(
-          NotificationOutboxStatus.PENDING)).willReturn(List.of(outbox));
+      given(notificationOutboxRepository.findByStatusOrderByCreatedAtAsc(
+          NotificationOutboxStatus.PENDING, PageRequest.of(0, 100))).willReturn(List.of(outbox));
       @SuppressWarnings("unchecked")
       SendResult<String, String> sendResult = mock(SendResult.class);
       given(kafkaTemplate.send("topic", "payload"))
@@ -75,8 +79,8 @@ class NotificationOutboxRelayServiceTest {
     void 발행에_실패하면_PENDING_상태를_유지하고_저장하지_않는다() {
       // given
       NotificationOutbox outbox = NotificationOutbox.create("topic", "payload");
-      given(notificationOutboxRepository.findTop100ByStatusOrderByCreatedAtAsc(
-          NotificationOutboxStatus.PENDING)).willReturn(List.of(outbox));
+      given(notificationOutboxRepository.findByStatusOrderByCreatedAtAsc(
+          NotificationOutboxStatus.PENDING, PageRequest.of(0, 100))).willReturn(List.of(outbox));
       CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
       failed.completeExceptionally(new RuntimeException("전송 실패"));
       given(kafkaTemplate.send("topic", "payload")).willReturn(failed);
@@ -93,8 +97,8 @@ class NotificationOutboxRelayServiceTest {
     @DisplayName("PENDING_outbox가_없으면_아무것도_하지_않는다")
     void PENDING_outbox가_없으면_아무것도_하지_않는다() {
       // given
-      given(notificationOutboxRepository.findTop100ByStatusOrderByCreatedAtAsc(
-          NotificationOutboxStatus.PENDING)).willReturn(List.of());
+      given(notificationOutboxRepository.findByStatusOrderByCreatedAtAsc(
+          NotificationOutboxStatus.PENDING, PageRequest.of(0, 100))).willReturn(List.of());
 
       // when
       notificationOutboxRelayService.relay();
