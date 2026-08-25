@@ -29,23 +29,9 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
-  @Bean(name = "notificationExecutor")
-  public Executor notificationExecutor() {
-    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setQueueCapacity(50);
-    executor.setThreadNamePrefix("notification-async-");
-    executor.setTaskDecorator(new MdcTaskDecorator());
-    executor.initialize();
-    return executor;
-  }
-
   @Bean(name = "sseDisconnectExecutor")
   public Executor sseDisconnectExecutor() {
     // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
-    // notificationExecutor와 분리 — 로그인발 SSE 정리가 실제 알림 전송과 풀을 다투지 않도록 함
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
     executor.setCorePoolSize(2);
     executor.setMaxPoolSize(4);
