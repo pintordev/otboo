@@ -190,14 +190,20 @@ class WeatherRefresherTest {
       List<Weather> dbSlots = List.of();
       CountDownLatch executeStarted = new CountDownLatch(1);
       CountDownLatch releaseExecute = new CountDownLatch(1);
+      ExecutorService pool = Executors.newFixedThreadPool(2);
       given(singleFlightRegistry.execute(anyString(), any(), any(), any())).willAnswer(
           invocation -> {
             executeStarted.countDown();
-            releaseExecute.await();
-            return CompletableFuture.completedFuture(List.of());
+            return CompletableFuture.supplyAsync(() -> {
+              try {
+                releaseExecute.await();
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+              return List.<Weather>of();
+            }, pool);
           });
 
-      ExecutorService pool = Executors.newFixedThreadPool(2);
       try {
         // when - 두 스레드가 동시에 같은 키로 refreshSlotsAsync 호출
         Future<?> first = pool.submit(() ->

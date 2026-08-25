@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.singleflight.SingleFlightRegistry;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.external.kma.KmaGridConverter.KmaGridPoint;
@@ -11,8 +12,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,17 +43,41 @@ public class WeatherRefresher {
   private final KmaForecastFetcher kmaForecastFetcher;
   private final WeatherWriter weatherWriter;
   private final Clock clock;
+  private final SingleFlightRegistry singleFlightRegistry;
+  private final WeatherCacheProvider weatherCacheProvider;
 
   private final ConcurrentHashMap<InFlightKey, CompletableFuture<List<Weather>>> inFlight =
       new ConcurrentHashMap<>();
 
-  // 로컬 in-flight single-flight - 이후 SingleFlightRegistry(분산 락)가 한 겹 더 붙는다.
+  // 로컬 in-flight 다음에 SingleFlightRegistry(분산 락)까지 태우는 2단 방어.
   public CompletableFuture<List<Weather>> refreshSlotsAsync(WeatherGrid weatherGrid,
-      KmaGridPoint grid, BaseTime baseTime, Executor executor) {
+      KmaGridPoint grid, BaseTime baseTime, List<Weather> dbSlots, Executor executor) {
     InFlightKey key = new InFlightKey(weatherGrid.getId(), baseTime);
+    String lockKey =
+        "weather:" + weatherGrid.getId() + ":" + baseTime.baseDate() + baseTime.baseTime();
     return inFlight.computeIfAbsent(key, k ->
-        CompletableFuture.supplyAsync(() -> refreshSlots(weatherGrid, grid, baseTime), executor)
+        singleFlightRegistry.execute(
+                lockKey,
+                () -> {
+                  List<Weather> refreshed = refreshSlots(weatherGrid, grid, baseTime);
+                  List<Weather> merged = refreshed.isEmpty()
+                      ? dbSlots : mergeByForecastAt(dbSlots, refreshed);
+                  weatherCacheProvider.putSlots(weatherGrid, merged);
+                  return merged;
+                },
+                executor,
+                () -> {
+                  List<Weather> cached = weatherCacheProvider.findCachedSlots(weatherGrid);
+                  return cached.isEmpty() ? Optional.empty() : Optional.of(cached);
+                })
             .whenComplete((r, e) -> inFlight.remove(k)));
+  }
+
+  private List<Weather> mergeByForecastAt(List<Weather> slots, List<Weather> refreshed) {
+    Map<Instant, Weather> byForecastAt = new LinkedHashMap<>();
+    slots.forEach(slot -> byForecastAt.put(slot.getForecastAt(), slot));
+    refreshed.forEach(slot -> byForecastAt.put(slot.getForecastAt(), slot));
+    return new ArrayList<>(byForecastAt.values());
   }
 
   private record InFlightKey(UUID weatherGridId, BaseTime baseTime) {
