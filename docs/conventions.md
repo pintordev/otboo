@@ -1153,7 +1153,7 @@ data(notificationDto));
 
 ### 패키지 위치
 
-```
+```text
 global/
   config/
     KafkaConfig.java                          # 공용 에러 핸들러(재시도+DLT), 모든 @KafkaListener에 자동 적용
