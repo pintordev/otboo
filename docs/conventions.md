@@ -1148,8 +1148,9 @@ data(notificationDto));
 
 ## 15. Kafka 이벤트 발행/소비
 
-기존 Spring 이벤트(`ApplicationEventPublisher`/`@TransactionalEventListener`) 뒤에 얹는 **릴레이 구조**가 기본입니다 — 발행
-지점 코드는 그대로 두고, 리스너가 하던 일(DB 저장 등)만 Kafka 컨슈머로 옮깁니다.
+기존 Spring 이벤트(`ApplicationEventPublisher`/`@TransactionalEventListener`) 뒤에 얹는 **Transactional Outbox +
+릴레이 구조**가 기본입니다 — 발행 지점 코드는 그대로 두고, 리스너는 원본 트랜잭션 안에서 outbox 행만 저장하고, 별도
+스케줄러가 그 행을 폴링해 실제 Kafka 발행을 담당합니다. 컨슈머는 이벤트 ID 기반으로 멱등하게 처리합니다.
 
 ### 패키지 위치
 
@@ -1162,13 +1163,28 @@ domain/
     notification/
       kafka/
         NotificationKafkaTopics.java          # 토픽 상수
+        NotificationOutboxPayload.java        # eventId + 원본 이벤트를 감싸는 봉투
+      entity/
+        NotificationOutbox.java               # outbox 행, NotificationOutboxStatus(PENDING/PUBLISHED)
+      repository/
+        NotificationOutboxRepository.java     # PENDING 조회(Pageable)
+      properties/
+        NotificationOutboxRelayProperties.java  # 배치 크기 등 설정값
+      config/
+        NotificationOutboxConfig.java         # @EnableConfigurationProperties
+      service/
+        NotificationOutboxRelayService.java   # PENDING outbox 폴링 → Kafka 발행 → PUBLISHED 마킹
+      scheduler/
+        NotificationOutboxRelayScheduler.java # 주기 폴링(ShedLock)
       event/
-        NotificationRequestedEventListener.java   # @TransactionalEventListener → Kafka 발행만
-        NotificationRequestedKafkaConsumer.java   # @KafkaListener → 기존 리스너가 하던 일 그대로 수행
+        NotificationRequestedEventListener.java   # @TransactionalEventListener → outbox 저장만
+        NotificationRequestedKafkaConsumer.java   # @KafkaListener → 봉투 소비, 멱등 처리
 ```
 
-토픽 상수는 도메인 유닛 하위 `kafka/` 패키지에 둡니다. 발행 리스너와 소비 컨슈머는 기존 Spring 이벤트가 있던 `event/`
-패키지에 나란히 둡니다 — 같은 이벤트 흐름의 발행/소비 양쪽이라 한 패키지가 자연스럽습니다.
+토픽 상수·봉투(payload) 타입은 도메인 유닛 하위 `kafka/` 패키지에 둡니다. outbox 엔티티·리포지토리·설정값·릴레이
+서비스·스케줄러는 각각 기존 프로젝트 관례(엔티티는 `entity/`, 설정값은 `properties/`+`config/`, 배치성 폴링은
+`service/`+`scheduler/`)를 그대로 따릅니다. 발행 리스너와 소비 컨슈머는 기존 Spring 이벤트가 있던 `event/` 패키지에
+나란히 둡니다 — 같은 이벤트 흐름의 발행/소비 양쪽이라 한 패키지가 자연스럽습니다.
 
 ### 필수 의존성 — Spring Boot 4는 `spring-boot-starter-kafka`
 
@@ -1211,44 +1227,74 @@ Spring Boot는 컨텍스트에 `CommonErrorHandler` 빈이 하나만 있으면 *
 **`KafkaTemplate<Object, Object>`로 받아야 합니다** — Spring Boot가 자동구성하는 기본 `KafkaTemplate` 빈의 실제 제네릭
 타입이 `<Object, Object>`라, `<String, String>`으로 주입받으면 `NoSuchBeanDefinitionException`이 납니다.
 
-### 발행 측 — 기존 리스너를 Kafka 릴레이로 교체
+### 발행 신뢰성 — Transactional Outbox
+
+리스너가 `AFTER_COMMIT`에서 직접 `kafkaTemplate.send()`를 호출하면, 원본 트랜잭션은 이미 커밋된 뒤라 발행이
+실패해도(네트워크 오류, 브로커 다운, 인스턴스 크래시 등) 복구할 방법이 없습니다 — 재시도할 대상 자체가 어디에도 남지
+않기 때문입니다. 리스너는 원본 트랜잭션 **안에서**(`BEFORE_COMMIT`) outbox 행을 저장만 하고, 별도 스케줄러가 그 행을
+폴링해 실제 Kafka 발행을 수행하는 구조로 이 문제를 막습니다.
 
 ```java
 // domain/weathernotification/notification/event/NotificationRequestedEventListener.java
-@Slf4j
 @RequiredArgsConstructor
 @Component
 public class NotificationRequestedEventListener {
 
-  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final NotificationOutboxRepository notificationOutboxRepository;
   private final ObjectMapper objectMapper;
 
-  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
   public void on(NotificationRequestedEvent event) {
-    try {
-      String payload = objectMapper.writeValueAsString(event);
-      kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload)
-          .whenComplete((result, ex) -> {
-            if (ex != null) {
-              log.error("알림 요청 이벤트 Kafka 발행 실패: event={}", event, ex);
-            }
-          });
-    } catch (JacksonException e) {
-      log.error("알림 요청 이벤트 직렬화 실패: event={}", event, e);
-    }
+    NotificationOutboxPayload outboxPayload = new NotificationOutboxPayload(UUID.randomUUID(), event);
+    String payload = objectMapper.writeValueAsString(outboxPayload);
+    notificationOutboxRepository.save(
+        NotificationOutbox.create(NotificationKafkaTopics.NOTIFICATION_REQUESTED, payload));
   }
 }
 ```
 
-- 원래 있던 `@Async` 실행기는 제거합니다 — `kafkaTemplate.send()` 자체가 논블로킹이라, `@Async`로 얻으려던 "트랜잭션
-  스레드를 막지 않음" 효과를 Kafka 클라이언트가 대신 줍니다.
-- `.send()` 결과는 fire-and-forget으로 버리지 않고 `.whenComplete()`로 실패를 로깅합니다 — Spring Kafka 공식 문서가
-  권장하는 패턴입니다.
+```java
+// domain/weathernotification/notification/service/NotificationOutboxRelayService.java
+@Transactional
+public void relay() {
+  List<NotificationOutbox> pendingOutboxes = notificationOutboxRepository
+      .findByStatusOrderByCreatedAtAsc(NotificationOutboxStatus.PENDING,
+          PageRequest.of(0, notificationOutboxRelayProperties.batchSize()));
+  for (NotificationOutbox outbox : pendingOutboxes) {
+    publish(outbox); // kafkaTemplate.send()가 성공하면 markPublished(), 실패하면 로그만 남기고 PENDING 유지
+  }
+}
+```
+
+- outbox 저장이 `BEFORE_COMMIT`이라 원본 비즈니스 변경과 **원자적**입니다 — 저장이 실패하면 원본도 롤백되고, 원본이
+  성공하면 outbox 행도 반드시 같이 커밋됩니다.
+- `NotificationOutboxRelayScheduler`(`@Scheduled` + `@SchedulerLock`)가 `relay()`를 주기 호출합니다. `relay()`는
+  조회부터 발행까지 **하나의 트랜잭션+락 구간 안에서 동기로** 처리합니다 — 비동기로 쪼개면 락이 실제 발행 완료 전에
+  풀려 다음 폴링이 같은 행을 중복 발행할 위험이 생기기 때문입니다. 대신 `@SchedulerLock`의 `lockAtMostFor`를 최악의
+  경우(배치 크기 × Kafka 전송 timeout)보다 반드시 크게 잡아, 인스턴스 간 중복 실행 자체가 구조적으로 불가능하도록
+  만듭니다.
+- 배치 크기는 `notification.outbox-relay.batch-size` 설정값(`NotificationOutboxRelayProperties`)으로 뺍니다 —
+  `findTop100`처럼 근거 없는 숫자를 리포지토리 메서드명에 박지 않습니다.
+- 인스턴스가 죽어도 outbox 행이 DB에 남아있으므로, 다음 폴링(또는 다른 인스턴스)이 자동으로 재발행합니다.
 - `ObjectMapper`는 이 프로젝트의 Jackson 3(`tools.jackson.databind.ObjectMapper`) 기준이라 `writeValueAsString`
   /`readValue`가 **unchecked** `tools.jackson.core.JacksonException`을 던집니다(Jackson 2의 checked
   `JsonProcessingException`이 아님 — 외부 자료 예제를 그대로 옮기지 않도록 주의).
 
-### 소비 측 — `@KafkaListener`
+### 소비 측 — 이벤트 ID 기반 멱등 처리
+
+컨슈머가 DB에 쓰는 작업을 하면, Kafka 재시도(`DefaultErrorHandler`)나 컨슈머 리밸런스로 같은 메시지가 다시 오는
+상황을 반드시 가정해야 합니다 — 재시도만 믿으면 같은 메시지가 여러 번 처리돼 데이터가 중복 생성됩니다. 발행 시점에
+발급한 `eventId`를 페이로드에 실어 보내고, 컨슈머는 저장 전에 이미 처리된 조합인지 확인합니다.
+
+```java
+// domain/weathernotification/notification/kafka/NotificationOutboxPayload.java
+public record NotificationOutboxPayload(
+    UUID eventId,
+    NotificationRequestedEvent event
+) {
+
+}
+```
 
 ```java
 // domain/weathernotification/notification/event/NotificationRequestedKafkaConsumer.java
@@ -1264,13 +1310,17 @@ public class NotificationRequestedKafkaConsumer {
       topics = NotificationKafkaTopics.NOTIFICATION_REQUESTED,
       groupId = "notification-requested-consumer")
   public void consume(String payload) {
-    NotificationRequestedEvent event = objectMapper.readValue(payload, NotificationRequestedEvent.class);
-    List<NotificationDto> notificationDtos = notificationService.create(event);
+    NotificationOutboxPayload outboxPayload = objectMapper.readValue(payload, NotificationOutboxPayload.class);
+    List<NotificationDto> notificationDtos =
+        notificationService.create(outboxPayload.eventId(), outboxPayload.event());
     sseService.send(notificationDtos, "notifications");
   }
 }
 ```
 
+- `notifications` 테이블에 `event_id` 컬럼 + `UNIQUE(event_id, receiver_id)` 제약을 두고, 저장 전에
+  `existsByEventIdAndReceiverId`로 이미 처리된 조합을 걸러냅니다 — 상세는 `NotificationService.create(eventId,
+  event)` 참고.
 - `id`를 명시적으로 붙입니다 — 테스트에서 `KafkaListenerEndpointRegistry.getListenerContainer(id)`로 컨테이너를 조회할
   때 필요합니다(아래 테스트 참고).
 - 역직렬화 실패는 여기서 잡지 않고 그대로 던집니다 — `KafkaConfig`의 공용 에러 핸들러(재시도 2회 후 DLT)가 처리하도록
