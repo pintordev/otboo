@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.RepresentativeSlotSelector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -40,6 +41,7 @@ public class WeatherSuddenChangeChunkProcessor {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final WeatherRepository weatherRepository;
+  private final RepresentativeSlotSelector representativeSlotSelector;
   private final ProfileRepository profileRepository;
   private final WeatherD1BaselineRepository weatherD1BaselineRepository;
   private final WeatherChangeEvaluator weatherChangeEvaluator;
@@ -57,21 +59,34 @@ public class WeatherSuddenChangeChunkProcessor {
     return new ChunkResult(d0Notified, d1Notified);
   }
 
-  // baseTime과 정확히 일치하는 슬롯만 청크 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
-  // 따로 조회하지 않으므로 N+1이 없다(#163). RepresentativeSlotSelector는 여기서 필요 없다 -
-  // baseTime은 근접일 그리드와 항상 거리 0으로 정확히 일치한다.
+  // baseTime 정각 슬롯은 기상청 응답에 없다(슬롯은 baseTime+1h부터 시작 - 실측 확인함) - 당일
+  // 슬롯 중 baseTime과 가장 가까운 슬롯을 대표로 삼는다. RepresentativeSlotSelector는 호출부가
+  // 이미 같은 날짜로 필터링한 리스트를 넘긴다는 전제로 동작한다 - 그리드별로 당일 범위 쿼리
+  // 결과를 미리 그룹핑해서 넘기므로 이 전제를 만족한다.
   int handleD0(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today) {
     List<UUID> gridIds = chunk.stream().map(WeatherGrid::getId).toList();
-    List<Weather> targets = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAt(gridIds, baseTime.toInstant());
+    Instant from = today.atStartOfDay(KST).toInstant();
+    Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
+    Map<UUID, List<Weather>> slotsByGridId = weatherRepository
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+            to)
+        .stream()
+        .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
 
     int notified = 0;
-    for (Weather target : targets) {
-      if (!hasCompleteBaseline(target)) {
-        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.getId());
+    for (WeatherGrid grid : chunk) {
+      List<Weather> todaySlots = slotsByGridId.getOrDefault(grid.getId(), List.of());
+      Optional<Weather> target = representativeSlotSelector.select(todaySlots, baseTime.toInstant());
+      if (target.isEmpty()) {
+        log.warn("당일 슬롯이 없어 D0 평가를 건너뜀: weatherGridId={}, baseTime={}", grid.getId(),
+            baseTime.baseTime());
         continue;
       }
-      if (evaluateD0(target)) {
+      if (!hasCompleteBaseline(target.get())) {
+        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.get().getId());
+        continue;
+      }
+      if (evaluateD0(target.get())) {
         notified++;
       }
     }

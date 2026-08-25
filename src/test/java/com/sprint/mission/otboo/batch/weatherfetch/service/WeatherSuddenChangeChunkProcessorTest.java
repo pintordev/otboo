@@ -27,6 +27,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.RepresentativeSlotSelector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator.ChangeResult;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
@@ -69,6 +70,8 @@ class WeatherSuddenChangeChunkProcessorTest {
   @Mock
   private WeatherRepository weatherRepository;
   @Mock
+  private RepresentativeSlotSelector representativeSlotSelector;
+  @Mock
   private ProfileRepository profileRepository;
   @Mock
   private WeatherD1BaselineRepository weatherD1BaselineRepository;
@@ -83,8 +86,9 @@ class WeatherSuddenChangeChunkProcessorTest {
 
   @BeforeEach
   void setUp() {
-    processor = new WeatherSuddenChangeChunkProcessor(weatherRepository, profileRepository,
-        weatherD1BaselineRepository, weatherChangeEvaluator, eventPublisher, CLOCK);
+    processor = new WeatherSuddenChangeChunkProcessor(weatherRepository, representativeSlotSelector,
+        profileRepository, weatherD1BaselineRepository, weatherChangeEvaluator, eventPublisher,
+        CLOCK);
     logger = (Logger) LoggerFactory.getLogger(WeatherSuddenChangeChunkProcessor.class);
     appender = new ListAppender<>();
     appender.start();
@@ -144,8 +148,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       processor.handleD0(List.of(gridA, gridB), baseTime, today);
 
       // then
-      verify(weatherRepository, times(1)).findAllByWeatherGridIdInAndForecastAt(
-          List.of(gridA.getId(), gridB.getId()), baseTime.toInstant());
+      verify(weatherRepository, times(1))
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+              List.of(gridA.getId(), gridB.getId()),
+              today.atStartOfDay(KST).toInstant(), today.plusDays(1).atStartOfDay(KST).toInstant());
     }
 
     @Test
@@ -156,8 +162,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
@@ -184,8 +193,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 20.5);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
 
       // when
       int notified = processor.handleD0(List.of(grid), baseTime, today);
@@ -206,8 +218,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather incomplete = weatherWithNullBaseline(grid, baseTime.toInstant());
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(incomplete));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(incomplete));
+      given(representativeSlotSelector.select(List.of(incomplete), baseTime.toInstant()))
+          .willReturn(Optional.of(incomplete));
 
       // when
       int notified = processor.handleD0(List.of(grid), baseTime, today);
@@ -231,6 +246,8 @@ class WeatherSuddenChangeChunkProcessorTest {
       Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
           List.of(grid.getId()), from, to)).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
@@ -258,8 +275,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
@@ -286,8 +306,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
@@ -322,8 +345,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
@@ -628,7 +654,9 @@ class WeatherSuddenChangeChunkProcessorTest {
       // then
       assertThat(result.d0Notified()).isZero();
       assertThat(result.d1Notified()).isZero();
-      verify(weatherRepository, never()).findAllByWeatherGridIdInAndForecastAt(any(), any());
+      verify(weatherRepository, never())
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(), any(),
+              any());
       verify(weatherD1BaselineRepository, never())
           .findAllByWeatherGridIdInAndTargetDate(any(), any());
     }
@@ -644,8 +672,11 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate d2Date = LocalDate.parse("2026-07-29");
 
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAt(List.of(grid.getId()),
-          baseTime.toInstant())).willReturn(List.of(target));
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
+          today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
+      given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
+          .willReturn(Optional.of(target));
       given(weatherChangeEvaluator.evaluate(WeatherChangeSnapshot.baselineOf(target),
           WeatherChangeSnapshot.currentOf(target)))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
