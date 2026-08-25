@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -94,7 +95,7 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
       List<NotificationDto> notificationDtos = List.of(new NotificationDto(
           UUID.randomUUID(), Instant.now(), event.receiverIds().iterator().next(), "제목", "내용",
           NotificationLevel.INFO));
-      given(notificationService.create(event)).willReturn(notificationDtos);
+      given(notificationService.create(any(), eq(event))).willReturn(notificationDtos);
 
       // when
       kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
@@ -114,7 +115,7 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
     @DisplayName("컨슈머가_계속_실패하면_재시도_소진_후_DLT_토픽으로_전달된다")
     void 컨슈머가_계속_실패하면_재시도_소진_후_DLT_토픽으로_전달된다() {
       // given
-      given(notificationService.create(any())).willThrow(new RuntimeException("강제 실패"));
+      given(notificationService.create(any(), any())).willThrow(new RuntimeException("강제 실패"));
       NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(NotificationRequestedEvent.class)
           .set("receiverIds", Set.of(UUID.randomUUID()))
           .set("title", "제목")
@@ -138,7 +139,7 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
       ConsumerRecord<String, String> dltRecord =
           KafkaTestUtils.getSingleRecord(dltConsumer, DLT_TOPIC, Duration.ofSeconds(10));
       assertThat(dltRecord.value()).isEqualTo(payload);
-      verify(notificationService, times(3)).create(any());
+      verify(notificationService, times(3)).create(any(), any());
 
       dltConsumer.close();
     }

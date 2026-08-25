@@ -26,10 +26,15 @@ public class NotificationService {
   private final NotificationMapper notificationMapper;
 
   @Transactional
-  public List<NotificationDto> create(NotificationRequestedEvent event) {
+  public List<NotificationDto> create(UUID eventId, NotificationRequestedEvent event) {
     List<Notification> notifications = event.receiverIds().stream()
-        .map(receiverId -> Notification.create(null, receiverId, event.title(), event.content(), event.level()))
+        .filter(receiverId -> !notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
+        .map(receiverId -> Notification.create(
+            eventId, receiverId, event.title(), event.content(), event.level()))
         .toList();
+    if (notifications.isEmpty()) {
+      return List.of();
+    }
     return notificationRepository.saveAll(notifications).stream()
         .map(notificationMapper::toDto)
         .toList();

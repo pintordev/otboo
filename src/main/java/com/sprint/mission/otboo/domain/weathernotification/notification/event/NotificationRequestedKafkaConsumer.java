@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.notification.service.
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -24,7 +25,7 @@ public class NotificationRequestedKafkaConsumer {
       groupId = "notification-requested-consumer")
   public void consume(String payload) {
     NotificationRequestedEvent event = objectMapper.readValue(payload, NotificationRequestedEvent.class);
-    List<NotificationDto> notificationDtos = notificationService.create(event);
+    List<NotificationDto> notificationDtos = notificationService.create(UUID.randomUUID(), event);
     sseService.send(notificationDtos, "notifications");
   }
 }
