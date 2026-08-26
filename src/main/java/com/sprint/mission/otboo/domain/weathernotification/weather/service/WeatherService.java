@@ -21,9 +21,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 // 클래스 레벨 @Transactional(readOnly = true)를 두지 않는다 - WeatherRefresher와 동일한 이유로,
@@ -45,6 +49,66 @@ public class WeatherService {
   private final WeatherMapper weatherMapper;
   private final RepresentativeSlotSelector representativeSlotSelector;
   private final Clock clock;
+  private final WeatherCacheProvider weatherCacheProvider;
+  @Qualifier("weatherRefreshExecutor")
+  private final Executor weatherRefreshExecutor;
+  @Qualifier("kakaoLocationExecutor")
+  private final Executor kakaoLocationExecutor;
+
+  // 결정 1의 3단(캐시→DB→재조회) 조회 - 캐시/위치 어느 쪽이 느려도 Tomcat 워커 스레드를 블로킹하지 않는다.
+  public CompletableFuture<List<WeatherDto>> getWeatherAsync(double latitude, double longitude) {
+    KmaGridPoint grid = toGrid(latitude, longitude);
+    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
+    LocalDate today = LocalDate.now(clock.withZone(KST));
+    LocalDate yesterday = today.minusDays(1);
+    Instant from = yesterday.atStartOfDay(KST).toInstant();
+    BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
+
+    List<Weather> cachedSlots = weatherCacheProvider.findCachedSlots(weatherGrid);
+    CompletableFuture<List<Weather>> weatherFuture = isStale(cachedSlots, today, latestBaseTime)
+        ? fetchFreshAsync(weatherGrid, grid, latestBaseTime, from, today)
+        : CompletableFuture.completedFuture(cachedSlots);
+
+    CompletableFuture<List<String>> locationFuture = locationResolver
+        .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
+        .orTimeout(5, TimeUnit.SECONDS);
+
+    return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
+            representativesFrom(slots, today).stream()
+                .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude, locationNames))
+                .toList())
+        .exceptionally(ex -> {
+          log.warn("날씨/위치 조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
+          List<Weather> fallbackSlots = weatherRepository
+              .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
+          List<String> fallbackNames = List.of();
+          return representativesFrom(fallbackSlots, today).stream()
+              .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude, fallbackNames))
+              .toList();
+        });
+  }
+
+  private CompletableFuture<List<Weather>> fetchFreshAsync(WeatherGrid weatherGrid,
+      KmaGridPoint grid, BaseTime latestBaseTime, Instant from, LocalDate today) {
+    List<Weather> dbSlots = weatherRepository
+        .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
+    if (!isStale(dbSlots, today, latestBaseTime)) {
+      weatherCacheProvider.putSlots(weatherGrid, dbSlots);
+      return CompletableFuture.completedFuture(dbSlots);
+    }
+    return weatherRefresher
+        .refreshSlotsAsync(weatherGrid, grid, latestBaseTime, dbSlots, weatherRefreshExecutor)
+        .orTimeout(5, TimeUnit.SECONDS);
+  }
+
+  // 기존 동기 getWeather()의 stale 판정과 완전히 동일 - 오늘 대표 슬롯 하나만 본다.
+  private boolean isStale(List<Weather> candidateSlots, LocalDate today, BaseTime latestBaseTime) {
+    Weather todayRepresentative = representativeSlotSelector
+        .select(slotsOfDate(candidateSlots, today), clock.instant())
+        .orElse(null);
+    return todayRepresentative == null
+        || todayRepresentative.getForecastedAt().isBefore(latestBaseTime.toInstant());
+  }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
