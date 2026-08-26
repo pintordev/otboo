@@ -3,6 +3,8 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.config.WeatherCacheConfigurationContributor;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
@@ -35,6 +37,11 @@ import org.springframework.test.context.DynamicPropertySource;
 })
 class WeatherCacheProviderTest implements RedisTestContainerSupport {
 
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
+      .build();
+
   @DynamicPropertySource
   static void redisProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.data.redis.host", REDIS_CONTAINER::getHost);
@@ -58,7 +65,10 @@ class WeatherCacheProviderTest implements RedisTestContainerSupport {
   }
 
   private static WeatherGrid fixtureWeatherGrid(int x, int y) {
-    return WeatherGrid.create(x, y);
+    return ENTITY_FIXTURE_MONKEY.giveMeBuilder(WeatherGrid.class)
+        .set("x", x)
+        .set("y", y)
+        .sample();
   }
 
   private static Weather weatherWithForecastedAt(WeatherGrid weatherGrid, Instant forecastedAt) {

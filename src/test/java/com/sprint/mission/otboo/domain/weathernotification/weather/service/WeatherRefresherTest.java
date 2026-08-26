@@ -13,6 +13,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -55,6 +56,10 @@ class WeatherRefresherTest {
 
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
       .build();
   private static final BaseTime BASE_TIME = new BaseTime("20260727", "1700");
   private static final KmaGridPoint GRID = new KmaGridPoint(60, 127);
@@ -227,9 +232,12 @@ class WeatherRefresherTest {
     @Test
     @DisplayName("로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다")
     void 로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다() {
-      // given - 미영속 WeatherGrid는 id가 null이라 lock key에 식별자가 실제로 들어가는지
-      // 검증할 수 없으므로, id를 직접 채워서 기대 키를 별도로 구성한다
-      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      // given - lock key에 식별자가 실제로 들어가는지 검증할 수 있도록 id를 직접 채워서
+      // 기대 키를 별도로 구성한다
+      WeatherGrid weatherGrid = ENTITY_FIXTURE_MONKEY.giveMeBuilder(WeatherGrid.class)
+          .set("x", 60)
+          .set("y", 127)
+          .sample();
       UUID weatherGridId = UUID.randomUUID();
       ReflectionTestUtils.setField(weatherGrid, "id", weatherGridId);
       List<Weather> dbSlots = List.of();
