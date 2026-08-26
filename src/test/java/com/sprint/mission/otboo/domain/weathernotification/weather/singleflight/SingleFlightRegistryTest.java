@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -40,9 +41,15 @@ class SingleFlightRegistryTest implements RedisTestContainerSupport {
   @Autowired
   private StringRedisTemplate redisTemplate;
 
+  @BeforeEach
+  void setUp() {
+    // 이전 테스트가 예외로 중단돼도 상태가 남지 않도록 시작 시점에도 비워 둔다
+    redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+  }
+
   @AfterEach
   void cleanUp() {
-    redisTemplate.delete("lock:test-key");
+    redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
   }
 
   @Nested
