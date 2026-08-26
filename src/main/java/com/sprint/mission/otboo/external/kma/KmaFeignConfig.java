@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.external.kma;
 
 import com.sprint.mission.otboo.external.kma.exception.KmaApiException;
 import feign.Logger;
+import feign.Request;
 import feign.codec.ErrorDecoder;
 import org.springframework.context.annotation.Bean;
 
@@ -13,6 +14,14 @@ public class KmaFeignConfig {
   @Bean
   public Logger.Level kmaFeignLoggerLevel() {
     return Logger.Level.NONE;
+  }
+
+  // Feign 기본 타임아웃(connect 10s, read 60s)은 SingleFlightRegistry의 lock TTL보다 훨씬
+  // 길다 - 이 호출을 포함한 work가 락 만료 전에 반드시 끝나도록 KmaFeignProperties로 줄인다.
+  // SingleFlightLeaseTimeoutValidator가 기동 시점에 lock TTL보다 충분히 짧은지 검증한다.
+  @Bean
+  public Request.Options kmaFeignOptions(KmaFeignProperties kmaFeignProperties) {
+    return new Request.Options(kmaFeignProperties.connect(), kmaFeignProperties.read(), true);
   }
 
   @Bean

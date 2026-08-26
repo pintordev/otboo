@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.singleflight;
 
+import com.sprint.mission.otboo.domain.weathernotification.weather.config.SingleFlightProperties;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
@@ -20,12 +20,8 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SingleFlightRegistry implements MessageListener {
 
-  private static final Duration LOCK_TTL = Duration.ofSeconds(10);
-  // 신호 유실(lost wakeup) 시에도 future가 반드시 완료되도록 두는 대기 상한 - 락 TTL보다 넉넉하게 잡는다
-  private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(15);
   // 리더가 계속 실패할 때 무한 재귀로 락 획득·외부 호출을 반복하지 않도록 두는 재시도 한도
   private static final int MAX_RETRIES = 3;
   private static final String CHANNEL_PREFIX = "single-flight:";
@@ -39,7 +35,20 @@ public class SingleFlightRegistry implements MessageListener {
       """, Long.class);
 
   private final StringRedisTemplate redisTemplate;
+  // work(외부 API 호출 + 저장)가 이 시간 안에 끝난다는 전제가 있다 - lease 갱신은 하지 않으므로,
+  // kma/kakao Feign 타임아웃 합이 이 값보다 충분히 짧아야 한다(SingleFlightLeaseTimeoutValidator가
+  // 기동 시점에 검증).
+  private final Duration lockTtl;
+  // 신호 유실(lost wakeup) 시에도 future가 반드시 완료되도록 두는 대기 상한 - 락 TTL보다 넉넉하게 잡는다
+  private final Duration waitTimeout;
   private final Map<String, CompletableFuture<String>> waiters = new ConcurrentHashMap<>();
+
+  public SingleFlightRegistry(StringRedisTemplate redisTemplate,
+      SingleFlightProperties singleFlightProperties) {
+    this.redisTemplate = redisTemplate;
+    this.lockTtl = singleFlightProperties.lockTtl();
+    this.waitTimeout = lockTtl.plusSeconds(5);
+  }
 
   public <T> CompletableFuture<T> execute(
       String key, Supplier<T> work, Executor executor, Supplier<Optional<T>> reload) {
@@ -54,7 +63,7 @@ public class SingleFlightRegistry implements MessageListener {
     // reload 확인과 waiter 등록 사이에 리더의 done 발행이 끼면 신호를 영영 못 받으므로,
     // 락 시도보다도 먼저 waiter부터 등록해 둔다
     CompletableFuture<String> signal = waitForSignal(key);
-    Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
+    Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, token, lockTtl);
 
     if (Boolean.TRUE.equals(acquired)) {
       waiters.remove(key, signal); // 내가 리더면 이 waiter는 필요 없다
@@ -72,7 +81,7 @@ public class SingleFlightRegistry implements MessageListener {
     }
     return signal
         // 신호가 유실돼도 이 future는 반드시 완료되게 대기 상한을 둔다
-        .completeOnTimeout("timeout", WAIT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+        .completeOnTimeout("timeout", waitTimeout.toMillis(), TimeUnit.MILLISECONDS)
         .thenCompose(received -> {
           if (!"failed".equals(received)) {
             return CompletableFuture.completedFuture(reload.get().orElse(null));
