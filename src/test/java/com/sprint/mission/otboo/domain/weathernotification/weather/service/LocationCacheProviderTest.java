@@ -6,6 +6,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.config.LocationCacheConfigurationContributor;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Location;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.LocationRepository;
@@ -35,6 +37,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     LocationCacheProvider.class
 })
 class LocationCacheProviderTest implements RedisTestContainerSupport {
+
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
+      .build();
 
   @DynamicPropertySource
   static void redisProperties(DynamicPropertyRegistry registry) {
@@ -102,7 +109,11 @@ class LocationCacheProviderTest implements RedisTestContainerSupport {
     @DisplayName("DB에_있어도_지역명_목록이_비어있으면_캐시하지_않는다")
     void DB에_있어도_지역명_목록이_비어있으면_캐시하지_않는다() {
       // given - null 분기가 아니라 unless의 isEmpty() 분기를 직접 검증
-      Location location = Location.create(1, 1, List.of());
+      Location location = ENTITY_FIXTURE_MONKEY.giveMeBuilder(Location.class)
+          .set("latBlock", 1)
+          .set("lonBlock", 1)
+          .set("locationNames", List.<String>of())
+          .sample();
       given(locationRepository.findByLatBlockAndLonBlock(1, 1)).willReturn(Optional.of(location));
 
       // when
