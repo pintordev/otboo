@@ -79,9 +79,13 @@ public class SingleFlightRegistry implements MessageListener {
       waiters.remove(key, signal);
       return CompletableFuture.completedFuture(reloaded.get());
     }
-    return signal
-        // 신호가 유실돼도 이 future는 반드시 완료되게 대기 상한을 둔다
-        .completeOnTimeout("timeout", waitTimeout.toMillis(), TimeUnit.MILLISECONDS)
+    // 신호가 유실돼도 이 future는 반드시 완료되게 대기 상한을 둔다
+    CompletableFuture<String> boundedSignal =
+        signal.completeOnTimeout("timeout", waitTimeout.toMillis(), TimeUnit.MILLISECONDS);
+    // onMessage가 이미 지웠다면 no-op, 신호 유실로 타임아웃됐다면 여기서 정리한다.
+    // 조건부 remove라 그 사이 재등록된 새 waiter는 건드리지 않는다.
+    boundedSignal.whenComplete((ignored, ex) -> waiters.remove(key, signal));
+    return boundedSignal
         .thenCompose(received -> {
           if (!"failed".equals(received)) {
             return CompletableFuture.completedFuture(reload.get().orElse(null));
