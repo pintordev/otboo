@@ -101,24 +101,30 @@ class WeatherControllerTest {
           .set("y", 127)
           .set("locationNames", List.of("서울특별시", "중구", "명동"))
           .sample();
-      given(weatherService.getLocation(anyDouble(), anyDouble())).willReturn(locationDto);
+      given(weatherService.getLocationAsync(anyDouble(), anyDouble()))
+          .willReturn(CompletableFuture.completedFuture(locationDto));
 
-      // when & then
-      mockMvc.perform(get("/api/weathers/location")
+      // when
+      MvcResult mvcResult = mockMvc.perform(get("/api/weathers/location")
               .param("longitude", "126.9884121")
               .param("latitude", "37.5674783"))
+          .andExpect(request().asyncStarted())
+          .andReturn();
+
+      // then
+      mockMvc.perform(asyncDispatch(mvcResult))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.x").value(60))
           .andExpect(jsonPath("$.y").value(127))
           .andExpect(jsonPath("$.locationNames[0]").value("서울특별시"));
-      verify(weatherService).getLocation(37.5674783, 126.9884121);
+      verify(weatherService).getLocationAsync(37.5674783, 126.9884121);
     }
 
     @Test
     @DisplayName("한반도_범위_밖_좌표로_조회하면_400을_반환한다")
     void 한반도_범위_밖_좌표로_조회하면_400을_반환한다() throws Exception {
-      // given
-      given(weatherService.getLocation(anyDouble(), anyDouble()))
+      // given - toGrid()가 DeferredResult 생성 전에 동기적으로 던지므로 async dispatch 불필요
+      given(weatherService.getLocationAsync(anyDouble(), anyDouble()))
           .willThrow(InvalidCoordinateException.of(10.0, 127.0));
 
       // when & then
