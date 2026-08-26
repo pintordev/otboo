@@ -29,6 +29,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -53,6 +55,12 @@ class WeatherServiceTest {
   private LocationResolver locationResolver;
   @Mock
   private WeatherMapper weatherMapper;
+  @Mock
+  private WeatherCacheProvider weatherCacheProvider;
+  @Mock
+  private Executor weatherRefreshExecutor;
+  @Mock
+  private Executor kakaoLocationExecutor;
 
   private WeatherService weatherService;
 
@@ -61,7 +69,8 @@ class WeatherServiceTest {
     // 2026-07-27 18:00 KST 고정 - 17시 발표가 최신
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
     weatherService = new WeatherService(weatherRepository, weatherRefresher, locationResolver,
-        weatherMapper, new RepresentativeSlotSelector(), clock);
+        weatherMapper, new RepresentativeSlotSelector(), clock, weatherCacheProvider,
+        weatherRefreshExecutor, kakaoLocationExecutor);
   }
 
   @Nested
@@ -353,6 +362,121 @@ class WeatherServiceTest {
       assertThatThrownBy(() -> weatherService.getLocation(10.0, 127.0))
           .isInstanceOf(InvalidCoordinateException.class);
       verifyNoInteractions(locationResolver);
+    }
+  }
+
+  @Nested
+  @DisplayName("GetWeatherAsync")
+  class GetWeatherAsync {
+
+    @Test
+    @DisplayName("캐시가_fresh이면_DB와_재조회_없이_캐시_값으로_응답한다")
+    void 캐시가_fresh이면_DB와_재조회_없이_캐시_값으로_응답한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+
+      Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Weather cachedSlot = Weather.create(weatherGrid, freshForecastedAt,
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE,
+          0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null,
+          null);
+      given(weatherCacheProvider.findCachedSlots(weatherGrid)).willReturn(List.of(cachedSlot));
+
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.completedFuture(locationNames));
+
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(cachedSlot, weatherGrid, latitude, longitude, locationNames))
+          .willReturn(expectedDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeatherAsync(latitude, longitude).join();
+
+      // then
+      assertThat(result).containsExactly(expectedDto);
+      verifyNoInteractions(weatherRepository, weatherRefresher);
+    }
+
+    @Test
+    @DisplayName("캐시는_stale이지만_DB가_fresh이면_캐시만_채우고_재조회는_안_한다")
+    void 캐시는_stale이지만_DB가_fresh이면_캐시만_채우고_재조회는_안_한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+      given(weatherCacheProvider.findCachedSlots(weatherGrid)).willReturn(List.of());
+
+      Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Weather dbSlot = Weather.create(weatherGrid, freshForecastedAt,
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE,
+          0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null,
+          null);
+      given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
+          any())).willReturn(List.of(dbSlot));
+
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.completedFuture(locationNames));
+
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(dbSlot, weatherGrid, latitude, longitude, locationNames))
+          .willReturn(expectedDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeatherAsync(latitude, longitude).join();
+
+      // then
+      assertThat(result).containsExactly(expectedDto);
+      verifyNoInteractions(weatherRefresher);
+      verify(weatherCacheProvider).putSlots(weatherGrid, List.of(dbSlot));
+    }
+
+    @Test
+    @DisplayName("캐시와_DB_모두_stale이면_WeatherRefresher로_재조회한다")
+    void 캐시와_DB_모두_stale이면_WeatherRefresher로_재조회한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+      given(weatherCacheProvider.findCachedSlots(weatherGrid)).willReturn(List.of());
+      given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
+          any())).willReturn(List.of());
+
+      Weather refreshedSlot = Weather.create(weatherGrid, LATEST_BASE_TIME.toInstant(),
+          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
+      given(weatherRefresher.refreshSlotsAsync(eq(weatherGrid), eq(new KmaGridPoint(60, 127)),
+          eq(LATEST_BASE_TIME), eq(List.of()), eq(weatherRefreshExecutor)))
+          .willReturn(CompletableFuture.completedFuture(List.of(refreshedSlot)));
+
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.completedFuture(locationNames));
+
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(refreshedSlot, weatherGrid, latitude, longitude, locationNames))
+          .willReturn(expectedDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeatherAsync(latitude, longitude).join();
+
+      // then
+      assertThat(result).containsExactly(expectedDto);
     }
   }
 }
