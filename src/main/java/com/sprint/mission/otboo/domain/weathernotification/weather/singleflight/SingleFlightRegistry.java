@@ -26,6 +26,8 @@ public class SingleFlightRegistry implements MessageListener {
   private static final Duration LOCK_TTL = Duration.ofSeconds(10);
   // 신호 유실(lost wakeup) 시에도 future가 반드시 완료되도록 두는 대기 상한 - 락 TTL보다 넉넉하게 잡는다
   private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(15);
+  // 리더가 계속 실패할 때 무한 재귀로 락 획득·외부 호출을 반복하지 않도록 두는 재시도 한도
+  private static final int MAX_RETRIES = 3;
   private static final String CHANNEL_PREFIX = "single-flight:";
   // 내가 건 락만 지우는 compare-and-delete - GET한 값이 인자로 준 토큰과 같을 때만 DEL(원자적)
   private static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>("""
@@ -41,6 +43,12 @@ public class SingleFlightRegistry implements MessageListener {
 
   public <T> CompletableFuture<T> execute(
       String key, Supplier<T> work, Executor executor, Supplier<Optional<T>> reload) {
+    return execute(key, work, executor, reload, 0);
+  }
+
+  private <T> CompletableFuture<T> execute(
+      String key, Supplier<T> work, Executor executor, Supplier<Optional<T>> reload,
+      int attempt) {
     String lockKey = "lock:" + key;
     String token = UUID.randomUUID().toString(); // acquire마다 새 토큰 - 같은 인스턴스 재시도도 구분
     // reload 확인과 waiter 등록 사이에 리더의 done 발행이 끼면 신호를 영영 못 받으므로,
@@ -65,9 +73,17 @@ public class SingleFlightRegistry implements MessageListener {
     return signal
         // 신호가 유실돼도 이 future는 반드시 완료되게 대기 상한을 둔다
         .completeOnTimeout("timeout", WAIT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
-        .thenCompose(received -> "failed".equals(received)
-            ? execute(key, work, executor, reload) // 리더가 실패했고 락은 이미 풀려있음 - 내가 새 리더로 재시도
-            : CompletableFuture.completedFuture(reload.get().orElse(null)));
+        .thenCompose(received -> {
+          if (!"failed".equals(received)) {
+            return CompletableFuture.completedFuture(reload.get().orElse(null));
+          }
+          if (attempt >= MAX_RETRIES) {
+            return CompletableFuture.<T>failedFuture(new IllegalStateException(
+                "single-flight 리더가 반복 실패해 재시도 한도를 초과함: key=" + key));
+          }
+          // 리더가 실패했고 락은 이미 풀려있음 - 내가 새 리더로 재시도
+          return execute(key, work, executor, reload, attempt + 1);
+        });
   }
 
   private CompletableFuture<String> waitForSignal(String key) {
