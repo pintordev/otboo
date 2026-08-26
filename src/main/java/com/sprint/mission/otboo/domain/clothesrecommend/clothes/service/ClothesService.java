@@ -151,9 +151,7 @@ public class ClothesService {
     }
 
     if (image != null && !image.isEmpty()) {
-      String oldImageUrl = clothes.getImageUrl();
       clothes.changeImageUrl(fileStorageService.store(image, IMAGE_DOMAIN));
-      fileStorageService.delete(oldImageUrl);
     }
 
     Map<UUID, List<ClothesAttributeDefValue>> defValuesByDefId =

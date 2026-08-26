@@ -385,8 +385,8 @@ class ClothesServiceTest {
     }
 
     @Test
-    @DisplayName("이미지를 첨부해 수정하면 새 이미지를 저장하고 기존 이미지를 삭제한다")
-    void 이미지를_첨부해_수정하면_새_이미지를_저장하고_기존_이미지를_삭제한다() {
+    @DisplayName("이미지를 첨부해 수정하면 새 이미지를 저장하고 기존 이미지는 삭제하지 않는다")
+    void 이미지를_첨부해_수정하면_새_이미지를_저장하고_기존_이미지는_삭제하지_않는다() {
       // given
       UUID clothesId = UUID.randomUUID();
       UUID ownerId = UUID.randomUUID();
@@ -413,7 +413,7 @@ class ClothesServiceTest {
 
       // then
       verify(fileStorageService).store(image, "clothes");
-      verify(fileStorageService).delete("clothes/old.jpg");
+      verify(fileStorageService, never()).delete(any());
       assertThat(clothes.getImageUrl()).isEqualTo("clothes/new.jpg");
     }
 
@@ -442,7 +442,6 @@ class ClothesServiceTest {
 
       // then
       verify(fileStorageService, never()).store(any(), any());
-      verify(fileStorageService, never()).delete(any());
       assertThat(clothes.getImageUrl()).isEqualTo("clothes/old.jpg");
     }
 
@@ -479,8 +478,8 @@ class ClothesServiceTest {
     }
 
     @Test
-    @DisplayName("속성 검증에 실패하면 기존 이미지를 삭제하지 않고 새 이미지도 저장하지 않는다")
-    void 속성_검증에_실패하면_기존_이미지를_삭제하지_않고_새_이미지도_저장하지_않는다() {
+    @DisplayName("속성 검증에 실패하면 새 이미지를 저장하지 않는다")
+    void 속성_검증에_실패하면_새_이미지를_저장하지_않는다() {
       // given
       UUID clothesId = UUID.randomUUID();
       UUID invalidDefId = UUID.randomUUID();
@@ -500,7 +499,6 @@ class ClothesServiceTest {
       assertThatThrownBy(() -> clothesService.update(clothesId, request, image))
           .isInstanceOf(ClothesAttributeDefNotFoundException.class);
       verify(fileStorageService, never()).store(any(), any());
-      verify(fileStorageService, never()).delete(any());
       assertThat(clothes.getImageUrl()).isEqualTo("clothes/old.jpg");
     }
   }

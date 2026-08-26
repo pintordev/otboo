@@ -80,7 +80,7 @@ class WeatherRetentionJobIntegrationTest extends IntegrationTestSupport {
     Instant forecastAt = forecastDate.atStartOfDay(KST).toInstant();
     return Weather.create(weatherGrid, forecastAt.plusSeconds(1), forecastAt, SkyStatus.CLEAR,
         PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, 20.0, 0.0, 15.0, 25.0, 2.0,
-        WindStrength.WEAK, null, null, null, null);
+        WindStrength.WEAK, 20.0, PrecipitationType.NONE, 0.0, 0.0);
   }
 
   @Nested

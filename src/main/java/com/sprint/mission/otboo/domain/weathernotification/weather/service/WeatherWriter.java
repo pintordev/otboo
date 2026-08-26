@@ -54,6 +54,7 @@ public class WeatherWriter {
           temperature_max = EXCLUDED.temperature_max,
           wind_speed = EXCLUDED.wind_speed,
           wind_as_word = EXCLUDED.wind_as_word
+      WHERE weathers.forecasted_at < EXCLUDED.forecasted_at
       """;
 
   private final WeatherRepository weatherRepository;
@@ -127,8 +128,8 @@ public class WeatherWriter {
     });
 
     List<Instant> forecastAts = built.stream().map(Weather::getForecastAt).toList();
-    return weatherRepository.findAllByWeatherGridAndForecastedAtAndForecastAtInOrderByForecastAt(
-        weatherGrid, forecastedAt, forecastAts);
+    return weatherRepository.findAllByWeatherGridAndForecastAtInOrderByForecastAt(
+        weatherGrid, forecastAts);
   }
 
   private WindStrength toWindStrength(double speed) {

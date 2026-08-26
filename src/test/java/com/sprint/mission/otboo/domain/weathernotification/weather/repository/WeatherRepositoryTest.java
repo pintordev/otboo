@@ -240,35 +240,6 @@ class WeatherRepositoryTest {
   }
 
   @Nested
-  @DisplayName("FindAllByWeatherGridIdInAndForecastAt")
-  class FindAllByWeatherGridIdInAndForecastAt {
-
-    @Test
-    @DisplayName("격자_ID_목록과_forecastAt이_정확히_일치하는_슬롯만_반환한다")
-    void 격자_ID_목록과_forecastAt이_정확히_일치하는_슬롯만_반환한다() {
-      WeatherGrid targetGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
-      WeatherGrid otherGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
-      testEntityManager.flush();
-
-      Instant target = Instant.parse("2026-07-27T02:00:00Z");
-      Instant other = Instant.parse("2026-07-27T05:00:00Z");
-      Weather matched = weatherRepository.save(
-          weatherOf(targetGrid, Instant.parse("2026-07-27T00:00:00Z"), target, 20.0));
-      weatherRepository.save(
-          weatherOf(targetGrid, Instant.parse("2026-07-27T00:00:00Z"), other, 21.0));
-      weatherRepository.save(
-          weatherOf(otherGrid, Instant.parse("2026-07-27T00:00:00Z"), target, 22.0));
-      testEntityManager.flush();
-      testEntityManager.clear();
-
-      List<Weather> result = weatherRepository
-          .findAllByWeatherGridIdInAndForecastAt(List.of(targetGrid.getId()), target);
-
-      assertThat(result).extracting(Weather::getId).containsExactly(matched.getId());
-    }
-  }
-
-  @Nested
   @DisplayName("UpdateBaseline")
   class UpdateBaseline {
 

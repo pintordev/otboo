@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weathe
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
+import com.sprint.mission.otboo.domain.weathernotification.weather.service.RepresentativeSlotSelector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
@@ -40,6 +41,7 @@ public class WeatherSuddenChangeChunkProcessor {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final WeatherRepository weatherRepository;
+  private final RepresentativeSlotSelector representativeSlotSelector;
   private final ProfileRepository profileRepository;
   private final WeatherD1BaselineRepository weatherD1BaselineRepository;
   private final WeatherChangeEvaluator weatherChangeEvaluator;
@@ -52,35 +54,47 @@ public class WeatherSuddenChangeChunkProcessor {
   @Transactional
   public ChunkResult process(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today,
       boolean shouldHandleD0, boolean shouldHandleD1) {
-    int d0Notified = shouldHandleD0 ? handleD0(chunk, baseTime) : 0;
+    int d0Notified = shouldHandleD0 ? handleD0(chunk, baseTime, today) : 0;
     int d1Notified = shouldHandleD1 ? handleD1(chunk, today) : 0;
     return new ChunkResult(d0Notified, d1Notified);
   }
 
-  // baseTime과 정확히 일치하는 슬롯만 청크 전체에 대해 쿼리 1번으로 가져온다 - 그리드마다
-  // 따로 조회하지 않으므로 N+1이 없다(#163). RepresentativeSlotSelector는 여기서 필요 없다 -
-  // baseTime은 근접일 그리드와 항상 거리 0으로 정확히 일치한다.
-  int handleD0(List<WeatherGrid> chunk, BaseTime baseTime) {
+  // baseTime 정각 슬롯은 기상청 응답에 없다(슬롯은 baseTime+1h부터 시작 - 실측 확인함) - 당일
+  // 슬롯 중 baseTime과 가장 가까운 슬롯을 대표로 삼는다. RepresentativeSlotSelector는 호출부가
+  // 이미 같은 날짜로 필터링한 리스트를 넘긴다는 전제로 동작한다 - 그리드별로 당일 범위 쿼리
+  // 결과를 미리 그룹핑해서 넘기므로 이 전제를 만족한다.
+  int handleD0(List<WeatherGrid> chunk, BaseTime baseTime, LocalDate today) {
     List<UUID> gridIds = chunk.stream().map(WeatherGrid::getId).toList();
-    List<Weather> targets = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAt(gridIds, baseTime.toInstant());
+    Instant from = today.atStartOfDay(KST).toInstant();
+    Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
+    Map<UUID, List<Weather>> slotsByGridId = weatherRepository
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+            to)
+        .stream()
+        .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
 
     int notified = 0;
-    for (Weather target : targets) {
-      if (!hasCompleteBaseline(target)) {
-        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.getId());
+    for (WeatherGrid grid : chunk) {
+      List<Weather> todaySlots = slotsByGridId.getOrDefault(grid.getId(), List.of());
+      Optional<Weather> target = representativeSlotSelector.select(todaySlots, baseTime.toInstant());
+      if (target.isEmpty()) {
+        log.warn("당일 슬롯이 없어 D0 평가를 건너뜀: weatherGridId={}, baseTime={}", grid.getId(),
+            baseTime.baseTime());
         continue;
       }
-      if (evaluateD0(target)) {
+      if (!hasCompleteBaseline(target.get())) {
+        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.get().getId());
+        continue;
+      }
+      if (evaluateD0(target.get())) {
         notified++;
       }
     }
     return notified;
   }
 
-  // 정상 쓰기 경로(WeatherWriter.buildSlots())에서는 baseline_*이 첫 insert 때 항상 함께
-  // 채워지므로 실제로는 도달하지 않지만, WeatherChangeSnapshot.baselineOf()의 언박싱
-  // NPE를 방어한다.
+  // baseline_* 컬럼이 DB 레벨 NOT NULL이라 이론상 도달 불가능하지만, WeatherChangeSnapshot
+  // .baselineOf()의 언박싱 NPE를 막는 값싼 방어선이라 남겨둔다.
   private boolean hasCompleteBaseline(Weather weather) {
     return weather.getBaselineTemperatureCurrent() != null
         && weather.getBaselinePrecipitationType() != null
@@ -155,8 +169,16 @@ public class WeatherSuddenChangeChunkProcessor {
 
     List<WeatherD1Baseline> newBaselines = new ArrayList<>();
     for (WeatherGrid grid : chunk) {
-      Map<Instant, WeatherChangeSnapshot> hourlySnapshot = slotsByGridId
-          .getOrDefault(grid.getId(), List.of()).stream()
+      List<Weather> slots = slotsByGridId.getOrDefault(grid.getId(), List.of());
+      if (slots.isEmpty()) {
+        // 빈 스냅샷을 그대로 저장하면 다음 날 compareD1AndNotify()가 "row는 있는데 전부
+        // null"이라는 걸 구분 못 해 경고 없이 조용히 스킵된다 - 아예 저장하지 않고 원인이
+        // 로그에 드러나게 한다.
+        log.warn("당일 슬롯이 없어 D2 스냅샷 캡처를 건너뜀: weatherGridId={}, d2Date={}",
+            grid.getId(), d2Date);
+        continue;
+      }
+      Map<Instant, WeatherChangeSnapshot> hourlySnapshot = slots.stream()
           .collect(Collectors.toMap(Weather::getForecastAt, WeatherChangeSnapshot::currentOf));
       WeatherD1Baseline existing = existingByGridId.get(grid.getId());
       if (existing != null) {

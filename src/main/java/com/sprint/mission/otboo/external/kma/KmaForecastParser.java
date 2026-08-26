@@ -24,7 +24,6 @@ public class KmaForecastParser {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
-  private static final int MIN_SLOT_COUNT = 4;
 
   // 슬롯 단위 파싱 - 날짜별 대표시각 1개로 압축하지 않고, distinct
   // fcstTime마다 슬롯 DTO를 그대로 만든다. now 파라미터가 없다 - 어느 슬롯도 "지금과 가장
@@ -36,7 +35,7 @@ public class KmaForecastParser {
     List<WeatherForecastSlotDto> result = new ArrayList<>();
     for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
       List<Item> dayItems = entry.getValue();
-      if (!hasEnoughSlots(dayItems) || !hasTemperatureData(dayItems)) {
+      if (!hasTemperatureData(dayItems)) {
         continue;
       }
       LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
@@ -117,11 +116,6 @@ public class KmaForecastParser {
 
   private record DailyTemperatureRange(double min, double max) {
 
-  }
-
-  private boolean hasEnoughSlots(List<Item> dayItems) {
-    long distinctSlotCount = dayItems.stream().map(Item::fcstTime).distinct().count();
-    return distinctSlotCount >= MIN_SLOT_COUNT;
   }
 
   private boolean hasTemperatureData(List<Item> dayItems) {

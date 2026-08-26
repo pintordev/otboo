@@ -25,10 +25,12 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+// 클래스 레벨 @Transactional(readOnly = true)를 두지 않는다 - WeatherRefresher와 동일한 이유로,
+// getWeather()가 stale일 때 refreshSlots()(Feign 호출)를 그대로 감싸면 그 대기 시간 내내
+// DB 커넥션을 쥐고 있게 된다. 쓰기가 필요한 지점(WeatherWriter.saveSlots())은 이미 자체
+// REQUIRES_NEW를 갖고 있고, 읽기 쿼리는 repository 메서드 자체가 개별 처리한다.
 @Slf4j
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Service
 public class WeatherService {

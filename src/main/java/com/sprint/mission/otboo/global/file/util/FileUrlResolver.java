@@ -20,4 +20,13 @@ public class FileUrlResolver {
     String trimmedKey = StringUtils.trimLeadingCharacter(key, '/');
     return baseUrl + "/" + trimmedKey;
   }
+
+  public String extractKey(String url) {
+    if (url == null) {
+      return null;
+    }
+
+    String prefix = StringUtils.trimTrailingCharacter(fileProperties.publicBaseUrl(), '/') + "/";
+    return url.startsWith(prefix) ? url.substring(prefix.length()) : url;
+  }
 }

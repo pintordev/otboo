@@ -88,17 +88,17 @@ public class Weather {
   @Column(name = "wind_as_word", nullable = false)
   private WindStrength windAsWord;
 
-  @Column(name = "baseline_temperature_current")
+  @Column(name = "baseline_temperature_current", nullable = false)
   private Double baselineTemperatureCurrent;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "baseline_precipitation_type")
+  @Column(name = "baseline_precipitation_type", nullable = false)
   private PrecipitationType baselinePrecipitationType;
 
-  @Column(name = "baseline_precipitation_probability")
+  @Column(name = "baseline_precipitation_probability", nullable = false)
   private Double baselinePrecipitationProbability;
 
-  @Column(name = "baseline_precipitation_amount")
+  @Column(name = "baseline_precipitation_amount", nullable = false)
   private Double baselinePrecipitationAmount;
 
   @CreatedDate
