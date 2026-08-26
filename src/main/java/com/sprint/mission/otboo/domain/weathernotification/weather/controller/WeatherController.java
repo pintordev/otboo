@@ -4,6 +4,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.controller.ap
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherService;
+import com.sprint.mission.otboo.global.dto.ErrorResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,7 +37,7 @@ public class WeatherController implements WeatherApi {
         .whenComplete((result, ex) -> {
           if (ex != null) {
             deferredResult.setErrorResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .build());
+                .body(toErrorResponse(ex)));
           } else {
             deferredResult.setResult(ResponseEntity.ok(result));
           }
@@ -55,11 +56,17 @@ public class WeatherController implements WeatherApi {
         .whenComplete((result, ex) -> {
           if (ex != null) {
             deferredResult.setErrorResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .build());
+                .body(toErrorResponse(ex)));
           } else {
             deferredResult.setResult(ResponseEntity.ok(result));
           }
         });
     return deferredResult;
+  }
+
+  private ErrorResponse toErrorResponse(Throwable ex) {
+    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+    return new ErrorResponse(cause.getClass().getSimpleName(), "날씨 조회 서비스를 일시적으로 이용할 수 없습니다.",
+        null);
   }
 }
