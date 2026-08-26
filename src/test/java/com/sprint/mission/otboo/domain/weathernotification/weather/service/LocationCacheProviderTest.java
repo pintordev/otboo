@@ -83,9 +83,12 @@ class LocationCacheProviderTest implements RedisTestContainerSupport {
 
       // when
       Optional<List<String>> result = locationCacheProvider.findCachedLocationNames(0, 0);
+      locationCacheProvider.findCachedLocationNames(0, 0);
 
       // then
       assertThat(result).isEmpty();
+      // 빈 결과는 캐시되지 않아야 하므로 두 번 모두 DB를 조회한다
+      verify(locationRepository, times(2)).findByLatBlockAndLonBlock(0, 0);
     }
   }
 }
