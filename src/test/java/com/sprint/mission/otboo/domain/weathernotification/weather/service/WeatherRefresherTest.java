@@ -74,6 +74,8 @@ class WeatherRefresherTest {
   private SingleFlightRegistry singleFlightRegistry;
   @Mock
   private WeatherCacheProvider weatherCacheProvider;
+  private final RepresentativeSlotSelector representativeSlotSelector =
+      new RepresentativeSlotSelector();
 
   private WeatherRefresher weatherRefresher;
   private ListAppender<ILoggingEvent> appender;
@@ -84,7 +86,7 @@ class WeatherRefresherTest {
     // 2026-07-27 18:00 KST 고정 - 17시 발표가 최신
     Clock clock = Clock.fixed(Instant.parse("2026-07-27T09:00:00Z"), ZoneOffset.UTC);
     weatherRefresher = new WeatherRefresher(weatherRepository, kmaForecastFetcher, weatherWriter,
-        clock, singleFlightRegistry, weatherCacheProvider);
+        clock, singleFlightRegistry, weatherCacheProvider, representativeSlotSelector);
     logger = (Logger) LoggerFactory.getLogger(WeatherRefresher.class);
     appender = new ListAppender<>();
     appender.start();

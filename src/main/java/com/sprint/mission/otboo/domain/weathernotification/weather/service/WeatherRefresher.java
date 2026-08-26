@@ -45,6 +45,7 @@ public class WeatherRefresher {
   private final Clock clock;
   private final SingleFlightRegistry singleFlightRegistry;
   private final WeatherCacheProvider weatherCacheProvider;
+  private final RepresentativeSlotSelector representativeSlotSelector;
 
   private final ConcurrentHashMap<InFlightKey, CompletableFuture<List<Weather>>> inFlight =
       new ConcurrentHashMap<>();
@@ -68,11 +69,13 @@ public class WeatherRefresher {
             executor,
             () -> {
               List<Weather> cached = weatherCacheProvider.findCachedSlots(weatherGrid);
-              // baseTime 기준으로 이미 갱신된 캐시만 반환한다 - 그렇지 않으면 리더가 새 예보를
-              // 저장하는 동안 다른 인스턴스가 stale 캐시를 즉시 응답하게 된다
-              boolean fresh = cached.stream()
-                  .anyMatch(slot -> !slot.getForecastedAt().isBefore(baseTime.toInstant()));
-              return fresh ? Optional.of(cached) : Optional.empty();
+              // WeatherService.isStale과 동일하게 "오늘 대표 슬롯" 기준으로만 신선도를 판단한다.
+              // 슬롯 하나라도 최신이면 통과시키면, 부분 갱신(파서 게이트로 일부 날짜 누락)된
+              // 미래 슬롯만 최신이고 오늘 슬롯은 stale인 경우를 신선함으로 오판한다.
+              LocalDate today = LocalDate.now(clock.withZone(KST));
+              boolean stale = representativeSlotSelector.isStale(cached, today, clock.instant(),
+                  baseTime);
+              return stale ? Optional.empty() : Optional.of(cached);
             }));
     // singleFlightRegistry.execute가 이미 완료된 future를 반환하면 whenComplete가
     // 즉시(동기) 실행되므로, computeIfAbsent 밖에서 맵을 수정해야 재귀 수정을 피할 수 있다

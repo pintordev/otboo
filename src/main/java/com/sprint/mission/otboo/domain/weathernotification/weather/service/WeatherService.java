@@ -124,13 +124,9 @@ public class WeatherService {
     }
   }
 
-  // 기존 동기 getWeather()의 stale 판정과 완전히 동일 - 오늘 대표 슬롯 하나만 본다.
   private boolean isStale(List<Weather> candidateSlots, LocalDate today, BaseTime latestBaseTime) {
-    Weather todayRepresentative = representativeSlotSelector
-        .select(slotsOfDate(candidateSlots, today), clock.instant())
-        .orElse(null);
-    return todayRepresentative == null
-        || todayRepresentative.getForecastedAt().isBefore(latestBaseTime.toInstant());
+    return representativeSlotSelector.isStale(candidateSlots, today, clock.instant(),
+        latestBaseTime);
   }
 
   public List<WeatherDto> getWeather(double latitude, double longitude) {
@@ -145,11 +141,7 @@ public class WeatherService {
         weatherGrid, from);
 
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
-    Weather todayRepresentative = representativeSlotSelector
-        .select(slotsOfDate(slots, today), clock.instant())
-        .orElse(null);
-    boolean stale = todayRepresentative == null
-        || todayRepresentative.getForecastedAt().isBefore(latestBaseTime.toInstant());
+    boolean stale = isStale(slots, today, latestBaseTime);
 
     List<Weather> fetched = slots;
     if (stale) {
@@ -217,10 +209,6 @@ public class WeatherService {
             .orElse(null))
         .filter(Objects::nonNull)
         .toList();
-  }
-
-  private List<Weather> slotsOfDate(List<Weather> slots, LocalDate date) {
-    return slots.stream().filter(w -> toForecastDate(w).equals(date)).toList();
   }
 
   private Instant referenceInstant(LocalDate date, LocalDate today) {
