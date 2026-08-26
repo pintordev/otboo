@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,8 @@ import org.springframework.stereotype.Component;
 public class SingleFlightRegistry implements MessageListener {
 
   private static final Duration LOCK_TTL = Duration.ofSeconds(10);
+  // 신호 유실(lost wakeup) 시에도 future가 반드시 완료되도록 두는 대기 상한 - 락 TTL보다 넉넉하게 잡는다
+  private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(15);
   private static final String CHANNEL_PREFIX = "single-flight:";
   // 내가 건 락만 지우는 compare-and-delete - GET한 값이 인자로 준 토큰과 같을 때만 DEL(원자적)
   private static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>("""
@@ -40,9 +43,13 @@ public class SingleFlightRegistry implements MessageListener {
       String key, Supplier<T> work, Executor executor, Supplier<Optional<T>> reload) {
     String lockKey = "lock:" + key;
     String token = UUID.randomUUID().toString(); // acquire마다 새 토큰 - 같은 인스턴스 재시도도 구분
+    // reload 확인과 waiter 등록 사이에 리더의 done 발행이 끼면 신호를 영영 못 받으므로,
+    // 락 시도보다도 먼저 waiter부터 등록해 둔다
+    CompletableFuture<String> signal = waitForSignal(key);
     Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
 
     if (Boolean.TRUE.equals(acquired)) {
+      waiters.remove(key, signal); // 내가 리더면 이 waiter는 필요 없다
       return CompletableFuture.supplyAsync(work, executor)
           .whenComplete((result, ex) -> {
             redisTemplate.execute(UNLOCK_SCRIPT, List.of(lockKey), token);
@@ -50,12 +57,17 @@ public class SingleFlightRegistry implements MessageListener {
           });
     }
 
-    return reload.get()
-        .map(CompletableFuture::completedFuture)
-        .orElseGet(() -> waitForSignal(key).thenCompose(signal ->
-            "failed".equals(signal)
-                ? execute(key, work, executor, reload) // 리더가 실패했고 락은 이미 풀려있음 - 내가 새 리더로 재시도
-                : CompletableFuture.completedFuture(reload.get().orElse(null))));
+    Optional<T> reloaded = reload.get();
+    if (reloaded.isPresent()) {
+      waiters.remove(key, signal);
+      return CompletableFuture.completedFuture(reloaded.get());
+    }
+    return signal
+        // 신호가 유실돼도 이 future는 반드시 완료되게 대기 상한을 둔다
+        .completeOnTimeout("timeout", WAIT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+        .thenCompose(received -> "failed".equals(received)
+            ? execute(key, work, executor, reload) // 리더가 실패했고 락은 이미 풀려있음 - 내가 새 리더로 재시도
+            : CompletableFuture.completedFuture(reload.get().orElse(null)));
   }
 
   private CompletableFuture<String> waitForSignal(String key) {
