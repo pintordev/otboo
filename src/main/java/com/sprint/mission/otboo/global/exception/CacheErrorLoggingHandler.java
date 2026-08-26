@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.global.exception;
 
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.interceptor.CacheErrorHandler;
@@ -13,18 +14,22 @@ public class CacheErrorLoggingHandler implements CacheErrorHandler {
 
   @Override
   public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
-    log.error("캐시 조회 실패, 캐시 미스로 처리: cache={}, key={}", cache.getName(), key, exception);
+    // location 캐시 키는 좌표(latBlock:lonBlock)에서 유도된 값이라 그대로 로깅하지 않는다
+    log.error("캐시 조회 실패, 캐시 미스로 처리: cache={}, keyHash={}", cache.getName(),
+        Objects.hashCode(key), exception);
   }
 
   @Override
   public void handleCachePutError(RuntimeException exception, Cache cache, Object key,
       Object value) {
-    log.error("캐시 저장 실패: cache={}, key={}", cache.getName(), key, exception);
+    log.error("캐시 저장 실패: cache={}, keyHash={}", cache.getName(), Objects.hashCode(key),
+        exception);
   }
 
   @Override
   public void handleCacheEvictError(RuntimeException exception, Cache cache, Object key) {
-    log.error("캐시 삭제 실패: cache={}, key={}", cache.getName(), key, exception);
+    log.error("캐시 삭제 실패: cache={}, keyHash={}", cache.getName(), Objects.hashCode(key),
+        exception);
   }
 
   @Override
