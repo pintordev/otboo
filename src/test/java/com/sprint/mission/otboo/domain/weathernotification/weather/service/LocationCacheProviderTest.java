@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.repository.Lo
 import com.sprint.mission.otboo.global.config.CacheConfig;
 import com.sprint.mission.otboo.global.exception.CacheErrorLoggingHandler;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +67,8 @@ class LocationCacheProviderTest implements RedisTestContainerSupport {
 
       // when
       locationCacheProvider.findCachedLocationNames(37, 127);
+      await().atMost(Duration.ofSeconds(5))
+          .until(() -> !stringRedisTemplate.keys("location*").isEmpty());
       locationCacheProvider.findCachedLocationNames(37, 127);
 
       // then

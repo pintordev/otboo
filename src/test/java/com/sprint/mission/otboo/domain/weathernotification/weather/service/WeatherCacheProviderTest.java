@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.config.WeatherCacheConfigurationContributor;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
@@ -11,6 +12,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.global.config.CacheConfig;
 import com.sprint.mission.otboo.global.exception.CacheErrorLoggingHandler;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -85,6 +87,8 @@ class WeatherCacheProviderTest implements RedisTestContainerSupport {
 
       // when
       weatherCacheProvider.putSlots(weatherGrid, slots);
+      await().atMost(Duration.ofSeconds(5))
+          .until(() -> !stringRedisTemplate.keys("weather*").isEmpty());
       List<Weather> result = weatherCacheProvider.findCachedSlots(weatherGrid);
 
       // then
@@ -107,6 +111,10 @@ class WeatherCacheProviderTest implements RedisTestContainerSupport {
           List.of(weatherWithForecastedAt(weatherGrid, newer)));
 
       // then
+      await().atMost(Duration.ofSeconds(5))
+          .until(() -> stringRedisTemplate.keys("weather*").stream()
+              .map(k -> stringRedisTemplate.opsForValue().get(k))
+              .anyMatch(v -> v != null && v.contains(newer.toString())));
       List<Weather> result = weatherCacheProvider.findCachedSlots(weatherGrid);
       assertThat(result.get(0).getForecastedAt()).isEqualTo(newer);
     }
