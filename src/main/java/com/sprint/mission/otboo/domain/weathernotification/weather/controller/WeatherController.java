@@ -19,7 +19,9 @@ import org.springframework.web.context.request.async.DeferredResult;
 @RestController
 public class WeatherController implements WeatherApi {
 
-  private static final long TIMEOUT_MILLIS = 5_000L;
+  // WeatherService 내부 조회 자체가 5초 orTimeout을 쓰므로, DeferredResult 타이머가 그보다
+  // 먼저 끝나면 DB 폴백이 끝나기 전에 요청이 만료된다. grid/캐시 조회·폴백 시간까지 감안해 여유를 둔다.
+  private static final long TIMEOUT_MILLIS = 8_000L;
 
   private final WeatherService weatherService;
 
