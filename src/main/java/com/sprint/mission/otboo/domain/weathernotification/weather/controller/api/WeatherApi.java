@@ -2,7 +2,10 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.controller.a
 
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.WeatherDto;
+import com.sprint.mission.otboo.global.dto.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,7 +20,8 @@ public interface WeatherApi {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "날씨 조회 성공"),
       @ApiResponse(responseCode = "400", description = "날씨 조회 실패"),
-      @ApiResponse(responseCode = "503", description = "날씨 조회 타임아웃 또는 일시적 장애")
+      @ApiResponse(responseCode = "503", description = "날씨 조회 타임아웃 또는 일시적 장애",
+          content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
   })
   DeferredResult<ResponseEntity<List<WeatherDto>>> getWeather(double longitude, double latitude);
 
@@ -25,7 +29,8 @@ public interface WeatherApi {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "위치 정보 조회 성공"),
       @ApiResponse(responseCode = "400", description = "위치 정보 조회 실패"),
-      @ApiResponse(responseCode = "503", description = "위치 조회 타임아웃 또는 일시적 장애")
+      @ApiResponse(responseCode = "503", description = "위치 조회 타임아웃 또는 일시적 장애",
+          content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
   })
   DeferredResult<ResponseEntity<LocationDto>> getWeatherLocation(double longitude,
       double latitude);
