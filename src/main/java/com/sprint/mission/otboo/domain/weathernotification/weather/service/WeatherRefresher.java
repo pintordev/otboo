@@ -55,22 +55,25 @@ public class WeatherRefresher {
     InFlightKey key = new InFlightKey(weatherGrid.getId(), baseTime);
     String lockKey =
         "weather:" + weatherGrid.getId() + ":" + baseTime.baseDate() + baseTime.baseTime();
-    return inFlight.computeIfAbsent(key, k ->
+    CompletableFuture<List<Weather>> future = inFlight.computeIfAbsent(key, k ->
         singleFlightRegistry.execute(
-                lockKey,
-                () -> {
-                  List<Weather> refreshed = refreshSlots(weatherGrid, grid, baseTime);
-                  List<Weather> merged = refreshed.isEmpty()
-                      ? dbSlots : mergeByForecastAt(dbSlots, refreshed);
-                  weatherCacheProvider.putSlots(weatherGrid, merged);
-                  return merged;
-                },
-                executor,
-                () -> {
-                  List<Weather> cached = weatherCacheProvider.findCachedSlots(weatherGrid);
-                  return cached.isEmpty() ? Optional.empty() : Optional.of(cached);
-                })
-            .whenComplete((r, e) -> inFlight.remove(k)));
+            lockKey,
+            () -> {
+              List<Weather> refreshed = refreshSlots(weatherGrid, grid, baseTime);
+              List<Weather> merged = refreshed.isEmpty()
+                  ? dbSlots : mergeByForecastAt(dbSlots, refreshed);
+              weatherCacheProvider.putSlots(weatherGrid, merged);
+              return merged;
+            },
+            executor,
+            () -> {
+              List<Weather> cached = weatherCacheProvider.findCachedSlots(weatherGrid);
+              return cached.isEmpty() ? Optional.empty() : Optional.of(cached);
+            }));
+    // singleFlightRegistry.execute가 이미 완료된 future를 반환하면 whenComplete가
+    // 즉시(동기) 실행되므로, computeIfAbsent 밖에서 맵을 수정해야 재귀 수정을 피할 수 있다
+    future.whenComplete((r, e) -> inFlight.remove(key, future));
+    return future;
   }
 
   private List<Weather> mergeByForecastAt(List<Weather> slots, List<Weather> refreshed) {

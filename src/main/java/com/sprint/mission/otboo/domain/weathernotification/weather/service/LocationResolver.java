@@ -45,14 +45,19 @@ public class LocationResolver {
     return locationCacheProvider
         .findCachedLocationNames(blockIndex.latBlock(), blockIndex.lonBlock())
         .map(CompletableFuture::completedFuture)
-        .orElseGet(() -> inFlight.computeIfAbsent(blockIndex, k ->
-            singleFlightRegistry.execute(
-                    lockKey,
-                    () -> fetchAndSave(blockIndex, latitude, longitude),
-                    executor,
-                    () -> locationCacheProvider.findCachedLocationNames(
-                        blockIndex.latBlock(), blockIndex.lonBlock()))
-                .whenComplete((r, e) -> inFlight.remove(k))));
+        .orElseGet(() -> {
+          CompletableFuture<List<String>> future = inFlight.computeIfAbsent(blockIndex, k ->
+              singleFlightRegistry.execute(
+                  lockKey,
+                  () -> fetchAndSave(blockIndex, latitude, longitude),
+                  executor,
+                  () -> locationCacheProvider.findCachedLocationNames(
+                      blockIndex.latBlock(), blockIndex.lonBlock())));
+          // singleFlightRegistry.execute가 이미 완료된 future를 반환하면 whenComplete가
+          // 즉시(동기) 실행되므로, computeIfAbsent 밖에서 맵을 수정해야 재귀 수정을 피할 수 있다
+          future.whenComplete((r, e) -> inFlight.remove(blockIndex, future));
+          return future;
+        });
   }
 
   private List<String> fetchAndSave(BlockIndex blockIndex, double latitude, double longitude) {
