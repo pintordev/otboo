@@ -367,6 +367,54 @@ class WeatherServiceTest {
   }
 
   @Nested
+  @DisplayName("GetLocationAsync")
+  class GetLocationAsync {
+
+    @Test
+    @DisplayName("유효한_좌표로_조회하면_LocationDto를_반환한다")
+    void 유효한_좌표로_조회하면_LocationDto를_반환한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+      List<String> locationNames = List.of("서울특별시", "중구", "명동");
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.completedFuture(locationNames));
+
+      // when
+      LocationDto result = weatherService.getLocationAsync(latitude, longitude).join();
+
+      // then
+      assertThat(result).isEqualTo(
+          new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+              locationNames));
+    }
+
+    @Test
+    @DisplayName("위치_조회가_실패하면_빈_지역명으로_폴백한다")
+    void 위치_조회가_실패하면_빈_지역명으로_폴백한다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.failedFuture(new RuntimeException("카카오 호출 실패")));
+
+      // when
+      LocationDto result = weatherService.getLocationAsync(latitude, longitude).join();
+
+      // then
+      assertThat(result).isEqualTo(
+          new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+              List.of()));
+    }
+  }
+
+  @Nested
   @DisplayName("GetWeatherAsync")
   class GetWeatherAsync {
 
