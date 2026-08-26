@@ -147,6 +147,21 @@ public class WeatherService {
         .toList();
   }
 
+  // resolveLocationNamesAsync()가 이미 캐시+single-flight를 내장하고 있어 그대로 재사용한다.
+  public CompletableFuture<LocationDto> getLocationAsync(double latitude, double longitude) {
+    KmaGridPoint grid = toGrid(latitude, longitude);
+    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
+    return locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
+        .orTimeout(5, TimeUnit.SECONDS)
+        .thenApply(locationNames -> new LocationDto(latitude, longitude, weatherGrid.getX(),
+            weatherGrid.getY(), locationNames))
+        .exceptionally(ex -> {
+          log.warn("위치 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
+          return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+              List.of());
+        });
+  }
+
   public LocationDto getLocation(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
     WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
