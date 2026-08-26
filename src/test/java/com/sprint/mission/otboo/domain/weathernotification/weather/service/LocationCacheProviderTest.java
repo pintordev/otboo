@@ -97,5 +97,22 @@ class LocationCacheProviderTest implements RedisTestContainerSupport {
       // 빈 결과는 캐시되지 않아야 하므로 두 번 모두 DB를 조회한다
       verify(locationRepository, times(2)).findByLatBlockAndLonBlock(0, 0);
     }
+
+    @Test
+    @DisplayName("DB에_있어도_지역명_목록이_비어있으면_캐시하지_않는다")
+    void DB에_있어도_지역명_목록이_비어있으면_캐시하지_않는다() {
+      // given - null 분기가 아니라 unless의 isEmpty() 분기를 직접 검증
+      Location location = Location.create(1, 1, List.of());
+      given(locationRepository.findByLatBlockAndLonBlock(1, 1)).willReturn(Optional.of(location));
+
+      // when
+      Optional<List<String>> result = locationCacheProvider.findCachedLocationNames(1, 1);
+      locationCacheProvider.findCachedLocationNames(1, 1);
+
+      // then
+      assertThat(result).contains(List.of());
+      // 빈 리스트는 캐시되지 않아야 하므로 두 번 모두 DB를 조회한다
+      verify(locationRepository, times(2)).findByLatBlockAndLonBlock(1, 1);
+    }
   }
 }
