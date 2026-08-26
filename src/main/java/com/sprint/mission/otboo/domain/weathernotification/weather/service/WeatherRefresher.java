@@ -68,7 +68,11 @@ public class WeatherRefresher {
             executor,
             () -> {
               List<Weather> cached = weatherCacheProvider.findCachedSlots(weatherGrid);
-              return cached.isEmpty() ? Optional.empty() : Optional.of(cached);
+              // baseTime 기준으로 이미 갱신된 캐시만 반환한다 - 그렇지 않으면 리더가 새 예보를
+              // 저장하는 동안 다른 인스턴스가 stale 캐시를 즉시 응답하게 된다
+              boolean fresh = cached.stream()
+                  .anyMatch(slot -> !slot.getForecastedAt().isBefore(baseTime.toInstant()));
+              return fresh ? Optional.of(cached) : Optional.empty();
             }));
     // singleFlightRegistry.execute가 이미 완료된 future를 반환하면 whenComplete가
     // 즉시(동기) 실행되므로, computeIfAbsent 밖에서 맵을 수정해야 재귀 수정을 피할 수 있다
