@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
+import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.HumidityDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.LocationDto;
 import com.sprint.mission.otboo.domain.weathernotification.weather.dto.PrecipitationDto;
@@ -47,6 +48,10 @@ class WeatherServiceTest {
 
   private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
+  private static final FixtureMonkey ENTITY_FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(FieldReflectionArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true)
       .build();
   private static final BaseTime LATEST_BASE_TIME = new BaseTime("20260727", "1700");
 
@@ -437,10 +442,27 @@ class WeatherServiceTest {
           .willReturn(weatherGrid);
 
       Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
-      Weather cachedSlot = Weather.create(weatherGrid, freshForecastedAt,
-          Instant.parse("2026-07-27T09:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE,
-          0.0, 10.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null,
-          null);
+      Weather cachedSlot = ENTITY_FIXTURE_MONKEY.giveMeBuilder(Weather.class)
+          .set("weatherGrid", weatherGrid)
+          .set("forecastedAt", freshForecastedAt)
+          .set("forecastAt", Instant.parse("2026-07-27T09:00:00Z"))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .set("precipitationAmount", 0.0)
+          .set("precipitationProbability", 10.0)
+          .set("humidityCurrent", 65.0)
+          .set("humidityCompared", 0.0)
+          .set("temperatureCurrent", 28.0)
+          .set("temperatureCompared", 0.0)
+          .set("temperatureMin", 25.0)
+          .set("temperatureMax", 31.0)
+          .set("windSpeed", 2.0)
+          .set("windAsWord", WindStrength.WEAK)
+          .set("baselineTemperatureCurrent", null)
+          .set("baselinePrecipitationType", null)
+          .set("baselinePrecipitationProbability", null)
+          .set("baselinePrecipitationAmount", null)
+          .sample();
       given(weatherCacheProvider.findCachedSlots(weatherGrid)).willReturn(List.of(cachedSlot));
 
       List<String> locationNames = List.of("서울특별시", "중구", "명동");
