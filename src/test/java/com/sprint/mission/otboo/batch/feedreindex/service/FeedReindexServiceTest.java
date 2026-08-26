@@ -53,7 +53,7 @@ class FeedReindexServiceTest {
   void setUp() {
     feedReindexService = new FeedReindexService(
         jobOperator,
-        new FeedReindexProperties(500, LOOKBACK),
+        new FeedReindexProperties(500, 10, LOOKBACK),
         feedReindexJob,
         feedIncrementalReindexJob);
   }

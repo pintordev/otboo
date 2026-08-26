@@ -15,6 +15,7 @@ import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
 import com.sprint.mission.otboo.domain.social.feed.repository.elasticsearch.FeedSearchRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +37,7 @@ class FeedIndexEventListenerTest {
   static final WeatherSnapshot DUMMY_SNAPSHOT = new WeatherSnapshot(
       SkyStatus.CLEAR, PrecipitationType.NONE,
       0.0, 0.0, 28.0, 2.0, 16.0, 31.0);
+  static final Instant FIXED_TIME = Instant.parse("2026-08-20T01:00:00Z");
 
   @InjectMocks
   FeedIndexEventListener listener;
@@ -46,14 +48,23 @@ class FeedIndexEventListenerTest {
   @Mock
   FeedSearchRepository feedSearchRepository;
 
-  private static void setFeedId(Feed feed, UUID id) {
+  private static void setField(Feed feed, String name, Object value) {
     try {
-      var field = Feed.class.getDeclaredField("id");
+      var field = Feed.class.getDeclaredField(name);
       field.setAccessible(true);
-      field.set(feed, id);
+      field.set(feed, value);
     } catch (ReflectiveOperationException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static Feed feedWith(UUID id, String content) {
+    Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), content,
+        DUMMY_SNAPSHOT, List.of());
+    setField(feed, "id", id);
+    setField(feed, "createdAt", FIXED_TIME);
+    setField(feed, "updatedAt", FIXED_TIME);
+    return feed;
   }
 
   @Nested
@@ -65,9 +76,7 @@ class FeedIndexEventListenerTest {
     void UPSERT_이벤트를_받으면_피드를_조회해_인덱스에_저장한다() {
       // given
       UUID feedId = UUID.randomUUID();
-      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
-          DUMMY_SNAPSHOT, List.of());
-      setFeedId(feed, feedId);
+      Feed feed = feedWith(feedId, "오늘의 착장");
       given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
 
       // when
@@ -115,9 +124,7 @@ class FeedIndexEventListenerTest {
     void 인덱스_저장에_실패해도_예외를_던지지_않는다() {
       // given
       UUID feedId = UUID.randomUUID();
-      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
-          DUMMY_SNAPSHOT, List.of());
-      setFeedId(feed, feedId);
+      Feed feed = feedWith(feedId, "오늘의 착장");
       given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
       willThrow(new DataAccessResourceFailureException("ES 연결 실패"))
           .given(feedSearchRepository).save(any(FeedDocument.class));
@@ -148,9 +155,7 @@ class FeedIndexEventListenerTest {
     void UPSERT_대상이_소프트_삭제된_피드면_인덱스에서_제거한다() {
       // given
       UUID feedId = UUID.randomUUID();
-      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "삭제된 피드",
-          DUMMY_SNAPSHOT, List.of());
-      setFeedId(feed, feedId);
+      Feed feed = feedWith(feedId, "삭제된 피드");
       feed.delete();
       given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
 
@@ -167,9 +172,7 @@ class FeedIndexEventListenerTest {
     void 문서_처리_오류가_나도_예외를_던지지_않는다() {
       // given
       UUID feedId = UUID.randomUUID();
-      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "오늘의 착장",
-          DUMMY_SNAPSHOT, List.of());
-      setFeedId(feed, feedId);
+      Feed feed = feedWith(feedId, "오늘의 착장");
       given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
       willThrow(new InvalidDataAccessApiUsageException("문서 매핑 오류"))
           .given(feedSearchRepository).save(any(FeedDocument.class));

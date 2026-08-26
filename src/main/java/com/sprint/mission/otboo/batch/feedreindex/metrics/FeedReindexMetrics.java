@@ -14,6 +14,7 @@ public class FeedReindexMetrics {
   private static final String JOB_DURATION = "batch.feed-reindex.job.duration";
   private static final String REINDEXED = "batch.feed-reindex.step.reindexed";
   private static final String STEP = "step";
+  private static final String DRIFT = "batch.feed-reindex.step.drift";
 
   private final MeterRegistry registry;
   private final Counter completedCounter;
@@ -47,5 +48,9 @@ public class FeedReindexMetrics {
 
   public void countReindexed(String stepName, long count) {
     registry.counter(REINDEXED, STEP, stepName).increment(count);
+  }
+
+  public void countDrift(String stepName, long count) {
+    registry.counter(DRIFT, STEP, stepName).increment(count);
   }
 }

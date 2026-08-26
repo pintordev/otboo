@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.infrastructure.item.ItemReader;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -34,7 +33,7 @@ public class FeedReindexReader implements ItemReader<Feed> {
   public Feed read() {
     while (iterator == null || !iterator.hasNext()) {
       List<Feed> feeds = feedRepository.findForReindex(
-          lastCreatedAt, lastId, PageRequest.of(0, properties.chunkSize()));
+          lastCreatedAt, lastId, properties.chunkSize());
       if (feeds.isEmpty()) {
         return null;
       }

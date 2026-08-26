@@ -2,7 +2,9 @@ package com.sprint.mission.otboo.batch.feedreindex.reader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.batch.feedreindex.config.FeedReindexProperties;
@@ -23,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FeedReindexReader")
@@ -59,7 +60,7 @@ class FeedReindexReaderTest {
   @BeforeEach
   void setUp() {
     reader = new FeedReindexReader(feedRepository,
-        new FeedReindexProperties(2, Duration.ofHours(2)));
+        new FeedReindexProperties(2, 10, Duration.ofHours(2)));
   }
 
   @Nested
@@ -72,7 +73,7 @@ class FeedReindexReaderTest {
       // given
       Feed feed1 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T01:00:00Z"), "피드1");
       Feed feed2 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T02:00:00Z"), "피드2");
-      given(feedRepository.findForReindex(any(), any(), any()))
+      given(feedRepository.findForReindex(any(), any(), anyInt()))
           .willReturn(List.of(feed1, feed2), List.of());
 
       // when
@@ -94,7 +95,7 @@ class FeedReindexReaderTest {
       Instant createdAt1 = Instant.parse("2026-08-20T01:00:00Z");
       Feed feed1 = feedWith(id1, createdAt1, "피드1");
       Feed feed2 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T02:00:00Z"), "피드2");
-      given(feedRepository.findForReindex(any(), any(), any()))
+      given(feedRepository.findForReindex(any(), any(), anyInt()))
           .willReturn(List.of(feed1), List.of(feed2), List.of());
 
       // when
@@ -104,8 +105,8 @@ class FeedReindexReaderTest {
       // then
       ArgumentCaptor<Instant> createdAtCaptor = ArgumentCaptor.forClass(Instant.class);
       ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
-      verify(feedRepository, org.mockito.Mockito.times(2))
-          .findForReindex(createdAtCaptor.capture(), idCaptor.capture(), any(Pageable.class));
+      verify(feedRepository, times(2))
+          .findForReindex(createdAtCaptor.capture(), idCaptor.capture(), anyInt());
 
       assertThat(createdAtCaptor.getAllValues().get(0)).isEqualTo(Instant.EPOCH);
       assertThat(createdAtCaptor.getAllValues().get(1)).isEqualTo(createdAt1);

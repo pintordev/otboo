@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -37,21 +36,31 @@ public interface FeedRepository extends JpaRepository<Feed, UUID> {
   @Query("select f from Feed f where f.id in :ids and f.softDeletable.deletedAt is null")
   List<Feed> findAllActiveByIds(@Param("ids") Collection<UUID> ids);
 
-  @Query("select f from Feed f "
-      + "where f.softDeletable.deletedAt is null "
-      + "and (f.createdAt > :lastCreatedAt "
-      + "     or (f.createdAt = :lastCreatedAt and f.id > :lastId)) "
-      + "order by f.createdAt asc, f.id asc")
+  // (created_at, id) 튜플 비교
+  // OR 형태로 쓰면 옵티마이저가 range scan으로 접지 못해 idx_feeds_active_created_at_id를 온전히 타지 못한다.
+  // JPQL은 튜플 비교를 지원하지 않아 네이티브 쿼리로 작성한다.
+  @Query(value = """
+      select * from feeds
+      where deleted_at is null
+        and (created_at, id) > (:lastCreatedAt, :lastId)
+      order by created_at, id
+      limit :limit
+      """, nativeQuery = true)
   List<Feed> findForReindex(@Param("lastCreatedAt") Instant lastCreatedAt,
-      @Param("lastId") UUID lastId, Pageable pageable);
+      @Param("lastId") UUID lastId, @Param("limit") int limit);
 
-  @Query("select f from Feed f "
-      + "where f.softDeletable.deletedAt is null "
-      + "and f.updatedAt >= :since "
-      + "and (f.createdAt > :lastCreatedAt "
-      + "     or (f.createdAt = :lastCreatedAt and f.id > :lastId)) "
-      + "order by f.createdAt asc, f.id asc")
+  // (updated_at, id) 튜플 비교. 조건(updated_at >= :since)과 정렬 축을 맞춰야
+  // idx_feeds_active_updated_at_id를 온전히 탈 수 있다.
+  // 변경분을 훑는 배치이므로 등록순이 아니라 수정순 페이징이 의미상으로도 맞다.
+  @Query(value = """
+      select * from feeds
+      where deleted_at is null
+        and updated_at >= :since
+        and (updated_at, id) > (:lastUpdatedAt, :lastId)
+      order by updated_at, id
+      limit :limit
+      """, nativeQuery = true)
   List<Feed> findForIncrementalReindex(@Param("since") Instant since,
-      @Param("lastCreatedAt") Instant lastCreatedAt,
-      @Param("lastId") UUID lastId, Pageable pageable);
+      @Param("lastUpdatedAt") Instant lastUpdatedAt,
+      @Param("lastId") UUID lastId, @Param("limit") int limit);
 }

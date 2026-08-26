@@ -23,7 +23,6 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 @DataJpaTest
@@ -441,7 +440,7 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> result = feedRepository.findForReindex(
-          Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 10));
+          Instant.EPOCH, new UUID(0L, 0L), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -460,7 +459,7 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> result = feedRepository.findForReindex(
-          Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 10));
+          Instant.EPOCH, new UUID(0L, 0L), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -482,7 +481,7 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> result = feedRepository.findForReindex(
-          Instant.parse("2026-08-20T01:00:00Z"), first.getId(), PageRequest.of(0, 10));
+          Instant.parse("2026-08-20T01:00:00Z"), first.getId(), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -505,10 +504,10 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> first = feedRepository.findForReindex(
-          Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 1));
+          Instant.EPOCH, new UUID(0L, 0L), 1);
       Feed cursor = first.get(0);
       List<Feed> second = feedRepository.findForReindex(
-          cursor.getCreatedAt(), cursor.getId(), PageRequest.of(0, 10));
+          cursor.getCreatedAt(), cursor.getId(), 10);
 
       // then
       assertThat(second).hasSize(1);
@@ -535,8 +534,7 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> result = feedRepository.findForIncrementalReindex(
-          Instant.parse("2026-08-20T03:00:00Z"), Instant.EPOCH, new UUID(0L, 0L),
-          PageRequest.of(0, 10));
+          Instant.parse("2026-08-20T03:00:00Z"), Instant.EPOCH, new UUID(0L, 0L), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -559,8 +557,7 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> result = feedRepository.findForIncrementalReindex(
-          Instant.parse("2026-08-20T03:00:00Z"), Instant.EPOCH, new UUID(0L, 0L),
-          PageRequest.of(0, 10));
+          Instant.parse("2026-08-20T03:00:00Z"), Instant.EPOCH, new UUID(0L, 0L), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -575,9 +572,7 @@ class FeedRepositoryTest {
       Feed second = createAndSaveFeed("두 번째");
       testEntityManager.flush();
 
-      setCreatedAt(first.getId(), Instant.parse("2026-08-20T01:00:00Z"));
-      setCreatedAt(second.getId(), Instant.parse("2026-08-20T02:00:00Z"));
-      setUpdatedAt(first.getId(), Instant.parse("2026-08-20T05:00:00Z"));
+      setUpdatedAt(first.getId(), Instant.parse("2026-08-20T04:00:00Z"));
       setUpdatedAt(second.getId(), Instant.parse("2026-08-20T05:00:00Z"));
       testEntityManager.flush();
       testEntityManager.clear();
@@ -585,7 +580,7 @@ class FeedRepositoryTest {
       // when
       List<Feed> result = feedRepository.findForIncrementalReindex(
           Instant.parse("2026-08-20T03:00:00Z"),
-          Instant.parse("2026-08-20T01:00:00Z"), first.getId(), PageRequest.of(0, 10));
+          Instant.parse("2026-08-20T04:00:00Z"), first.getId(), 10);
 
       // then
       assertThat(result).extracting(Feed::getContent)
@@ -593,17 +588,14 @@ class FeedRepositoryTest {
     }
 
     @Test
-    @DisplayName("createdAt이 같으면 id 순으로 이어서 반환한다")
-    void createdAt이_같으면_id_순으로_이어서_반환한다() {
+    @DisplayName("updatedAt이 같으면 id 순으로 이어서 반환한다")
+    void updatedAt이_같으면_id_순으로_이어서_반환한다() {
       // given
-      Instant sameTime = Instant.parse("2026-08-20T01:00:00Z");
       Instant updatedTime = Instant.parse("2026-08-20T05:00:00Z");
       Feed feedA = createAndSaveFeed("피드A");
       Feed feedB = createAndSaveFeed("피드B");
       testEntityManager.flush();
 
-      setCreatedAt(feedA.getId(), sameTime);
-      setCreatedAt(feedB.getId(), sameTime);
       setUpdatedAt(feedA.getId(), updatedTime);
       setUpdatedAt(feedB.getId(), updatedTime);
       testEntityManager.flush();
@@ -613,10 +605,10 @@ class FeedRepositoryTest {
 
       // when
       List<Feed> first = feedRepository.findForIncrementalReindex(
-          since, Instant.EPOCH, new UUID(0L, 0L), PageRequest.of(0, 1));
+          since, Instant.EPOCH, new UUID(0L, 0L), 1);
       Feed cursor = first.get(0);
       List<Feed> second = feedRepository.findForIncrementalReindex(
-          since, cursor.getCreatedAt(), cursor.getId(), PageRequest.of(0, 10));
+          since, cursor.getUpdatedAt(), cursor.getId(), 10);
 
       // then
       assertThat(second).hasSize(1);

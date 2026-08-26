@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.batch.feedreindex.reader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FeedIncrementalReindexReader")
@@ -41,11 +41,11 @@ class FeedIncrementalReindexReaderTest {
   @Mock
   private FeedRepository feedRepository;
 
-  private static Feed feedWith(UUID id, Instant createdAt, String content) {
+  private static Feed feedWith(UUID id, Instant updatedAt, String content) {
     Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), content,
         DUMMY_SNAPSHOT, List.of());
     setField(feed, "id", id);
-    setField(feed, "createdAt", createdAt);
+    setField(feed, "updatedAt", updatedAt);
     return feed;
   }
 
@@ -62,7 +62,7 @@ class FeedIncrementalReindexReaderTest {
   @BeforeEach
   void setUp() {
     reader = new FeedIncrementalReindexReader(feedRepository,
-        new FeedReindexProperties(2, Duration.ofHours(2)), SINCE.toEpochMilli());
+        new FeedReindexProperties(2, 10, Duration.ofHours(2)), SINCE.toEpochMilli());
   }
 
   @Nested
@@ -75,7 +75,7 @@ class FeedIncrementalReindexReaderTest {
       // given
       Feed feed1 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T04:00:00Z"), "피드1");
       Feed feed2 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T05:00:00Z"), "피드2");
-      given(feedRepository.findForIncrementalReindex(any(), any(), any(), any()))
+      given(feedRepository.findForIncrementalReindex(any(), any(), any(), anyInt()))
           .willReturn(List.of(feed1, feed2), List.of());
 
       // when
@@ -94,7 +94,7 @@ class FeedIncrementalReindexReaderTest {
     void JobParameter로_받은_기준_시각을_조회에_사용한다() {
       // given
       Feed feed = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T04:00:00Z"), "피드1");
-      given(feedRepository.findForIncrementalReindex(any(), any(), any(), any()))
+      given(feedRepository.findForIncrementalReindex(any(), any(), any(), anyInt()))
           .willReturn(List.of(feed), List.of());
 
       // when
@@ -102,18 +102,18 @@ class FeedIncrementalReindexReaderTest {
 
       // then
       verify(feedRepository).findForIncrementalReindex(
-          eq(SINCE), any(Instant.class), any(UUID.class), any(Pageable.class));
+          eq(SINCE), any(Instant.class), any(UUID.class), anyInt());
     }
 
     @Test
-    @DisplayName("직전 항목의 createdAt id를 커서로 다음 페이지를 조회한다")
-    void 직전_항목의_createdAt_id를_커서로_다음_페이지를_조회한다() {
+    @DisplayName("직전 항목의 updatedAt id를 커서로 다음 페이지를 조회한다")
+    void 직전_항목의_updatedAt_id를_커서로_다음_페이지를_조회한다() {
       // given
       UUID id1 = UUID.randomUUID();
-      Instant createdAt1 = Instant.parse("2026-08-20T04:00:00Z");
-      Feed feed1 = feedWith(id1, createdAt1, "피드1");
+      Instant updatedAt1 = Instant.parse("2026-08-20T04:00:00Z");
+      Feed feed1 = feedWith(id1, updatedAt1, "피드1");
       Feed feed2 = feedWith(UUID.randomUUID(), Instant.parse("2026-08-20T05:00:00Z"), "피드2");
-      given(feedRepository.findForIncrementalReindex(any(), any(), any(), any()))
+      given(feedRepository.findForIncrementalReindex(any(), any(), any(), anyInt()))
           .willReturn(List.of(feed1), List.of(feed2), List.of());
 
       // when
@@ -121,12 +121,13 @@ class FeedIncrementalReindexReaderTest {
       reader.read();
 
       // then
-      ArgumentCaptor<Instant> createdAtCaptor = ArgumentCaptor.forClass(Instant.class);
+      ArgumentCaptor<Instant> updatedAtCaptor = ArgumentCaptor.forClass(Instant.class);
       ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
       verify(feedRepository, times(2)).findForIncrementalReindex(
-          eq(SINCE), createdAtCaptor.capture(), idCaptor.capture(), any(Pageable.class));
+          eq(SINCE), updatedAtCaptor.capture(), idCaptor.capture(), anyInt());
 
-      assertThat(createdAtCaptor.getAllValues().get(1)).isEqualTo(createdAt1);
+      assertThat(updatedAtCaptor.getAllValues().get(0)).isEqualTo(Instant.EPOCH);
+      assertThat(updatedAtCaptor.getAllValues().get(1)).isEqualTo(updatedAt1);
       assertThat(idCaptor.getAllValues().get(1)).isEqualTo(id1);
     }
   }

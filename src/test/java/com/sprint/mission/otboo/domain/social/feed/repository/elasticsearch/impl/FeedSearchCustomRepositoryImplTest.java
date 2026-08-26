@@ -82,6 +82,7 @@ class FeedSearchCustomRepositoryImplTest extends ElasticsearchTestContainerSuppo
     Feed feed = Feed.create(authorId, UUID.randomUUID(), content, snapshot, ootds);
     setField(feed, "id", feedId);
     setField(feed, "createdAt", createdAt);
+    setField(feed, "updatedAt", createdAt);
     setField(feed, "likeCount", likeCount);
 
     feedSearchRepository.save(FeedDocument.from(feed));

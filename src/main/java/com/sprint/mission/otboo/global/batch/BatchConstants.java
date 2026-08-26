@@ -9,6 +9,8 @@ public final class BatchConstants {
   // Repository는 조회 limit만 clamp할 뿐 Batch 커밋 단위(청크)는 그대로 커져서 상한 없이 무의미해진다.
   public static final int MAX_CHUNK_SIZE = 1000;
 
+  public static final int MAX_SKIP_LIMIT = 100;
+
   private BatchConstants() {
   }
 }

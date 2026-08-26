@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.infrastructure.item.ItemReader;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -19,14 +18,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class FeedIncrementalReindexReader implements ItemReader<Feed> {
 
-  private static final Instant INITIAL_CREATED_AT = Instant.EPOCH;
+  private static final Instant INITIAL_UPDATED_AT = Instant.EPOCH;
   private static final UUID INITIAL_ID = new UUID(0L, 0L);
 
   private final FeedRepository feedRepository;
   private final FeedReindexProperties properties;
   private final Instant since;
 
-  private Instant lastCreatedAt = INITIAL_CREATED_AT;
+  private Instant lastUpdatedAt = INITIAL_UPDATED_AT;
   private UUID lastId = INITIAL_ID;
   private Iterator<Feed> iterator;
 
@@ -42,7 +41,7 @@ public class FeedIncrementalReindexReader implements ItemReader<Feed> {
   public Feed read() {
     while (iterator == null || !iterator.hasNext()) {
       List<Feed> feeds = feedRepository.findForIncrementalReindex(
-          since, lastCreatedAt, lastId, PageRequest.of(0, properties.chunkSize()));
+          since, lastUpdatedAt, lastId, properties.chunkSize());
       if (feeds.isEmpty()) {
         return null;
       }
@@ -51,7 +50,7 @@ public class FeedIncrementalReindexReader implements ItemReader<Feed> {
     }
 
     Feed feed = iterator.next();
-    lastCreatedAt = feed.getCreatedAt();
+    lastUpdatedAt = feed.getUpdatedAt();
     lastId = feed.getId();
     return feed;
   }
