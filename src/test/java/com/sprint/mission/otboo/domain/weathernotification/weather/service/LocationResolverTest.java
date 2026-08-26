@@ -222,5 +222,27 @@ class LocationResolverTest {
           eq("location:" + block.latBlock() + ":" + block.lonBlock()),
           any(), eq(directExecutor), any());
     }
+
+    @Test
+    @DisplayName("SingleFlightRegistry가_이미_완료된_future를_반환해도_정상적으로_결과를_반환한다")
+    void SingleFlightRegistry가_이미_완료된_future를_반환해도_정상적으로_결과를_반환한다()
+        throws Exception {
+      // given - reload가 이미 값을 가진 상태라 execute가 즉시 완료된 future를 반환하는 상황.
+      // 이때 whenComplete가 computeIfAbsent 밖에서 실행돼야 예외 없이 정상 완료된다.
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      BlockIndex block = locationBlockCalculator.toBlock(latitude, longitude);
+      given(locationCacheProvider.findCachedLocationNames(block.latBlock(), block.lonBlock()))
+          .willReturn(Optional.empty());
+      given(singleFlightRegistry.execute(anyString(), any(), any(), any()))
+          .willReturn(CompletableFuture.completedFuture(List.of("서울특별시", "중구")));
+
+      // when
+      CompletableFuture<List<String>> result =
+          locationResolver.resolveLocationNamesAsync(latitude, longitude, directExecutor);
+
+      // then
+      assertThat(result.get(1, TimeUnit.SECONDS)).containsExactly("서울특별시", "중구");
+    }
   }
 }
