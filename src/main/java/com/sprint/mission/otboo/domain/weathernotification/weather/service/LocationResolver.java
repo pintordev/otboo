@@ -71,10 +71,6 @@ public class LocationResolver {
     return locationRepository
         .findByLatBlockAndLonBlock(blockIndex.latBlock(), blockIndex.lonBlock())
         .map(Location::getLocationNames)
-        .orElseGet(() -> {
-          List<String> locationNames = kakaoRegionFetcher.fetch(latitude, longitude);
-          return locationWriter.save(blockIndex.latBlock(), blockIndex.lonBlock(), locationNames)
-              .getLocationNames();
-        });
+        .orElseGet(() -> fetchAndSave(blockIndex, latitude, longitude));
   }
 }
