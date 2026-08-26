@@ -89,11 +89,9 @@ public class UserService {
         request.temperatureSensitivity()
     );
 
-    String oldProfileImageUrl = foundProfile.getProfileImageUrl();
-    String newProfileImageUrl = oldProfileImageUrl;
+    String newProfileImageUrl = foundProfile.getProfileImageUrl();
     if (image != null && !image.isEmpty()) {
       newProfileImageUrl = fileStorageService.store(image, "profile");
-      fileStorageService.delete(oldProfileImageUrl);
     }
 
     foundProfile.changeProfileImageUrl(newProfileImageUrl);

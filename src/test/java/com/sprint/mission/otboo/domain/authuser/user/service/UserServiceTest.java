@@ -262,7 +262,6 @@ class UserServiceTest {
 
       // then
       verify(fileStorageService, never()).store(any(), any());
-      verify(fileStorageService, never()).delete(any());
     }
 
     @Test
@@ -289,8 +288,8 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("기존 이미지가 있는 상태에서 새 이미지를 업로드하면 기존 이미지를 삭제한다")
-    void 기존_이미지가_있는_상태에서_새_이미지를_업로드하면_기존_이미지를_삭제한다() {
+    @DisplayName("기존 이미지가 있는 상태에서 새 이미지를 업로드해도 기존 이미지는 삭제하지 않는다")
+    void 기존_이미지가_있는_상태에서_새_이미지를_업로드해도_기존_이미지는_삭제하지_않는다() {
       // given
       UUID userId = UUID.randomUUID();
       User user = User.create("홍길동", "hong@test.com", "encoded-password");
@@ -309,7 +308,7 @@ class UserServiceTest {
       userService.changeProfile(userId, request, image, userId);
 
       // then
-      verify(fileStorageService).delete("profile/old-uuid.jpg");
+      verify(fileStorageService, never()).delete(any());
     }
   }
 
