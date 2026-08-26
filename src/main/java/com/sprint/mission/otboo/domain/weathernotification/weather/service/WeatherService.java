@@ -55,36 +55,44 @@ public class WeatherService {
   @Qualifier("kakaoLocationExecutor")
   private final Executor kakaoLocationExecutor;
 
-  // 결정 1의 3단(캐시→DB→재조회) 조회 - 캐시/위치 어느 쪽이 느려도 Tomcat 워커 스레드를 블로킹하지 않는다.
+  // 3단(캐시→DB→재조회) 조회 - 캐시/위치 어느 쪽이 느려도 Tomcat 워커 스레드를 블로킹하지 않는다.
+  // grid 조회·캐시 조회도 요청 스레드가 아니라 전용 executor에서 수행한다.
   public CompletableFuture<List<WeatherDto>> getWeatherAsync(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
-    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
     LocalDate today = LocalDate.now(clock.withZone(KST));
     LocalDate yesterday = today.minusDays(1);
     Instant from = yesterday.atStartOfDay(KST).toInstant();
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
 
-    List<Weather> cachedSlots = weatherCacheProvider.findCachedSlots(weatherGrid);
-    CompletableFuture<List<Weather>> weatherFuture = isStale(cachedSlots, today, latestBaseTime)
-        ? fetchFreshAsync(weatherGrid, grid, latestBaseTime, from, today)
-        : CompletableFuture.completedFuture(cachedSlots);
+    return CompletableFuture
+        .supplyAsync(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
+        .thenCompose(weatherGrid -> {
+          CompletableFuture<List<Weather>> weatherFuture = CompletableFuture
+              .supplyAsync(() -> weatherCacheProvider.findCachedSlots(weatherGrid),
+                  weatherRefreshExecutor)
+              .thenCompose(cachedSlots -> isStale(cachedSlots, today, latestBaseTime)
+                  ? fetchFreshAsync(weatherGrid, grid, latestBaseTime, from, today)
+                  : CompletableFuture.completedFuture(cachedSlots));
 
-    CompletableFuture<List<String>> locationFuture = locationResolver
-        .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
-        .orTimeout(5, TimeUnit.SECONDS);
+          CompletableFuture<List<String>> locationFuture = locationResolver
+              .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
+              .orTimeout(5, TimeUnit.SECONDS);
 
-    return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
-            representativesFrom(slots, today).stream()
-                .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude, locationNames))
-                .toList())
-        .exceptionally(ex -> {
-          log.warn("날씨/위치 조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
-          List<Weather> fallbackSlots = weatherRepository
-              .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
-          List<String> fallbackNames = List.of();
-          return representativesFrom(fallbackSlots, today).stream()
-              .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude, fallbackNames))
-              .toList();
+          return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
+                  representativesFrom(slots, today).stream()
+                      .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
+                          locationNames))
+                      .toList())
+              .exceptionally(ex -> {
+                log.warn("날씨/위치 조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
+                List<Weather> fallbackSlots = weatherRepository
+                    .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
+                List<String> fallbackNames = List.of();
+                return representativesFrom(fallbackSlots, today).stream()
+                    .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
+                        fallbackNames))
+                    .toList();
+              });
         });
   }
 
@@ -148,18 +156,21 @@ public class WeatherService {
   }
 
   // resolveLocationNamesAsync()가 이미 캐시+single-flight를 내장하고 있어 그대로 재사용한다.
+  // grid 조회도 요청 스레드가 아니라 전용 executor에서 수행한다.
   public CompletableFuture<LocationDto> getLocationAsync(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
-    WeatherGrid weatherGrid = locationResolver.resolveWeatherGrid(grid);
-    return locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
-        .orTimeout(5, TimeUnit.SECONDS)
-        .thenApply(locationNames -> new LocationDto(latitude, longitude, weatherGrid.getX(),
-            weatherGrid.getY(), locationNames))
-        .exceptionally(ex -> {
-          log.warn("위치 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
-          return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
-              List.of());
-        });
+    return CompletableFuture
+        .supplyAsync(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
+        .thenCompose(weatherGrid -> locationResolver
+            .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
+            .orTimeout(5, TimeUnit.SECONDS)
+            .thenApply(locationNames -> new LocationDto(latitude, longitude, weatherGrid.getX(),
+                weatherGrid.getY(), locationNames))
+            .exceptionally(ex -> {
+              log.warn("위치 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
+              return new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(),
+                  List.of());
+            }));
   }
 
   public LocationDto getLocation(double latitude, double longitude) {

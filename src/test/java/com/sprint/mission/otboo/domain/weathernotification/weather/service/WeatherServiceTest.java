@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -72,6 +74,12 @@ class WeatherServiceTest {
     weatherService = new WeatherService(weatherRepository, weatherRefresher, locationResolver,
         weatherMapper, new RepresentativeSlotSelector(), clock, weatherCacheProvider,
         weatherRefreshExecutor, kakaoLocationExecutor);
+    // weatherRefreshExecutor는 CompletableFuture.supplyAsync()에 직접 쓰이므로,
+    // 목이 실제로 실행해 주지 않으면 future가 영영 완료되지 않는다
+    lenient().doAnswer(invocation -> {
+      invocation.getArgument(0, Runnable.class).run();
+      return null;
+    }).when(weatherRefreshExecutor).execute(any());
   }
 
   @Nested
