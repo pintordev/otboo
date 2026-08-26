@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.context.request.async.DeferredResult;
 
 @Tag(name = "날씨 관리", description = "날씨 관련 API")
 public interface WeatherApi {
@@ -17,7 +18,7 @@ public interface WeatherApi {
       @ApiResponse(responseCode = "200", description = "날씨 조회 성공"),
       @ApiResponse(responseCode = "400", description = "날씨 조회 실패")
   })
-  ResponseEntity<List<WeatherDto>> getWeather(double longitude, double latitude);
+  DeferredResult<ResponseEntity<List<WeatherDto>>> getWeather(double longitude, double latitude);
 
   @Operation(summary = "날씨 위치 정보 조회", description = "날씨 위치 정보 조회 API")
   @ApiResponses({
