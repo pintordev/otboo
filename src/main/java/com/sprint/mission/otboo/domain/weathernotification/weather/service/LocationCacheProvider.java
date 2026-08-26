@@ -15,7 +15,7 @@ public class LocationCacheProvider {
   private final LocationRepository locationRepository;
 
   @Cacheable(cacheNames = "location", key = "#latBlock + ':' + #lonBlock",
-      unless = "#result == null")
+      unless = "#result == null || #result.isEmpty()")
   public Optional<List<String>> findCachedLocationNames(int latBlock, int lonBlock) {
     return locationRepository.findByLatBlockAndLonBlock(latBlock, lonBlock)
         .map(Location::getLocationNames);

@@ -33,6 +33,7 @@ public class LocationCacheConfigurationContributor implements CacheConfiguration
         .constructCollectionType(List.class, String.class);
     return RedisCacheConfiguration.defaultCacheConfig()
         .entryTtl(Duration.ofDays(weatherCacheProperties.locationTtlDays()))
+        .disableCachingNullValues()
         .serializeValuesWith(RedisSerializationContext.SerializationPair
             .fromSerializer(new JacksonJsonRedisSerializer<>(objectMapper, listOfString)));
   }
