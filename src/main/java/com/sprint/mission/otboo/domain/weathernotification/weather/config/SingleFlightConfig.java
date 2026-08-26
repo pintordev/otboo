@@ -26,10 +26,10 @@ public class SingleFlightConfig {
   @Bean
   public RedisMessageListenerContainer singleFlightListenerContainer(
       RedisConnectionFactory connectionFactory, SingleFlightRegistry registry,
-      @Qualifier("sseListenerExecutor") Executor sseListenerExecutor) {
+      @Qualifier("singleFlightListenerExecutor") Executor singleFlightListenerExecutor) {
     RedisMessageListenerContainer container = new RedisMessageListenerContainer();
     container.setConnectionFactory(connectionFactory);
-    container.setTaskExecutor(sseListenerExecutor);
+    container.setTaskExecutor(singleFlightListenerExecutor);
     container.addMessageListener(registry, new PatternTopic(SINGLE_FLIGHT_CHANNEL_PATTERN));
     return container;
   }

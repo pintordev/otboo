@@ -74,6 +74,21 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
+  @Bean(name = "singleFlightListenerExecutor")
+  public Executor singleFlightListenerExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    // sseListenerExecutor와 분리 — single-flight 완료(done/failed) 메시지는 비리더 요청이
+    // 그 자리에서 기다리는 지연 민감 신호라, SSE emitter IO 지연이 이 풀까지 잠식하면 안 된다.
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(2);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(100);
+    executor.setThreadNamePrefix("single-flight-listener-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
+    executor.initialize();
+    return executor;
+  }
+
   @Bean(name = "weatherRefreshExecutor")
   public Executor weatherRefreshExecutor() {
     // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
