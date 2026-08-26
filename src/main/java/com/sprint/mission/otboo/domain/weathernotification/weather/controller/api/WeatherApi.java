@@ -25,5 +25,6 @@ public interface WeatherApi {
       @ApiResponse(responseCode = "200", description = "위치 정보 조회 성공"),
       @ApiResponse(responseCode = "400", description = "위치 정보 조회 실패")
   })
-  ResponseEntity<LocationDto> getWeatherLocation(double longitude, double latitude);
+  DeferredResult<ResponseEntity<LocationDto>> getWeatherLocation(double longitude,
+      double latitude);
 }

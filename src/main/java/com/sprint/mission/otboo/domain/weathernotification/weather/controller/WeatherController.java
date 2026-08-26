@@ -44,9 +44,20 @@ public class WeatherController implements WeatherApi {
 
   @Override
   @GetMapping("/location")
-  public ResponseEntity<LocationDto> getWeatherLocation(
+  public DeferredResult<ResponseEntity<LocationDto>> getWeatherLocation(
       @RequestParam("longitude") double longitude,
       @RequestParam("latitude") double latitude) {
-    return ResponseEntity.ok(weatherService.getLocation(latitude, longitude));
+    DeferredResult<ResponseEntity<LocationDto>> deferredResult =
+        new DeferredResult<>(TIMEOUT_MILLIS);
+    weatherService.getLocationAsync(latitude, longitude)
+        .whenComplete((result, ex) -> {
+          if (ex != null) {
+            deferredResult.setErrorResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .build());
+          } else {
+            deferredResult.setResult(ResponseEntity.ok(result));
+          }
+        });
+    return deferredResult;
   }
 }
