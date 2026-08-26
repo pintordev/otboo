@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,12 @@ class LocationCacheProviderTest implements RedisTestContainerSupport {
   private LocationRepository locationRepository;
   @Autowired
   private StringRedisTemplate stringRedisTemplate;
+
+  @BeforeEach
+  void setUpCache() {
+    // 이전 테스트가 예외로 중단돼도 상태가 남지 않도록 시작 시점에도 비워 둔다
+    stringRedisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+  }
 
   @AfterEach
   void clearCache() {
