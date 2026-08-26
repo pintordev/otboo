@@ -23,7 +23,9 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,8 +66,7 @@ public class WeatherService {
     Instant from = yesterday.atStartOfDay(KST).toInstant();
     BaseTime latestBaseTime = KmaBaseTimeCalculator.calculate(clock.instant());
 
-    return CompletableFuture
-        .supplyAsync(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
+    return supplyOnExecutor(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
         .thenCompose(weatherGrid -> {
           CompletableFuture<List<Weather>> weatherFuture = CompletableFuture
               .supplyAsync(() -> weatherCacheProvider.findCachedSlots(weatherGrid),
@@ -107,6 +108,17 @@ public class WeatherService {
     return weatherRefresher
         .refreshSlotsAsync(weatherGrid, grid, latestBaseTime, dbSlots, weatherRefreshExecutor)
         .orTimeout(5, TimeUnit.SECONDS);
+  }
+
+  // thenCompose 연쇄 밖에서 최초로 executor에 작업을 넘기는 지점 - 여기서 거부되면
+  // CompletableFuture.supplyAsync가 future를 실패시키는 대신 동기적으로 예외를 던지므로,
+  // 직접 잡아 실패한 future로 변환해야 호출자가 항상 future만 받는다.
+  private <T> CompletableFuture<T> supplyOnExecutor(Supplier<T> supplier, Executor executor) {
+    try {
+      return CompletableFuture.supplyAsync(supplier, executor);
+    } catch (RejectedExecutionException e) {
+      return CompletableFuture.failedFuture(e);
+    }
   }
 
   // 기존 동기 getWeather()의 stale 판정과 완전히 동일 - 오늘 대표 슬롯 하나만 본다.
@@ -159,8 +171,7 @@ public class WeatherService {
   // grid 조회도 요청 스레드가 아니라 전용 executor에서 수행한다.
   public CompletableFuture<LocationDto> getLocationAsync(double latitude, double longitude) {
     KmaGridPoint grid = toGrid(latitude, longitude);
-    return CompletableFuture
-        .supplyAsync(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
+    return supplyOnExecutor(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
         .thenCompose(weatherGrid -> locationResolver
             .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
             .orTimeout(5, TimeUnit.SECONDS)

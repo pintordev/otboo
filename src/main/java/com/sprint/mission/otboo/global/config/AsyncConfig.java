@@ -83,7 +83,9 @@ public class AsyncConfig implements AsyncConfigurer {
     executor.setQueueCapacity(50);
     executor.setThreadNamePrefix("weather-refresh-");
     executor.setTaskDecorator(new MdcTaskDecorator());
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    // 포화 시 요청(서블릿) 스레드에서 외부 호출을 대신 실행하지 않는다 - 거부 예외는
+    // WeatherService의 폴백 경로에서 처리한다.
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     executor.initialize();
     return executor;
   }
@@ -99,7 +101,9 @@ public class AsyncConfig implements AsyncConfigurer {
     executor.setQueueCapacity(50);
     executor.setThreadNamePrefix("kakao-location-");
     executor.setTaskDecorator(new MdcTaskDecorator());
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    // 포화 시 요청(서블릿) 스레드에서 외부 호출을 대신 실행하지 않는다 - 거부 예외는
+    // WeatherService의 폴백 경로에서 처리한다.
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     executor.initialize();
     return executor;
   }
