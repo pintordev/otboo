@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -47,6 +48,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherRefresherTest {
@@ -225,8 +227,11 @@ class WeatherRefresherTest {
     @Test
     @DisplayName("로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다")
     void 로컬_in_flight에_없으면_SingleFlightRegistry로_위임한다() {
-      // given
+      // given - 미영속 WeatherGrid는 id가 null이라 lock key에 식별자가 실제로 들어가는지
+      // 검증할 수 없으므로, id를 직접 채워서 기대 키를 별도로 구성한다
       WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      UUID weatherGridId = UUID.randomUUID();
+      ReflectionTestUtils.setField(weatherGrid, "id", weatherGridId);
       List<Weather> dbSlots = List.of();
       given(singleFlightRegistry.execute(anyString(), any(), any(), any()))
           .willReturn(CompletableFuture.completedFuture(List.of()));
@@ -236,7 +241,7 @@ class WeatherRefresherTest {
 
       // then - 락 키에 baseTime까지 포함(로컬 InFlightKey와 동일 granularity)
       verify(singleFlightRegistry).execute(
-          eq("weather:" + weatherGrid.getId() + ":" + BASE_TIME.baseDate() + BASE_TIME.baseTime()),
+          eq("weather:" + weatherGridId + ":" + BASE_TIME.baseDate() + BASE_TIME.baseTime()),
           any(), eq(directExecutor), any());
     }
   }
