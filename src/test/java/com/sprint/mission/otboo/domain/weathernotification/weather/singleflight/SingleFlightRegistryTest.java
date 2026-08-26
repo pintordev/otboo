@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -100,21 +101,26 @@ class SingleFlightRegistryTest implements RedisTestContainerSupport {
       // given - 이미 락을 쥔 "리더" 시뮬레이션: 잠시 후 스스로 락을 해제하고 done을 발행
       redisTemplate.opsForValue().setIfAbsent("lock:test-key", "leader", Duration.ofSeconds(10));
       AtomicBoolean reloaded = new AtomicBoolean(false);
-      Executors.newSingleThreadScheduledExecutor().schedule(() -> {
-        redisTemplate.delete("lock:test-key");
-        redisTemplate.convertAndSend("single-flight:test-key", "done");
-      }, 300, TimeUnit.MILLISECONDS);
+      ScheduledExecutorService leader = Executors.newSingleThreadScheduledExecutor();
+      try {
+        leader.schedule(() -> {
+          redisTemplate.delete("lock:test-key");
+          redisTemplate.convertAndSend("single-flight:test-key", "done");
+        }, 300, TimeUnit.MILLISECONDS);
 
-      // when - reload는 처음엔 없다가, done 수신 후에는 있다고 응답
-      String result = registry.execute("test-key", () -> "unused", Runnable::run, () -> {
-        if (reloaded.getAndSet(true)) {
-          return Optional.of("reloaded-after-done");
-        }
-        return Optional.empty();
-      }).get(3, TimeUnit.SECONDS);
+        // when - reload는 처음엔 없다가, done 수신 후에는 있다고 응답
+        String result = registry.execute("test-key", () -> "unused", Runnable::run, () -> {
+          if (reloaded.getAndSet(true)) {
+            return Optional.of("reloaded-after-done");
+          }
+          return Optional.empty();
+        }).get(3, TimeUnit.SECONDS);
 
-      // then
-      assertThat(result).isEqualTo("reloaded-after-done");
+        // then
+        assertThat(result).isEqualTo("reloaded-after-done");
+      } finally {
+        leader.shutdownNow();
+      }
     }
   }
 }
