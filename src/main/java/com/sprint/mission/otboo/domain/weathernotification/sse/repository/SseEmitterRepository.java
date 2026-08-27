@@ -1,7 +1,6 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.EmitterConnection;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,9 +14,9 @@ public class SseEmitterRepository {
 
   private final Map<UUID, EmitterConnection> connections = new ConcurrentHashMap<>();
 
-  public Optional<EmitterConnection> save(UUID userId, SseEmitter emitter, Instant snapshotAt) {
+  public Optional<EmitterConnection> save(UUID userId, SseEmitter emitter, Long snapshotSeq) {
     EmitterConnection previous =
-        connections.put(userId, new EmitterConnection(emitter, snapshotAt));
+        connections.put(userId, new EmitterConnection(emitter, snapshotSeq));
     return Optional.ofNullable(previous);
   }
 
@@ -25,8 +24,8 @@ public class SseEmitterRepository {
     return Optional.ofNullable(connections.get(userId)).map(EmitterConnection::emitter);
   }
 
-  public Optional<Instant> findSnapshotAt(UUID userId) {
-    return Optional.ofNullable(connections.get(userId)).map(EmitterConnection::snapshotAt);
+  public Optional<Long> findSnapshotSeq(UUID userId) {
+    return Optional.ofNullable(connections.get(userId)).map(EmitterConnection::snapshotSeq);
   }
 
   public void remove(UUID userId, SseEmitter emitter) {

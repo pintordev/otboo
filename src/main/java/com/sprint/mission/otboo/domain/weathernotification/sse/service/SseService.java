@@ -8,8 +8,6 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmi
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import java.io.IOException;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -53,13 +51,13 @@ public class SseService {
     emitter.onTimeout(() -> sseEmitterRepository.remove(userId, emitter));
     emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
-    Instant snapshotAt;
+    Long snapshotSeq;
     Optional<EmitterConnection> previous;
     ReentrantLock lock = lockFor(userId);
     lock.lock();
     try {
-      snapshotAt = lastEventId == null ? null : sseMessageRepository.getLatestCreatedAt();
-      previous = sseEmitterRepository.save(userId, emitter, snapshotAt);
+      snapshotSeq = lastEventId == null ? null : sseMessageRepository.getLatestSequence();
+      previous = sseEmitterRepository.save(userId, emitter, snapshotSeq);
     } finally {
       lock.unlock();
     }
@@ -71,7 +69,7 @@ public class SseService {
 
     List<SseMessage> missed = sseMessageRepository.findAllAfter(lastEventId, userId);
     for (SseMessage message : missed) {
-      if (snapshotAt != null && isAfterSnapshot(message.createdAt(), snapshotAt)) {
+      if (snapshotSeq != null && message.seq() > snapshotSeq) {
         break;
       }
       if (!sendToEmitter(emitter, message)) {
@@ -85,9 +83,10 @@ public class SseService {
     notificationDtos.forEach(dto -> {
       try {
         SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
-        sseMessageRepository.save(message);
+        long seq = sseMessageRepository.save(message);
+        SseMessage withSeq = message.withSeq(seq);
         stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
-            objectMapper.writeValueAsString(message));
+            objectMapper.writeValueAsString(withSeq));
       } catch (Exception e) {
         log.error("SSE 발행 실패: receiverId={}", dto.receiverId(), e);
       }
@@ -109,9 +108,9 @@ public class SseService {
     ReentrantLock lock = lockFor(receiverId);
     lock.lock();
     try {
-      Optional<Instant> snapshotAt = sseEmitterRepository.findSnapshotAt(receiverId);
-      boolean alreadyReplayed = snapshotAt
-          .filter(s -> !isAfterSnapshot(message.createdAt(), s))
+      Optional<Long> snapshotSeq = sseEmitterRepository.findSnapshotSeq(receiverId);
+      boolean alreadyReplayed = snapshotSeq
+          .filter(s -> message.seq() <= s)
           .isPresent();
       if (alreadyReplayed) {
         return Optional.empty();
@@ -120,10 +119,6 @@ public class SseService {
     } finally {
       lock.unlock();
     }
-  }
-
-  private boolean isAfterSnapshot(Instant createdAt, Instant snapshotAt) {
-    return createdAt.truncatedTo(ChronoUnit.MICROS).isAfter(snapshotAt);
   }
 
   private ReentrantLock lockFor(UUID userId) {

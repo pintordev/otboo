@@ -146,7 +146,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       sseMessageRepository.save(forOther);
       SseMessage forUser = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
           "for-user", NOW);
-      sseMessageRepository.save(forUser);
+      forUser = forUser.withSeq(sseMessageRepository.save(forUser));
 
       // when
       List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
@@ -184,7 +184,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       redisTemplate.opsForValue().set("sse:message:" + corrupted.id(), "not-valid-json");
       SseMessage valid = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
           "valid", NOW);
-      sseMessageRepository.save(valid);
+      valid = valid.withSeq(sseMessageRepository.save(valid));
 
       // when
       List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
@@ -222,9 +222,9 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       cappedRepository.save(anchor);
       cappedRepository.save(m1);
       cappedRepository.save(m2);
-      cappedRepository.save(m3);
-      cappedRepository.save(m4);
-      cappedRepository.save(m5);
+      m3 = m3.withSeq(cappedRepository.save(m3));
+      m4 = m4.withSeq(cappedRepository.save(m4));
+      m5 = m5.withSeq(cappedRepository.save(m5));
 
       // when
       List<SseMessage> found = cappedRepository.findAllAfter(anchor.id(), userId);
@@ -235,19 +235,19 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
   }
 
   @Nested
-  @DisplayName("최신 생성 시각 조회")
-  class GetLatestCreatedAt {
+  @DisplayName("최신 seq 조회")
+  class GetLatestSequence {
 
     @Test
     @DisplayName("메시지가 없으면 null을 반환한다")
     void 메시지가_없으면_null을_반환한다() {
       // when & then
-      assertThat(sseMessageRepository.getLatestCreatedAt()).isNull();
+      assertThat(sseMessageRepository.getLatestSequence()).isNull();
     }
 
     @Test
-    @DisplayName("가장 최근 저장한 메시지의 생성 시각을 반환한다")
-    void 가장_최근_저장한_메시지의_생성_시각을_반환한다() {
+    @DisplayName("가장 최근 저장한 메시지의 seq를 반환한다")
+    void 가장_최근_저장한_메시지의_seq를_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
       Instant earlier = NOW.minusSeconds(10);
@@ -256,10 +256,10 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       SseMessage second = new SseMessage(UUID.randomUUID(), Set.of(userId), "notifications",
           "second", NOW);
       sseMessageRepository.save(first);
-      sseMessageRepository.save(second);
+      long secondSeq = sseMessageRepository.save(second);
 
       // when & then
-      assertThat(sseMessageRepository.getLatestCreatedAt()).isEqualTo(NOW);
+      assertThat(sseMessageRepository.getLatestSequence()).isEqualTo(secondSeq);
     }
   }
 
@@ -280,7 +280,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
           "kept", NOW.minus(Duration.ofMinutes(1)));
       sseMessageRepository.save(expired);
       sseMessageRepository.save(anchor);
-      sseMessageRepository.save(kept);
+      kept = kept.withSeq(sseMessageRepository.save(kept));
 
       // when
       List<SseMessage> found = sseMessageRepository.findAllAfter(anchor.id(), userId);
