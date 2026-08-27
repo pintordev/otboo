@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.config;
 import com.sprint.mission.otboo.domain.weathernotification.sse.listener.SseRedisMessageListener;
 import com.sprint.mission.otboo.domain.weathernotification.sse.properties.SseReplayBufferProperties;
 import java.util.concurrent.Executor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +12,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 
+@Slf4j
 @Configuration
 @EnableConfigurationProperties(SseReplayBufferProperties.class)
 public class SseConfig {
@@ -25,6 +27,7 @@ public class SseConfig {
     container.setConnectionFactory(connectionFactory);
     container.addMessageListener(listener, new ChannelTopic(SSE_CHANNEL));
     container.setTaskExecutor(sseListenerExecutor);
+    container.setErrorHandler(t -> log.error("SSE Redis 리스너 컨테이너 예외", t));
     return container;
   }
 }
