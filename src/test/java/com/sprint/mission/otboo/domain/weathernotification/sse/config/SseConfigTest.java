@@ -38,5 +38,23 @@ class SseConfigTest {
       taskExecutorField.setAccessible(true);
       assertThat(taskExecutorField.get(container)).isSameAs(sseListenerExecutor);
     }
+
+    @Test
+    @DisplayName("ErrorHandler가 설정돼 있다")
+    void ErrorHandler가_설정돼_있다() throws Exception {
+      // given
+      RedisConnectionFactory connectionFactory = mock(RedisConnectionFactory.class);
+      SseRedisMessageListener listener = mock(SseRedisMessageListener.class);
+      Executor sseListenerExecutor = mock(Executor.class);
+
+      // when
+      RedisMessageListenerContainer container = sseConfig.sseMessageListenerContainer(
+          connectionFactory, listener, sseListenerExecutor);
+
+      // then
+      Field errorHandlerField = RedisMessageListenerContainer.class.getDeclaredField("errorHandler");
+      errorHandlerField.setAccessible(true);
+      assertThat(errorHandlerField.get(container)).isNotNull();
+    }
   }
 }
