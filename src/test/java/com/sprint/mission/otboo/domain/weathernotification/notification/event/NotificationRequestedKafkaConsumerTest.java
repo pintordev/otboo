@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -96,7 +97,8 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
       List<NotificationDto> notificationDtos = List.of(new NotificationDto(
           UUID.randomUUID(), Instant.now(), event.receiverIds().iterator().next(), "제목", "내용",
           NotificationLevel.INFO));
-      given(notificationService.create(eventId, event)).willReturn(notificationDtos);
+      given(notificationService.createAndFindUndelivered(eventId, event))
+          .willReturn(notificationDtos);
 
       // when
       kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
@@ -116,7 +118,8 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
     @DisplayName("컨슈머가_계속_실패하면_재시도_소진_후_DLT_토픽으로_전달된다")
     void 컨슈머가_계속_실패하면_재시도_소진_후_DLT_토픽으로_전달된다() {
       // given
-      given(notificationService.create(any(), any())).willThrow(new RuntimeException("강제 실패"));
+      given(notificationService.createAndFindUndelivered(any(), any()))
+          .willThrow(new RuntimeException("강제 실패"));
       NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(NotificationRequestedEvent.class)
           .set("receiverIds", Set.of(UUID.randomUUID()))
           .set("title", "제목")
@@ -141,9 +144,43 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
       ConsumerRecord<String, String> dltRecord =
           KafkaTestUtils.getSingleRecord(dltConsumer, DLT_TOPIC, Duration.ofSeconds(10));
       assertThat(dltRecord.value()).isEqualTo(payload);
-      verify(notificationService, times(3)).create(any(), any());
+      verify(notificationService, times(3)).createAndFindUndelivered(any(), any());
 
       dltConsumer.close();
+    }
+  }
+
+  @Nested
+  @DisplayName("SSE 전송 실패 후 재시도 복구")
+  class RetryRecovery {
+
+    @Test
+    @DisplayName("SSE_전송이_실패해도_재시도에서_같은_알림이_다시_전달된다")
+    void SSE_전송이_실패해도_재시도에서_같은_알림이_다시_전달된다() {
+      // given
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(UUID.randomUUID()))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      UUID eventId = UUID.randomUUID();
+      NotificationDto dto = new NotificationDto(
+          UUID.randomUUID(), Instant.now(), event.receiverIds().iterator().next(), "제목", "내용",
+          NotificationLevel.INFO);
+      given(notificationService.createAndFindUndelivered(eventId, event)).willReturn(List.of(dto));
+      doThrow(new RuntimeException("SSE 전송 실패"))
+          .doNothing()
+          .when(sseService).send(List.of(dto), "notifications");
+
+      // when - 1차 처리는 sseService.send() 실패로 재시도 대상이 되고, 2차 처리에서 정상 전달된다
+      kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
+          objectMapper.writeValueAsString(new NotificationOutboxPayload(eventId, event)));
+
+      // then
+      await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+          verify(sseService, times(2)).send(List.of(dto), "notifications"));
+      verify(notificationService, times(1)).markSseDelivered(List.of(dto.id()));
     }
   }
 }
