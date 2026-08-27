@@ -14,6 +14,7 @@ import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -613,6 +614,44 @@ class FeedRepositoryTest {
       // then
       assertThat(second).hasSize(1);
       assertThat(second.get(0).getId()).isNotEqualTo(cursor.getId());
+    }
+  }
+
+  @Nested
+  @DisplayName("findAllOotdImageKeys")
+  class FindAllOotdImageKeys {
+
+    @Test
+    @DisplayName("ootds_스냅샷에_담긴_이미지_키를_모아서_반환하고_소프트_삭제된_피드도_포함한다")
+    void ootds_스냅샷에_담긴_이미지_키를_모아서_반환하고_소프트_삭제된_피드도_포함한다() {
+      // given
+      OotdSnapshot ootd1 = new OotdSnapshot(
+          UUID.randomUUID(), "패딩", "clothes/a.png", ClothesType.OUTER, List.of());
+      OotdSnapshot ootd2 = new OotdSnapshot(
+          UUID.randomUUID(), "청바지", "clothes/b.png", ClothesType.BOTTOM, List.of());
+      User author = persistUser("작성자");
+      feedRepository.save(
+          Feed.create(author.getId(), UUID.randomUUID(), "오늘의 착장", DUMMY_SNAPSHOT,
+              List.of(ootd1, ootd2)));
+
+      OotdSnapshot deletedOotd = new OotdSnapshot(
+          UUID.randomUUID(), "코트", "clothes/c.png", ClothesType.OUTER, List.of());
+      Feed deletedFeed = feedRepository.save(
+          Feed.create(author.getId(), UUID.randomUUID(), "삭제된 피드", DUMMY_SNAPSHOT,
+              List.of(deletedOotd)));
+      deletedFeed.delete();
+      feedRepository.save(deletedFeed);
+
+      createAndSaveFeed("ootds 없는 피드");
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // when
+      Set<String> imageKeys = feedRepository.findAllOotdImageKeys();
+
+      // then — 소프트 삭제 여부와 무관하게 스냅샷에 남아있는 키는 전부 참조로 집계된다
+      assertThat(imageKeys)
+          .containsExactlyInAnyOrder("clothes/a.png", "clothes/b.png", "clothes/c.png");
     }
   }
 }
