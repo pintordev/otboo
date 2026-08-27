@@ -24,8 +24,12 @@ public class NotificationRequestedKafkaConsumer {
       groupId = "notification-requested-consumer")
   public void consume(String payload) {
     NotificationOutboxPayload outboxPayload = objectMapper.readValue(payload, NotificationOutboxPayload.class);
-    List<NotificationDto> notificationDtos =
-        notificationService.create(outboxPayload.eventId(), outboxPayload.event());
+    List<NotificationDto> notificationDtos = notificationService
+        .createAndFindUndelivered(outboxPayload.eventId(), outboxPayload.event());
+    if (notificationDtos.isEmpty()) {
+      return;
+    }
     sseService.send(notificationDtos, "notifications");
+    notificationService.markSseDelivered(notificationDtos.stream().map(NotificationDto::id).toList());
   }
 }
