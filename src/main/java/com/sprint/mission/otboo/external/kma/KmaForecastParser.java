@@ -40,10 +40,12 @@ public class KmaForecastParser {
       }
       LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
       DailyTemperatureRange range = temperatureRange(dayItems);
+      DailyPrecipitationSummary precipitationSummary = precipitationSummary(dayItems);
       Map<String, List<Item>> itemsBySlot = dayItems.stream()
           .collect(Collectors.groupingBy(Item::fcstTime, TreeMap::new, Collectors.toList()));
       for (Map.Entry<String, List<Item>> slot : itemsBySlot.entrySet()) {
-        toSlotForecast(date, slot.getKey(), slot.getValue(), range).ifPresent(result::add);
+        toSlotForecast(date, slot.getKey(), slot.getValue(), range, precipitationSummary)
+            .ifPresent(result::add);
       }
     }
     return result;
@@ -72,15 +74,32 @@ public class KmaForecastParser {
     return new DailyTemperatureRange(tmn != null ? tmn : tmpMin, tmx != null ? tmx : tmpMax);
   }
 
+  // POP(강수확률)은 "그날 비 올 가능성"(하루 최댓값), PCP(강수량)는 "그날 강수량"(하루 합계)이라는
+  // 기존 의미를 유지한다 - temperatureRange()와 같은 자리에서 날짜 단위로 한 번만 계산해 그날 모든
+  // 슬롯에 동일하게 적용한다.
+  private DailyPrecipitationSummary precipitationSummary(List<Item> dayItems) {
+    double probabilityMax = 0.0;
+    double amountSum = 0.0;
+    for (Item item : dayItems) {
+      switch (item.category()) {
+        case "POP" ->
+            probabilityMax = Math.max(probabilityMax, Double.parseDouble(item.fcstValue()));
+        case "PCP" -> amountSum += parsePrecipitationAmount(item.fcstValue());
+        default -> {
+        }
+      }
+    }
+    return new DailyPrecipitationSummary(probabilityMax, amountSum);
+  }
+
   private Optional<WeatherForecastSlotDto> toSlotForecast(LocalDate date, String slotTime,
-      List<Item> slotItems, DailyTemperatureRange range) {
+      List<Item> slotItems, DailyTemperatureRange range,
+      DailyPrecipitationSummary precipitationSummary) {
     Double tempCurrent = null;
     double humidityCurrent = 0.0;
     double windSpeed = 0.0;
     SkyStatus skyStatus = SkyStatus.CLEAR;
     PrecipitationType precipitationType = PrecipitationType.NONE;
-    double precipitationAmount = 0.0;
-    double precipitationProbability = 0.0;
 
     for (Item item : slotItems) {
       switch (item.category()) {
@@ -88,8 +107,6 @@ public class KmaForecastParser {
         case "SKY" -> skyStatus = toSkyStatus(item.fcstValue());
         case "REH" -> humidityCurrent = Double.parseDouble(item.fcstValue());
         case "WSD" -> windSpeed = Double.parseDouble(item.fcstValue());
-        case "POP" -> precipitationProbability = Double.parseDouble(item.fcstValue());
-        case "PCP" -> precipitationAmount = parsePrecipitationAmount(item.fcstValue());
         case "PTY" -> {
           String pty = item.fcstValue();
           if (pty != null && !"0".equals(pty)) {
@@ -105,8 +122,8 @@ public class KmaForecastParser {
       return Optional.empty();
     }
     return Optional.of(new WeatherForecastSlotDto(date, toInstant(date, slotTime), skyStatus,
-        precipitationType, precipitationAmount, precipitationProbability, humidityCurrent,
-        tempCurrent, range.min(), range.max(), windSpeed));
+        precipitationType, precipitationSummary.amountSum(), precipitationSummary.probabilityMax(),
+        humidityCurrent, tempCurrent, range.min(), range.max(), windSpeed));
   }
 
   private Instant toInstant(LocalDate date, String slotTime) {
@@ -116,6 +133,10 @@ public class KmaForecastParser {
   }
 
   private record DailyTemperatureRange(double min, double max) {
+
+  }
+
+  private record DailyPrecipitationSummary(double probabilityMax, double amountSum) {
 
   }
 

@@ -102,8 +102,9 @@ class KmaForecastParserTest {
       assertThat(hour1.temperatureCurrent()).isEqualTo(16.0);
       assertThat(hour1.skyStatus()).isEqualTo(SkyStatus.CLEAR);
       assertThat(hour1.precipitationType()).isEqualTo(PrecipitationType.NONE);
-      assertThat(hour1.precipitationProbability()).isEqualTo(0.0);
-      assertThat(hour1.precipitationAmount()).isEqualTo(0.0);
+      // POP/PCP는 하루 대표값이라 PTY와 달리 이 슬롯에도 0시 슬롯과 동일한 값이 적용된다
+      assertThat(hour1.precipitationProbability()).isEqualTo(60.0);
+      assertThat(hour1.precipitationAmount()).isEqualTo(5.0);
       assertThat(hour1.humidityCurrent()).isEqualTo(0.0);
       assertThat(hour1.windSpeed()).isEqualTo(0.0);
     }
