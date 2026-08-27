@@ -450,51 +450,9 @@ class WeatherSuddenChangeChunkProcessorTest {
     }
 
     @Test
-    @DisplayName("baseline과_다른_시각만_개별적으로_비교해_발행한다")
-    void baseline과_다른_시각만_개별적으로_비교해_발행한다() {
-      // given
-      WeatherGrid grid = gridWithId(60, 127);
-      LocalDate d1Date = LocalDate.parse("2026-07-28");
-      Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
-      Instant hour3 = hour0.plusSeconds(3 * 3600);
-      WeatherChangeSnapshot baselineHour0 =
-          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0);
-      WeatherChangeSnapshot baselineHour3 =
-          new WeatherChangeSnapshot(18.0, PrecipitationType.NONE, 0.0, 0.0);
-      WeatherD1Baseline baselineRow = WeatherD1Baseline.create(grid, d1Date,
-          Map.of(hour0, baselineHour0, hour3, baselineHour3),
-          Instant.parse("2026-07-27T11:10:00Z"));
-      given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
-          List.of(grid.getId()), d1Date)).willReturn(List.of(baselineRow));
-
-      Weather currentHour0 = weatherWithBaseline(grid, hour0, 20.0, 25.0);
-      Weather currentHour3 = weatherWithBaseline(grid, hour3, 18.0, 18.5);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
-          List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
-          .willReturn(List.of(currentHour0, currentHour3));
-
-      given(weatherChangeEvaluator.evaluate(baselineHour0,
-          WeatherChangeSnapshot.currentOf(currentHour0)))
-          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
-      given(weatherChangeEvaluator.evaluate(baselineHour3,
-          WeatherChangeSnapshot.currentOf(currentHour3)))
-          .willReturn(Optional.empty());
-      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
-      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
-          .willReturn(List.of(profile));
-
-      // when
-      int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
-
-      // then
-      assertThat(notified).isEqualTo(1);
-      verify(eventPublisher, times(1)).publishEvent(any(NotificationRequestedEvent.class));
-    }
-
-    @Test
-    @DisplayName("한_그리드_안에서_여러_시각이_동시에_임계값을_넘어도_발행은_그리드당_1회다")
-    void 한_그리드_안에서_여러_시각이_동시에_임계값을_넘어도_발행은_그리드당_1회다() {
-      // given
+    @DisplayName("baseline과_current를_시각_순서대로_짝지어_evaluateDaySummary에_그리드당_1회_전달한다")
+    void baseline과_current를_시각_순서대로_짝지어_evaluateDaySummary에_그리드당_1회_전달한다() {
+      // given - 하루 두 시각이 모두 baseline을 갖는 경우
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
       Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
@@ -515,11 +473,10 @@ class WeatherSuddenChangeChunkProcessorTest {
           List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
           .willReturn(List.of(currentHour0, currentHour3));
 
-      given(weatherChangeEvaluator.evaluate(baselineHour0,
-          WeatherChangeSnapshot.currentOf(currentHour0)))
-          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
-      given(weatherChangeEvaluator.evaluate(baselineHour3,
-          WeatherChangeSnapshot.currentOf(currentHour3)))
+      given(weatherChangeEvaluator.evaluateDaySummary(
+          List.of(baselineHour0, baselineHour3),
+          List.of(WeatherChangeSnapshot.currentOf(currentHour0),
+              WeatherChangeSnapshot.currentOf(currentHour3))))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 내렸어요."))));
       Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
@@ -528,29 +485,28 @@ class WeatherSuddenChangeChunkProcessorTest {
       // when
       int notified = processor.compareD1AndNotify(List.of(grid), d1Date);
 
-      // then - 시각 2개가 모두 임계값을 넘어도 publish/profileRepository 조회는 그리드당 1회다
+      // then - 시각이 여러 개여도 evaluateDaySummary/publish/profileRepository 조회는 그리드당 1회다
       assertThat(notified).isEqualTo(1);
-      verify(eventPublisher, times(1)).publishEvent(any(NotificationRequestedEvent.class));
+      verify(weatherChangeEvaluator, times(1)).evaluateDaySummary(any(), any());
       verify(profileRepository, times(1)).findByLocation(grid.getX(), grid.getY());
       ArgumentCaptor<NotificationRequestedEvent> captor =
           ArgumentCaptor.forClass(NotificationRequestedEvent.class);
-      verify(eventPublisher).publishEvent(captor.capture());
-      assertThat(captor.getValue().content())
-          .contains("기온이 5.0도 올랐어요.")
-          .contains("기온이 5.0도 내렸어요.");
+      verify(eventPublisher, times(1)).publishEvent(captor.capture());
+      assertThat(captor.getValue().content()).contains("기온이 5.0도 내렸어요.");
     }
 
     @Test
-    @DisplayName("어제는_없었던_슬롯은_비교를_건너뛴다")
-    void 어제는_없었던_슬롯은_비교를_건너뛴다() {
-      // given
+    @DisplayName("어제는_없었던_슬롯은_evaluateDaySummary_대상에서_제외된다")
+    void 어제는_없었던_슬롯은_evaluateDaySummary_대상에서_제외된다() {
+      // given - hour3는 어제(baseline) 캡처에 없던 슬롯(경계 케이스)
       WeatherGrid grid = gridWithId(60, 127);
       LocalDate d1Date = LocalDate.parse("2026-07-28");
       Instant hour0 = d1Date.atStartOfDay(KST).toInstant();
       Instant hour3 = hour0.plusSeconds(3 * 3600);
+      WeatherChangeSnapshot baselineHour0 =
+          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0);
       WeatherD1Baseline baselineRow = WeatherD1Baseline.create(grid, d1Date,
-          Map.of(hour0, new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0)),
-          Instant.parse("2026-07-27T11:10:00Z"));
+          Map.of(hour0, baselineHour0), Instant.parse("2026-07-27T11:10:00Z"));
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(grid.getId()), d1Date)).willReturn(List.of(baselineRow));
 
@@ -563,9 +519,10 @@ class WeatherSuddenChangeChunkProcessorTest {
       // when
       processor.compareD1AndNotify(List.of(grid), d1Date);
 
-      // then
-      verify(weatherChangeEvaluator, never()).evaluate(any(),
-          eq(WeatherChangeSnapshot.currentOf(currentHour3)));
+      // then - hour3은 baseline이 없어 evaluateDaySummary로 넘어가는 리스트에서 빠진다(길이 1)
+      verify(weatherChangeEvaluator).evaluateDaySummary(
+          eq(List.of(baselineHour0)),
+          eq(List.of(WeatherChangeSnapshot.currentOf(currentHour0))));
     }
 
     @Test
@@ -588,8 +545,8 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
           List.of(notifiedGrid.getId(), quietGrid.getId()), hour0,
           d1Date.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(currentHour0));
-      given(weatherChangeEvaluator.evaluate(baselineHour0,
-          WeatherChangeSnapshot.currentOf(currentHour0)))
+      given(weatherChangeEvaluator.evaluateDaySummary(
+          List.of(baselineHour0), List.of(WeatherChangeSnapshot.currentOf(currentHour0))))
           .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
       Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
       given(profileRepository.findByLocation(notifiedGrid.getX(), notifiedGrid.getY()))
