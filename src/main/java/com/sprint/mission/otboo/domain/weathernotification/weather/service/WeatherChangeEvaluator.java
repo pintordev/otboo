@@ -72,19 +72,13 @@ public class WeatherChangeEvaluator {
 
       double temperatureDelta = normalize(
           latest.temperatureCurrent() - previous.temperatureCurrent());
-      if (Math.abs(temperatureDelta) > Math.abs(maxTemperatureDelta)) {
-        maxTemperatureDelta = temperatureDelta;
-      }
+      maxTemperatureDelta = trackMaxDelta(maxTemperatureDelta, temperatureDelta);
       double probabilityDelta = normalize(
           latest.precipitationProbability() - previous.precipitationProbability());
-      if (Math.abs(probabilityDelta) > Math.abs(maxProbabilityDelta)) {
-        maxProbabilityDelta = probabilityDelta;
-      }
+      maxProbabilityDelta = trackMaxDelta(maxProbabilityDelta, probabilityDelta);
       double amountDelta = normalize(
           latest.precipitationAmount() - previous.precipitationAmount());
-      if (Math.abs(amountDelta) > Math.abs(maxAmountDelta)) {
-        maxAmountDelta = amountDelta;
-      }
+      maxAmountDelta = trackMaxDelta(maxAmountDelta, amountDelta);
       if (previous.precipitationType() != latest.precipitationType()) {
         typeChangeFrom = previous.precipitationType();
         typeChangeTo = latest.precipitationType();
@@ -109,6 +103,10 @@ public class WeatherChangeEvaluator {
 
   private double normalize(double delta) {
     return Math.round(delta * SCALE) / SCALE;
+  }
+
+  private double trackMaxDelta(double currentMax, double candidate) {
+    return Math.abs(candidate) > Math.abs(currentMax) ? candidate : currentMax;
   }
 
   private String temperatureMessage(double delta) {
