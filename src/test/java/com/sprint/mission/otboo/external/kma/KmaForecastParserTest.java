@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.external.kma;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -251,6 +252,26 @@ class KmaForecastParserTest {
             assertThat(logEvent.getLevel()).isEqualTo(Level.WARN);
             assertThat(logEvent.getFormattedMessage()).contains("PTY").contains("9");
           });
+    }
+
+    @Test
+    @DisplayName("PTY_값이_null이면_강수형태를_NONE으로_두고_NPE_없이_파싱한다")
+    void PTY_값이_null이면_강수형태를_NONE으로_두고_NPE_없이_파싱한다() {
+      // given - 기상청 응답에서 PTY 항목의 fcstValue가 null인 경우(결측)
+      List<Item> items = new ArrayList<>();
+      for (int hour = 0; hour < 4; hour++) {
+        items.add(item("TMP", "20260824", "%02d00".formatted(hour), String.valueOf(20 + hour)));
+      }
+      items.add(item("PTY", "20260824", "0000", null));
+      KmaWeatherResponse response = responseOf(items);
+
+      // when / then
+      assertThatCode(() -> parser.parseSlotForecast(response)).doesNotThrowAnyException();
+      WeatherForecastSlotDto hour0 = parser.parseSlotForecast(response).stream()
+          .filter(dto -> dto.slotAt().equals(
+              LocalDate.of(2026, 8, 24).atTime(0, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant()))
+          .findFirst().orElseThrow();
+      assertThat(hour0.precipitationType()).isEqualTo(PrecipitationType.NONE);
     }
 
     @Test
