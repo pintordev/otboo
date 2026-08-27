@@ -1,11 +1,13 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -38,7 +40,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.ZSetOperations;
@@ -218,6 +222,52 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       assertThat(appender.list)
           .extracting(ILoggingEvent::getFormattedMessage)
           .anyMatch(msg -> msg.contains("MULTI/EXEC 일부 실패"));
+    }
+
+    @Test
+    @DisplayName("MULTI_이후_예외가_발생하면_discard_후_원래_예외를_재전파한다")
+    void MULTI_이후_예외가_발생하면_discard_후_원래_예외를_재전파한다() {
+      // given - execute(SessionCallback)을 직접 흉내내 RedisOperations를 목으로 넘긴다
+      // (Lettuce 파이프라인 특성상 실제 커넥션 장애를 통합 테스트로 재현하긴 어려움)
+      StringRedisTemplate mockTemplate = mock(StringRedisTemplate.class);
+      ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+      @SuppressWarnings("unchecked")
+      ZSetOperations<String, String> zSetOpsMock = mock(ZSetOperations.class);
+      given(mockTemplate.opsForValue()).willReturn(valueOps);
+      given(mockTemplate.opsForZSet()).willReturn(zSetOpsMock);
+      given(valueOps.increment("sse:seq")).willReturn(1L);
+      given(zSetOpsMock.rangeByScore(anyString(), anyDouble(), anyDouble()))
+          .willReturn(Set.of());
+
+      @SuppressWarnings("unchecked")
+      RedisOperations<String, String> mockOperations = mock(RedisOperations.class);
+      @SuppressWarnings("unchecked")
+      ValueOperations<String, String> opsValueOps = mock(ValueOperations.class);
+      @SuppressWarnings("unchecked")
+      SetOperations<String, String> opsSetOps = mock(SetOperations.class);
+      @SuppressWarnings("unchecked")
+      ZSetOperations<String, String> opsZSetOps = mock(ZSetOperations.class);
+      given(mockOperations.opsForValue()).willReturn(opsValueOps);
+      given(mockOperations.opsForSet()).willReturn(opsSetOps);
+      given(mockOperations.opsForZSet()).willReturn(opsZSetOps);
+      RuntimeException redisFailure = new RuntimeException("Redis 장애");
+      given(opsZSetOps.add(anyString(), anyString(), anyDouble())).willThrow(redisFailure);
+      given(mockTemplate.execute(any(SessionCallback.class))).willAnswer(invocation -> {
+        SessionCallback<?> callback = invocation.getArgument(0);
+        return callback.execute(mockOperations);
+      });
+
+      SseMessageRepository repository = new SseMessageRepository(mockTemplate,
+          new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
+          new SseReplayBufferProperties(10, 1000));
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("receiverIds", Set.of(UUID.randomUUID()))
+          .set("data", "payload")
+          .sample();
+
+      // when & then
+      assertThatThrownBy(() -> repository.save(message)).isSameAs(redisFailure);
+      verify(mockOperations).discard();
     }
   }
 
