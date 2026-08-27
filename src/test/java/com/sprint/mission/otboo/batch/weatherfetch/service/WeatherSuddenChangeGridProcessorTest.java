@@ -133,4 +133,48 @@ class WeatherSuddenChangeGridProcessorTest {
           anyDouble());
     }
   }
+
+  @Nested
+  @DisplayName("EvaluateD1")
+  class EvaluateD1 {
+
+    @Test
+    @DisplayName("변화가_감지되면_발행하고_true를_반환한다")
+    void 변화가_감지되면_발행하고_true를_반환한다() {
+      // given
+      WeatherGrid grid = gridWithId(60, 127);
+      List<WeatherChangeSnapshot> baselines = List.of(
+          new WeatherChangeSnapshot(20.0, PrecipitationType.NONE, 0.0, 0.0));
+      List<WeatherChangeSnapshot> currents = List.of(
+          new WeatherChangeSnapshot(25.0, PrecipitationType.NONE, 0.0, 0.0));
+      given(weatherChangeEvaluator.evaluateDaySummary(baselines, currents))
+          .willReturn(Optional.of(new ChangeResult(List.of("기온이 5.0도 올랐어요."))));
+      Profile profile = profileWithLocation(List.of("서울특별시", "강남구"));
+      given(profileRepository.findByLocation(grid.getX(), grid.getY()))
+          .willReturn(List.of(profile));
+
+      // when
+      boolean notified = gridProcessor.evaluateD1(grid, baselines, currents);
+
+      // then
+      assertThat(notified).isTrue();
+      verify(eventPublisher).publishEvent(any(NotificationRequestedEvent.class));
+    }
+
+    @Test
+    @DisplayName("변화가_없으면_발행하지_않고_false를_반환한다")
+    void 변화가_없으면_발행하지_않고_false를_반환한다() {
+      // given
+      WeatherGrid grid = gridWithId(60, 127);
+      List<WeatherChangeSnapshot> baselines = List.of();
+      List<WeatherChangeSnapshot> currents = List.of();
+
+      // when
+      boolean notified = gridProcessor.evaluateD1(grid, baselines, currents);
+
+      // then
+      assertThat(notified).isFalse();
+      verify(eventPublisher, never()).publishEvent(any());
+    }
+  }
 }
