@@ -275,6 +275,29 @@ class KmaForecastParserTest {
     }
 
     @Test
+    @DisplayName("POP는_하루_최댓값_PCP는_하루_합계로_모든_슬롯에_동일하게_적용된다")
+    void POP는_하루_최댓값_PCP는_하루_합계로_모든_슬롯에_동일하게_적용된다() {
+      // given - 06시 POP 80/PCP 20mm, 15시 POP 10/PCP 0mm인 날(문서 2번 시나리오)
+      List<Item> items = new ArrayList<>();
+      items.add(item("TMP", "20260824", "0600", "20"));
+      items.add(item("POP", "20260824", "0600", "80"));
+      items.add(item("PCP", "20260824", "0600", "20.0mm"));
+      items.add(item("TMP", "20260824", "1500", "28"));
+      items.add(item("POP", "20260824", "1500", "10"));
+      items.add(item("PCP", "20260824", "1500", "강수없음"));
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then - 15시 슬롯의 원값(POP 10/PCP 0)이 아니라 하루 대표값(80/20.0)이 모든 슬롯에 똑같이 적용된다
+      assertThat(result).extracting(WeatherForecastSlotDto::precipitationProbability)
+          .containsOnly(80.0);
+      assertThat(result).extracting(WeatherForecastSlotDto::precipitationAmount)
+          .containsOnly(20.0);
+    }
+
+    @Test
     @DisplayName("당일_늦은_시각_base_time으로_남은_슬롯이_3개뿐이어도_버려지지_않는다")
     void 당일_늦은_시각_base_time으로_남은_슬롯이_3개뿐이어도_버려지지_않는다() {
       // given - 20시 base_time 조회 시 오늘 남은 슬롯은 21·22·23시 3개뿐(기존 MIN_SLOT_COUNT=4 미달)
