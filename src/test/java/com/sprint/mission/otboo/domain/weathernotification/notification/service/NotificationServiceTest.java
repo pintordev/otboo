@@ -142,7 +142,7 @@ class NotificationServiceTest {
 
       // then
       assertThat(result).containsExactly(dto);
-      verify(notificationBatchWriter, never()).saveAll(anyList());
+      verify(notificationBatchWriter).saveAll(List.of());
     }
   }
 

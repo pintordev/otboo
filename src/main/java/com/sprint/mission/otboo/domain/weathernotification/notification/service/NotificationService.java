@@ -26,6 +26,7 @@ public class NotificationService {
 
   private final NotificationRepository notificationRepository;
   private final NotificationMapper notificationMapper;
+  private final NotificationBatchWriter notificationBatchWriter;
   private final Clock clock;
 
   @Transactional
@@ -35,9 +36,7 @@ public class NotificationService {
         .map(receiverId -> Notification.create(
             eventId, receiverId, event.title(), event.content(), event.level()))
         .toList();
-    if (!newlyCreated.isEmpty()) {
-      notificationRepository.saveAll(newlyCreated);
-    }
+    notificationBatchWriter.saveAll(newlyCreated);
     return notificationRepository.findByEventIdAndSseDeliveredAtIsNull(eventId).stream()
         .map(notificationMapper::toDto)
         .toList();
