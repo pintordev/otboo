@@ -1,11 +1,10 @@
 package com.sprint.mission.otboo.batch.orphanedimage.writer;
 
 import com.sprint.mission.otboo.batch.orphanedimage.metrics.OrphanedImageCleanupMetrics;
-import lombok.RequiredArgsConstructor;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Delete;
@@ -22,10 +21,10 @@ public class OrphanedImageWriter implements ItemWriter<String> {
   private final String bucket;
 
   public OrphanedImageWriter(S3Client s3Client, OrphanedImageCleanupMetrics metrics,
-      @Value("${otboo.file.s3.bucket}") String bucket) {
+      FileProperties fileProperties) {
     this.s3Client = s3Client;
     this.metrics = metrics;
-    this.bucket = bucket;
+    this.bucket = fileProperties.s3().bucket();
   }
 
   @Override

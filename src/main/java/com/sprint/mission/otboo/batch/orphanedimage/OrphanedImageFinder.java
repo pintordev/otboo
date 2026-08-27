@@ -4,13 +4,13 @@ import com.sprint.mission.otboo.batch.orphanedimage.config.OrphanedImageCleanupP
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesRepository;
 import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -19,7 +19,6 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class OrphanedImageFinder {
 
   private final S3Client s3Client;
@@ -29,6 +28,18 @@ public class OrphanedImageFinder {
   private final Clock clock;
   private final OrphanedImageCleanupProperties properties;
   private final String bucket;
+
+  public OrphanedImageFinder(S3Client s3Client, ProfileRepository profileRepository,
+      ClothesRepository clothesRepository, FeedRepository feedRepository, Clock clock,
+      OrphanedImageCleanupProperties properties, FileProperties fileProperties) {
+    this.s3Client = s3Client;
+    this.profileRepository = profileRepository;
+    this.clothesRepository = clothesRepository;
+    this.feedRepository = feedRepository;
+    this.clock = clock;
+    this.properties = properties;
+    this.bucket = fileProperties.s3().bucket();
+  }
 
   public record Result(List<String> orphanedKeys, boolean capped) {
 

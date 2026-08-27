@@ -7,6 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.batch.orphanedimage.metrics.OrphanedImageCleanupMetrics;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,7 +37,10 @@ class OrphanedImageWriterTest {
 
   @BeforeEach
   void setUp() {
-    writer = new OrphanedImageWriter(s3Client, metrics, "otboo-uploads");
+    FileProperties fileProperties = new FileProperties(FileImplType.LOCAL,
+        "http://localhost:8080/uploads", 5242880, Set.of("png"), null,
+        new FileProperties.S3("otboo-uploads", "ap-northeast-2"));
+    writer = new OrphanedImageWriter(s3Client, metrics, fileProperties);
   }
 
   @Nested

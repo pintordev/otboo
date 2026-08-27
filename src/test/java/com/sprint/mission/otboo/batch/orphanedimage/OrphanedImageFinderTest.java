@@ -10,6 +10,8 @@ import com.sprint.mission.otboo.batch.orphanedimage.config.OrphanedImageCleanupP
 import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.clothesrecommend.clothes.repository.ClothesRepository;
 import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -63,8 +65,11 @@ class OrphanedImageFinderTest {
       int maxDeleteAbsolute) {
     OrphanedImageCleanupProperties properties =
         new OrphanedImageCleanupProperties(prefixes, 24, 100, maxDeleteRatio, maxDeleteAbsolute);
+    FileProperties fileProperties = new FileProperties(FileImplType.LOCAL,
+        "http://localhost:8080/uploads", 5242880, Set.of("png"), null,
+        new FileProperties.S3("otboo-uploads", "ap-northeast-2"));
     return new OrphanedImageFinder(s3Client, profileRepository, clothesRepository, feedRepository,
-        clock, properties, "otboo-uploads");
+        clock, properties, fileProperties);
   }
 
   @Nested
