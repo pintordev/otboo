@@ -29,21 +29,6 @@ public class NotificationService {
   private final Clock clock;
 
   @Transactional
-  public List<NotificationDto> create(UUID eventId, NotificationRequestedEvent event) {
-    List<Notification> notifications = event.receiverIds().stream()
-        .filter(receiverId -> !notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
-        .map(receiverId -> Notification.create(
-            eventId, receiverId, event.title(), event.content(), event.level()))
-        .toList();
-    if (notifications.isEmpty()) {
-      return List.of();
-    }
-    return notificationRepository.saveAll(notifications).stream()
-        .map(notificationMapper::toDto)
-        .toList();
-  }
-
-  @Transactional
   public List<NotificationDto> createAndFindUndelivered(UUID eventId, NotificationRequestedEvent event) {
     List<Notification> newlyCreated = event.receiverIds().stream()
         .filter(receiverId -> !notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
