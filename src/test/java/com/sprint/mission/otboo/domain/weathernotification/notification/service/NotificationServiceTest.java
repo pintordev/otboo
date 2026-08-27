@@ -61,6 +61,8 @@ class NotificationServiceTest {
   @Mock
   private NotificationMapper notificationMapper;
   @Mock
+  private NotificationBatchWriter notificationBatchWriter;
+  @Mock
   private Clock clock;
 
   @Nested
@@ -86,7 +88,6 @@ class NotificationServiceTest {
       Notification newlySaved = entityFixtureMonkey.giveMeBuilder(Notification.class)
           .set("receiverId", newReceiverId)
           .sample();
-      given(notificationRepository.saveAll(anyList())).willReturn(List.of(newlySaved));
 
       Notification stillUndelivered = entityFixtureMonkey.giveMeBuilder(Notification.class)
           .sample();
@@ -107,7 +108,7 @@ class NotificationServiceTest {
 
       // then
       assertThat(result).containsExactlyInAnyOrder(dto1, dto2);
-      verify(notificationRepository).saveAll(anyList());
+      verify(notificationBatchWriter).saveAll(anyList());
       verify(notificationRepository).findByEventIdAndSseDeliveredAtIsNull(eventId);
     }
 
@@ -141,7 +142,7 @@ class NotificationServiceTest {
 
       // then
       assertThat(result).containsExactly(dto);
-      verify(notificationRepository, never()).saveAll(anyList());
+      verify(notificationBatchWriter, never()).saveAll(anyList());
     }
   }
 
