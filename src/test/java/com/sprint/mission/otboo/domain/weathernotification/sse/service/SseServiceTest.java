@@ -422,6 +422,25 @@ class SseServiceTest {
     }
 
     @Test
+    @DisplayName("seq가_없는_구버전_메시지도_전달한다")
+    void seq가_없는_구버전_메시지도_전달한다() throws IOException {
+      // given - 롤링 배포 중 구버전 인스턴스가 발행한, seq 필드가 없는 메시지와의 호환성
+      UUID userId = UUID.randomUUID();
+      SseMessage legacyMessage =
+          new SseMessage(Set.of(userId), "notifications", "payload", Instant.now()); // seq=null
+      SseEmitter emitter = mock(SseEmitter.class);
+      given(sseEmitterRepository.findSnapshotSeq(userId)).willReturn(Optional.of(5L));
+      given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
+
+      // when
+      sseService.deliverLocally(legacyMessage);
+
+      // then - seq를 알 수 없으면 이미 재생됐다고 판단하지 않고 그대로 전달한다(NPE로 조용히
+      // 폐기되면 안 됨)
+      verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    }
+
+    @Test
     @DisplayName("재생_스냅샷_이전_메시지는_중복_전송하지_않는다")
     void 재생_스냅샷_이전_메시지는_중복_전송하지_않는다() {
       // given — save()와 로컬 전송 사이 Pub/Sub 왕복 구간에 connect()가 끼어들어
