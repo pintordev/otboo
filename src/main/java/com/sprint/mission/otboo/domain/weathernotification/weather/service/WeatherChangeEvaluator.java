@@ -55,6 +55,11 @@ public class WeatherChangeEvaluator {
   // 같은 시각의 baseline/current 스냅샷 쌍이어야 한다.
   public Optional<ChangeResult> evaluateDaySummary(List<WeatherChangeSnapshot> baselines,
       List<WeatherChangeSnapshot> currents) {
+    if (baselines.size() != currents.size()) {
+      throw new IllegalArgumentException(
+          "baselines와 currents의 크기가 일치해야 합니다: baselines=%d, currents=%d"
+              .formatted(baselines.size(), currents.size()));
+    }
     double maxTemperatureDelta = 0.0;
     double maxProbabilityDelta = 0.0;
     double maxAmountDelta = 0.0;
