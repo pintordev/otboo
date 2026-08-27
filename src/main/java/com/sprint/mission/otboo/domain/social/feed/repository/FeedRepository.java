@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -63,4 +64,13 @@ public interface FeedRepository extends JpaRepository<Feed, UUID> {
   List<Feed> findForIncrementalReindex(@Param("since") Instant since,
       @Param("lastUpdatedAt") Instant lastUpdatedAt,
       @Param("lastId") UUID lastId, @Param("limit") int limit);
+
+  // feeds.ootds(jsonb) 배열 안의 각 원소에서 imageUrl만 뽑는다. 소프트 삭제된 피드도 포함 —
+  // 삭제된 피드라도 스냅샷 이미지가 남아있으면 여전히 보호 대상이다.
+  @Query(value = """
+      select distinct elem ->> 'imageUrl'
+      from feeds, jsonb_array_elements(ootds) as elem
+      where elem ->> 'imageUrl' is not null
+      """, nativeQuery = true)
+  Set<String> findAllOotdImageKeys();
 }
