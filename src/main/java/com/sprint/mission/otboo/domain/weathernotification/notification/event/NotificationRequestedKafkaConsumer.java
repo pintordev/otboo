@@ -1,11 +1,13 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationSseDeliveryFailedException;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationOutboxPayload;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -29,7 +31,14 @@ public class NotificationRequestedKafkaConsumer {
     if (notificationDtos.isEmpty()) {
       return;
     }
-    sseService.send(notificationDtos, "notifications");
-    notificationService.markSseDelivered(notificationDtos.stream().map(NotificationDto::id).toList());
+    List<UUID> deliveredIds = sseService.send(notificationDtos, "notifications");
+    notificationService.markSseDelivered(deliveredIds);
+    if (deliveredIds.size() < notificationDtos.size()) {
+      List<UUID> failedIds = notificationDtos.stream()
+          .map(NotificationDto::id)
+          .filter(id -> !deliveredIds.contains(id))
+          .toList();
+      throw NotificationSseDeliveryFailedException.of(failedIds);
+    }
   }
 }
