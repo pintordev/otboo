@@ -373,11 +373,12 @@ class SseServiceTest {
           .willReturn(3L);
 
       // when
-      sseService.send(List.of(dto1, dto2, dto3), "notifications");
+      List<UUID> delivered = sseService.send(List.of(dto1, dto2, dto3), "notifications");
 
-      // then - 2번째가 실패해도 3번째까지 시도돼야 한다
+      // then - 2번째가 실패해도 3번째까지 시도돼야 하고, 반환값은 성공한 알림 id만 담는다
       verify(sseMessageRepository, times(3)).save(any());
       verify(stringRedisTemplate, times(2)).convertAndSend(eq(SseConfig.SSE_CHANNEL), anyString());
+      assertThat(delivered).containsExactly(dto1.id(), dto3.id());
     }
 
     @Test
