@@ -117,7 +117,9 @@ public class SseService {
     lock.lock();
     try {
       Optional<Long> snapshotSeq = sseEmitterRepository.findSnapshotSeq(receiverId);
-      boolean alreadyReplayed = snapshotSeq
+      // message.seq()가 null이면(롤링 배포 중 구버전 인스턴스가 발행한 메시지) 이미 재생됐는지
+      // 판단할 근거가 없다 — 조용히 폐기하는 대신 그대로 전달한다(중복 전송 위험 < 유실 위험).
+      boolean alreadyReplayed = message.seq() != null && snapshotSeq
           .filter(s -> message.seq() <= s)
           .isPresent();
       if (alreadyReplayed) {
