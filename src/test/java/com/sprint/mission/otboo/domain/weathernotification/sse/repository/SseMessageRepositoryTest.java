@@ -76,18 +76,6 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
   class Save {
 
     @Test
-    @DisplayName("저장하면 메시지의 id를 반환한다")
-    void 저장하면_메시지의_id를_반환한다() {
-      // given
-      SseMessage message = fm.giveMeBuilder(SseMessage.class)
-          .set("data", "payload")
-          .sample();
-
-      // when & then
-      assertThat(sseMessageRepository.save(message)).isEqualTo(message.id());
-    }
-
-    @Test
     @DisplayName("저장한 메시지는 Redis에 JSON으로 기록된다")
     void 저장한_메시지는_Redis에_JSON으로_기록된다() {
       // given
@@ -103,7 +91,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     }
 
     @Test
-    @DisplayName("저장한 메시지의 id가 인덱스에 생성 시각 score로 등록된다")
+    @DisplayName("저장한 메시지의 id가 인덱스에 seq를 score로 등록된다")
     void 저장한_메시지의_id가_인덱스에_등록된다() {
       // given
       SseMessage message = fm.giveMeBuilder(SseMessage.class)
@@ -111,13 +99,32 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
           .sample();
 
       // when
-      sseMessageRepository.save(message);
+      long seq = sseMessageRepository.save(message);
 
       // then
-      Instant createdAt = message.createdAt();
-      double expectedMicros = createdAt.getEpochSecond() * 1_000_000L + createdAt.getNano() / 1_000L;
       assertThat(redisTemplate.opsForZSet().score("sse:message-index", message.id().toString()))
-          .isEqualTo(expectedMicros);
+          .isEqualTo((double) seq);
+    }
+
+    @Test
+    @DisplayName("서로_다른_인스턴스에서_저장해도_seq는_전역적으로_단조_증가한다")
+    void 서로_다른_인스턴스에서_저장해도_seq는_전역적으로_단조_증가한다() {
+      // given - 두 번째 저장의 createdAt이 첫 번째보다 이르다(시계 스큐 재현)
+      SseMessage earlierClockLaterSave = fm.giveMeBuilder(SseMessage.class)
+          .set("data", "payload")
+          .set("createdAt", NOW.minusSeconds(1)) // 다른 인스턴스 시계가 1초 느림
+          .sample();
+      SseMessage laterClockEarlierSave = fm.giveMeBuilder(SseMessage.class)
+          .set("data", "payload")
+          .set("createdAt", NOW)
+          .sample();
+
+      // when
+      long firstSeq = sseMessageRepository.save(laterClockEarlierSave);
+      long secondSeq = sseMessageRepository.save(earlierClockLaterSave);
+
+      // then - createdAt은 두 번째가 더 이르지만, 저장 순서(seq)는 항상 증가해야 한다
+      assertThat(secondSeq).isGreaterThan(firstSeq);
     }
   }
 
@@ -186,28 +193,6 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       assertThat(found).containsExactly(valid);
     }
 
-    @Test
-    @DisplayName("같은 밀리초 안에서도 마이크로초 정밀도로 실제 생성 순서를 따른다")
-    void 같은_밀리초_안에서도_마이크로초_정밀도로_실제_생성_순서를_따른다() {
-      // given — m1이 m2보다 먼저 생성됐지만(같은 밀리초, 마이크로초만 다름) m1의 id가
-      // m2의 id보다 사전순으로 크다 — 밀리초 단위 score라면 둘이 동점이라 사전순(m2, m1)으로
-      // tie-break되어, lastEventId=m1일 때 ZRANK가 m1을 m2보다 뒤로 잡아 m2가 재생에서 빠진다
-      UUID userId = UUID.randomUUID();
-      Instant m1CreatedAt = NOW.plusNanos(100_000);
-      Instant m2CreatedAt = NOW.plusNanos(900_000);
-      SseMessage m1 = new SseMessage(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-          Set.of(userId), "notifications", "m1", m1CreatedAt);
-      SseMessage m2 = new SseMessage(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-          Set.of(userId), "notifications", "m2", m2CreatedAt);
-      sseMessageRepository.save(m1);
-      sseMessageRepository.save(m2);
-
-      // when
-      List<SseMessage> found = sseMessageRepository.findAllAfter(m1.id(), userId);
-
-      // then — m2가 m1보다 나중에 생성됐으므로 재생 대상에 포함돼야 한다
-      assertThat(found).containsExactly(m2);
-    }
   }
 
   @Nested
