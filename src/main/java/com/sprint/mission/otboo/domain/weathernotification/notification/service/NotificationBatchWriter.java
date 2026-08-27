@@ -10,10 +10,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 // Hibernate saveAll()은 알림 건수만큼 개별 INSERT를 보낸다(hibernate.jdbc.batch_size 미설정은
 // 프로젝트 전역 갭). 그 전역 설정을 켜는 결정을 기다리지 않고, WeatherWriter.saveSlots()와 동일한
 // 패턴(JdbcTemplate.batchUpdate)으로 이 도메인 안에서 바로 해결한다.
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Component
 public class NotificationBatchWriter {
@@ -25,6 +27,7 @@ public class NotificationBatchWriter {
 
   private final JdbcTemplate jdbcTemplate;
 
+  @Transactional
   public void saveAll(List<Notification> notifications) {
     if (notifications.isEmpty()) {
       return;
