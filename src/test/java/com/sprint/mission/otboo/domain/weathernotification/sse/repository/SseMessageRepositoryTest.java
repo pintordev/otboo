@@ -91,10 +91,12 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     }
 
     @Test
-    @DisplayName("저장한 메시지의 id가 인덱스에 seq를 score로 등록된다")
+    @DisplayName("저장한 메시지의 id가 수신자별 인덱스에 seq를 score로 등록된다")
     void 저장한_메시지의_id가_인덱스에_등록된다() {
       // given
+      UUID receiverId = UUID.randomUUID();
       SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("receiverIds", Set.of(receiverId))
           .set("data", "payload")
           .sample();
 
@@ -102,7 +104,8 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       long seq = sseMessageRepository.save(message);
 
       // then
-      assertThat(redisTemplate.opsForZSet().score("sse:message-index", message.id().toString()))
+      assertThat(redisTemplate.opsForZSet()
+          .score("sse:message-index:" + receiverId, message.id().toString()))
           .isEqualTo((double) seq);
     }
 
@@ -235,6 +238,35 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
   }
 
   @Nested
+  @DisplayName("유저별 인덱스 격리")
+  class PerUserIndexIsolation {
+
+    @Test
+    @DisplayName("한_유저의_메시지가_많아도_다른_유저의_재생_상한에_영향을_주지_않는다")
+    void 한_유저의_메시지가_많아도_다른_유저의_재생_상한에_영향을_주지_않는다() {
+      // given - target 메시지 1건을 먼저 저장한 뒤, maxReplaySize보다 많은 타인(other) 메시지로
+      // 뒤덮는다. 전역 인덱스였다면 target 메시지가 최신 N건 밖으로 밀려 잘렸어야 한다.
+      SseMessageRepository smallCapRepository = new SseMessageRepository(redisTemplate,
+          new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC), new SseReplayBufferProperties(10, 5));
+      UUID other = UUID.randomUUID();
+      UUID target = UUID.randomUUID();
+      SseMessage anchor = new SseMessage(Set.of(target), "notifications", "anchor", NOW);
+      anchor = anchor.withSeq(smallCapRepository.save(anchor));
+      SseMessage targetMessage = new SseMessage(Set.of(target), "notifications", "for-target", NOW);
+      long targetSeq = smallCapRepository.save(targetMessage);
+      for (int i = 0; i < 10; i++) { // other 메시지 10건으로 maxSize(5)를 넘김
+        smallCapRepository.save(new SseMessage(Set.of(other), "notifications", "other-" + i, NOW));
+      }
+
+      // when
+      List<SseMessage> result = smallCapRepository.findAllAfter(anchor.id(), target);
+
+      // then - 전역 인덱스였다면 other 10건에 밀려 target 메시지가 상한 밖으로 잘렸어야 한다
+      assertThat(result).extracting(SseMessage::seq).contains(targetSeq);
+    }
+  }
+
+  @Nested
   @DisplayName("최신 seq 조회")
   class GetLatestSequence {
 
@@ -287,12 +319,15 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
       // then
       assertThat(found).containsExactly(kept);
-      assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
+      // 유저별 인덱스(sse:message-index:{userId})는 이번 스코프에서 능동적으로 정리하지 않는다
+      // (착수 시 결정 — 별도 배치로 미룸). 보관 기간 정리 전용 시각 인덱스만 검증한다.
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index-by-time", expired.id().toString()))
           .isNull();
     }
 
     @Test
-    @DisplayName("findAllAfter/getLatestCreatedAt 없이 save만 반복해도 보관 기간이 지난 항목이 정리된다")
+    @DisplayName("findAllAfter/getLatestSequence 없이 save만 반복해도 보관 기간이 지난 항목이 정리된다")
     void save만_반복해도_보관_기간이_지난_항목이_정리된다() {
       // given
       UUID userId = UUID.randomUUID();
@@ -304,7 +339,8 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "fresh", NOW));
 
       // then
-      assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index-by-time", expired.id().toString()))
           .isNull();
     }
   }
