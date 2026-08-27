@@ -2,9 +2,8 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.EmitterConnection;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -71,12 +70,12 @@ class SseEmitterRepositoryTest {
   }
 
   @Nested
-  @DisplayName("재연결 시 이전 emitter 정리")
+  @DisplayName("재연결 시 이전 연결 반환")
   class ReplaceOnReconnect {
 
     @Test
-    @DisplayName("같은_userId로_새_emitter를_저장하면_이전_emitter를_complete로_종료한다")
-    void 같은_userId로_새_emitter를_저장하면_이전_emitter를_complete로_종료한다() {
+    @DisplayName("같은_userId로_새_emitter를_저장하면_이전_연결을_Optional로_반환한다")
+    void 같은_userId로_새_emitter를_저장하면_이전_연결을_Optional로_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
       SseEmitter previous = mock(SseEmitter.class);
@@ -84,24 +83,25 @@ class SseEmitterRepositoryTest {
       sseEmitterRepository.save(userId, previous, SNAPSHOT_AT);
 
       // when
-      sseEmitterRepository.save(userId, next, SNAPSHOT_AT);
+      Optional<EmitterConnection> result = sseEmitterRepository.save(userId, next, SNAPSHOT_AT);
 
-      // then
-      verify(previous).complete();
+      // then — complete() 호출 여부는 더 이상 여기서 검증하지 않는다(호출부 SseService.connect()의 책임)
+      assertThat(result).isPresent();
+      assertThat(result.get().emitter()).isSameAs(previous);
     }
 
     @Test
-    @DisplayName("최초_저장이면_기존_emitter가_없어_complete를_호출하지_않는다")
-    void 최초_저장이면_기존_emitter가_없어_complete를_호출하지_않는다() {
+    @DisplayName("최초_저장이면_빈_Optional을_반환한다")
+    void 최초_저장이면_빈_Optional을_반환한다() {
       // given
       UUID userId = UUID.randomUUID();
-      SseEmitter emitter = mock(SseEmitter.class);
 
       // when
-      sseEmitterRepository.save(userId, emitter, SNAPSHOT_AT);
+      Optional<EmitterConnection> result =
+          sseEmitterRepository.save(userId, mock(SseEmitter.class), SNAPSHOT_AT);
 
       // then
-      verify(emitter, never()).complete();
+      assertThat(result).isEmpty();
     }
   }
 
