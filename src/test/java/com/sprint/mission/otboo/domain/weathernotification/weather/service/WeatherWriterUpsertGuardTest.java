@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -25,6 +27,10 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest
 @ActiveProfiles("test")
 class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
+
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
 
   @Autowired
   private WeatherWriter weatherWriter;
@@ -106,12 +112,20 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
     Instant slotAt = Instant.parse("2026-08-24T12:00:00Z");
     Instant forecastedAt1 = Instant.parse("2026-08-24T05:00:00Z");
     Instant forecastedAt2 = Instant.parse("2026-08-24T08:00:00Z"); // 더 최신 - upsert 가드 통과
-    WeatherForecastSlotDto first = new WeatherForecastSlotDto(
-        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
-        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0);
-    WeatherForecastSlotDto second = new WeatherForecastSlotDto(
-        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
-        0.0, 0.0, 50.0, 23.0, 15.0, 25.0, 2.0); // temperatureCurrent만 20.0 -> 23.0
+    WeatherForecastSlotDto first = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+        .set("date", LocalDate.of(2026, 8, 24))
+        .set("slotAt", slotAt)
+        .set("skyStatus", SkyStatus.CLEAR)
+        .set("precipitationType", PrecipitationType.NONE)
+        .set("temperatureCurrent", 20.0)
+        .sample();
+    WeatherForecastSlotDto second = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+        .set("date", LocalDate.of(2026, 8, 24))
+        .set("slotAt", slotAt)
+        .set("skyStatus", SkyStatus.CLEAR)
+        .set("precipitationType", PrecipitationType.NONE)
+        .set("temperatureCurrent", 23.0) // temperatureCurrent만 20.0 -> 23.0
+        .sample();
 
     // when
     weatherWriter.saveSlots(weatherGrid, forecastedAt1, List.of(first), Map.of());
