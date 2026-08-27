@@ -19,8 +19,9 @@ public class RepresentativeSlotSelector {
   public Optional<Weather> select(List<Weather> slots, Instant referenceInstant) {
     long referenceMinutes = toMinutesOfDay(referenceInstant);
     return slots.stream()
-        .min(Comparator.comparingLong(
-            w -> Math.abs(toMinutesOfDay(w.getForecastAt()) - referenceMinutes)));
+        .min(Comparator
+            .<Weather>comparingLong(w -> Math.abs(toMinutesOfDay(w.getForecastAt()) - referenceMinutes))
+            .thenComparing(Weather::getForecastAt));
   }
 
   // 오늘 대표 슬롯 하나만 보고 stale 여부를 판단한다 - 캐시/DB 전체를 훑어 부분적으로만
