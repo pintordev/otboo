@@ -9,6 +9,7 @@ import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -147,6 +148,34 @@ class ProfileRepositoryTest {
 
       // then
       assertThat(found).extracting(Profile::getId).containsExactly(matchingProfile.getId());
+    }
+  }
+
+  @Nested
+  @DisplayName("이미지 키 전체 조회 (findAllProfileImageUrls)")
+  class FindAllProfileImageUrls {
+
+    @Test
+    @DisplayName("이미지가_등록된_프로필의_키만_모아서_반환한다")
+    void 이미지가_등록된_프로필의_키만_모아서_반환한다() {
+      // given
+      User withImageUser = userRepository.save(
+          User.create("홍길동", "hong5@test.com", "encoded-password"));
+      Profile withImageProfile = Profile.create(withImageUser);
+      withImageProfile.changeProfileImageUrl("profile/a.png");
+      profileRepository.save(withImageProfile);
+
+      User withoutImageUser = userRepository.save(
+          User.create("김철수", "kim2@test.com", "encoded-password"));
+      profileRepository.save(Profile.create(withoutImageUser));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // when
+      Set<String> imageUrls = profileRepository.findAllProfileImageUrls();
+
+      // then
+      assertThat(imageUrls).containsExactly("profile/a.png");
     }
   }
 }
