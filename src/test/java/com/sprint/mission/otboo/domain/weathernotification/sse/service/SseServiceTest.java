@@ -25,6 +25,9 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmi
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -42,6 +45,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,11 +68,13 @@ class SseServiceTest {
   private final FixtureMonkey fm = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
       .build();
+  private static final Instant FIXED_NOW = Instant.parse("2026-01-01T00:00:00Z");
+  private final Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 
   @BeforeEach
   void setUp() {
     sseService = new SseService(sseEmitterRepository, sseMessageRepository, stringRedisTemplate,
-        objectMapper);
+        objectMapper, clock);
   }
 
   @Nested
@@ -372,6 +378,23 @@ class SseServiceTest {
       // then - 2번째가 실패해도 3번째까지 시도돼야 한다
       verify(sseMessageRepository, times(3)).save(any());
       verify(stringRedisTemplate, times(2)).convertAndSend(eq(SseConfig.SSE_CHANNEL), anyString());
+    }
+
+    @Test
+    @DisplayName("주입된_Clock의_시각으로_메시지를_생성한다")
+    void 주입된_Clock의_시각으로_메시지를_생성한다() {
+      // given
+      NotificationDto dto = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", UUID.randomUUID())
+          .sample();
+      ArgumentCaptor<SseMessage> captor = ArgumentCaptor.forClass(SseMessage.class);
+
+      // when
+      sseService.send(List.of(dto), "notifications");
+
+      // then - 실제 벽시계가 아니라 주입된 Clock(FIXED_NOW)의 시각을 사용해야 한다
+      verify(sseMessageRepository).save(captor.capture());
+      assertThat(captor.getValue().createdAt()).isEqualTo(FIXED_NOW);
     }
   }
 
