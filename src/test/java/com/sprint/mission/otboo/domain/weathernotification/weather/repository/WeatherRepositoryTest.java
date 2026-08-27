@@ -172,7 +172,7 @@ class WeatherRepositoryTest {
       testEntityManager.clear();
 
       List<Weather> result = weatherRepository
-          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
               List.of(targetGrid.getId(), otherTargetGrid.getId()), from, to);
 
       assertThat(result).extracting(Weather::getId)

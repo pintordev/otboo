@@ -43,7 +43,7 @@ public interface WeatherRepository extends JpaRepository<Weather, UUID>, Weather
 
   // D0/D1 급변 알림 청크 배치 전용(#163) - 청크 안 그리드 전체의 D0/D1 대상 날짜 24시간 슬롯을
   // 그리드별 개별 조회 대신 IN 절 하나로 묶어 쿼리 1번에 끝낸다.
-  List<Weather> findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+  List<Weather> findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
       List<UUID> weatherGridIds, Instant from, Instant to);
 
   @Query("SELECT DISTINCT w.weatherGrid FROM Weather w WHERE w.forecastedAt = :forecastedAt")

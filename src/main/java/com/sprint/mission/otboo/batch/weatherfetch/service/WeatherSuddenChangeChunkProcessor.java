@@ -68,7 +68,7 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant from = today.atStartOfDay(KST).toInstant();
     Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
     Map<UUID, List<Weather>> slotsByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
             to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
@@ -157,7 +157,7 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
 
     Map<UUID, List<Weather>> slotsByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
             to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
@@ -214,7 +214,7 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant from = d1Date.atStartOfDay(KST).toInstant();
     Instant to = d1Date.plusDays(1).atStartOfDay(KST).toInstant();
     Map<UUID, List<Weather>> currentByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(gridIds, from,
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
             to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));

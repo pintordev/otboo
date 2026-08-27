@@ -149,7 +149,7 @@ class WeatherSuddenChangeChunkProcessorTest {
 
       // then
       verify(weatherRepository, times(1))
-          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
               List.of(gridA.getId(), gridB.getId()),
               today.atStartOfDay(KST).toInstant(), today.plusDays(1).atStartOfDay(KST).toInstant());
     }
@@ -162,7 +162,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -193,7 +193,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 20.5);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -218,7 +218,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather incomplete = weatherWithNullBaseline(grid, baseTime.toInstant());
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(incomplete));
       given(representativeSlotSelector.select(List.of(incomplete), baseTime.toInstant()))
@@ -244,7 +244,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       Weather target = weatherWithBaseline(grid, slotAt21, 20.0, 25.0);
       Instant from = today.atStartOfDay(KST).toInstant();
       Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), from, to)).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
           .willReturn(Optional.of(target));
@@ -275,7 +275,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -306,7 +306,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -345,7 +345,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate today = LocalDate.parse("2026-07-27");
       WeatherGrid grid = gridWithId(60, 127);
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -380,7 +380,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
       Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
       Weather slotA = weatherWithBaseline(gridA, hour0, 20.0, 20.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(gridA.getId(), gridB.getId()), hour0, to)).willReturn(List.of(slotA));
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(gridA.getId(), gridB.getId()), d2Date)).willReturn(List.of());
@@ -406,7 +406,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate d2Date = LocalDate.parse("2026-07-29");
       Instant hour0 = d2Date.atStartOfDay(KST).toInstant();
       Weather slot0 = weatherWithBaseline(grid, hour0, 20.0, 20.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), hour0, d2Date.plusDays(1).atStartOfDay(KST).toInstant()))
           .willReturn(List.of(slot0));
       WeatherD1Baseline existing = WeatherD1Baseline.create(grid, d2Date, Map.of(),
@@ -441,7 +441,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       // then
       assertThat(notified).isZero();
       verify(weatherRepository, never())
-          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(),
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(any(),
               any(), any());
       assertThat(appender.list)
           .extracting(ILoggingEvent::getFormattedMessage)
@@ -469,7 +469,7 @@ class WeatherSuddenChangeChunkProcessorTest {
 
       Weather currentHour0 = weatherWithBaseline(grid, hour0, 20.0, 25.0);
       Weather currentHour3 = weatherWithBaseline(grid, hour3, 18.0, 13.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
           .willReturn(List.of(currentHour0, currentHour3));
 
@@ -512,7 +512,7 @@ class WeatherSuddenChangeChunkProcessorTest {
 
       Weather currentHour0 = weatherWithBaseline(grid, hour0, 20.0, 20.0);
       Weather currentHour3 = weatherWithBaseline(grid, hour3, 18.0, 18.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), hour0, d1Date.plusDays(1).atStartOfDay(KST).toInstant()))
           .willReturn(List.of(currentHour0, currentHour3));
 
@@ -542,7 +542,7 @@ class WeatherSuddenChangeChunkProcessorTest {
           .willReturn(List.of(baselineRow));
 
       Weather currentHour0 = weatherWithBaseline(notifiedGrid, hour0, 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(notifiedGrid.getId(), quietGrid.getId()), hour0,
           d1Date.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(currentHour0));
       given(weatherChangeEvaluator.evaluateDaySummary(
@@ -571,14 +571,14 @@ class WeatherSuddenChangeChunkProcessorTest {
           List.of(grid.getId()), d2Date)).willReturn(List.of());
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
           List.of(grid.getId()), d1Date)).willReturn(List.of());
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           any(), any(), any())).willReturn(List.of());
 
       // when
       processor.handleD1(List.of(grid), today);
 
       // then
-      verify(weatherRepository).findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      verify(weatherRepository).findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), d2Date.atStartOfDay(KST).toInstant(),
           d2Date.plusDays(1).atStartOfDay(KST).toInstant());
       verify(weatherD1BaselineRepository).findAllByWeatherGridIdInAndTargetDate(
@@ -606,7 +606,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       assertThat(result.d0Notified()).isZero();
       assertThat(result.d1Notified()).isZero();
       verify(weatherRepository, never())
-          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(any(), any(),
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(any(), any(),
               any());
       verify(weatherD1BaselineRepository, never())
           .findAllByWeatherGridIdInAndTargetDate(any(), any());
@@ -623,7 +623,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       LocalDate d2Date = LocalDate.parse("2026-07-29");
 
       Weather target = weatherWithBaseline(grid, baseTime.toInstant(), 20.0, 25.0);
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), today.atStartOfDay(KST).toInstant(),
           today.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of(target));
       given(representativeSlotSelector.select(List.of(target), baseTime.toInstant()))
@@ -635,7 +635,7 @@ class WeatherSuddenChangeChunkProcessorTest {
       given(profileRepository.findByLocation(grid.getX(), grid.getY()))
           .willReturn(List.of(profile));
 
-      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThan(
+      given(weatherRepository.findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
           List.of(grid.getId()), d2Date.atStartOfDay(KST).toInstant(),
           d2Date.plusDays(1).atStartOfDay(KST).toInstant())).willReturn(List.of());
       given(weatherD1BaselineRepository.findAllByWeatherGridIdInAndTargetDate(
