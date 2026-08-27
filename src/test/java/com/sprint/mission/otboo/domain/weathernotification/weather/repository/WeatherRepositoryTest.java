@@ -178,6 +178,33 @@ class WeatherRepositoryTest {
       assertThat(result).extracting(Weather::getId)
           .containsExactlyInAnyOrder(matched1.getId(), matched2.getId());
     }
+
+    @Test
+    @DisplayName("결과를_forecastAt_오름차순으로_정렬해_반환한다")
+    void 결과를_forecastAt_오름차순으로_정렬해_반환한다() {
+      WeatherGrid gridA = weatherGridRepository.save(WeatherGrid.create(60, 127));
+      WeatherGrid gridB = weatherGridRepository.save(WeatherGrid.create(61, 128));
+      testEntityManager.flush();
+
+      Instant from = Instant.parse("2026-07-29T00:00:00Z");
+      Instant to = Instant.parse("2026-07-30T00:00:00Z");
+      Instant hour9 = Instant.parse("2026-07-29T09:00:00Z");
+      Instant hour3 = Instant.parse("2026-07-29T03:00:00Z");
+      Instant hour15 = Instant.parse("2026-07-29T15:00:00Z");
+      // given - 저장 순서를 시각 순서와 다르게 뒤섞는다
+      weatherRepository.save(weatherOf(gridA, Instant.parse("2026-07-27T08:00:00Z"), hour9, 20.0));
+      weatherRepository.save(weatherOf(gridB, Instant.parse("2026-07-27T08:00:00Z"), hour3, 21.0));
+      weatherRepository.save(weatherOf(gridA, Instant.parse("2026-07-27T08:00:00Z"), hour15, 22.0));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      List<Weather> result = weatherRepository
+          .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
+              List.of(gridA.getId(), gridB.getId()), from, to);
+
+      assertThat(result).extracting(Weather::getForecastAt)
+          .containsExactly(hour3, hour9, hour15);
+    }
   }
 
   @Nested
