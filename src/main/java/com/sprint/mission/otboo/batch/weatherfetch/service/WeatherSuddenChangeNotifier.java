@@ -47,18 +47,24 @@ public class WeatherSuddenChangeNotifier {
 
     int d0Notified = 0;
     int d1Notified = 0;
+    int failedChunks = 0;
     int chunkSize = weatherChangeProperties.gridChunkSize();
     for (int from = 0; from < updatedGrids.size(); from += chunkSize) {
       int to = Math.min(from + chunkSize, updatedGrids.size());
       List<WeatherGrid> chunk = updatedGrids.subList(from, to);
-      WeatherSuddenChangeChunkProcessor.ChunkResult result =
-          chunkProcessor.process(chunk, baseTime, today, shouldHandleD0, shouldHandleD1);
-      d0Notified += result.d0Notified();
-      d1Notified += result.d1Notified();
+      try {
+        WeatherSuddenChangeChunkProcessor.ChunkResult result =
+            chunkProcessor.process(chunk, baseTime, today, shouldHandleD0, shouldHandleD1);
+        d0Notified += result.d0Notified();
+        d1Notified += result.d1Notified();
+      } catch (RuntimeException e) {
+        failedChunks++;
+        log.error("청크 감지 실패 | from={}, to={}", from, to, e);
+      }
     }
 
-    log.info("날씨 급변 감지 완료: 평가 격자 수={}, D0 알림={}, D1 알림={}", updatedGrids.size(),
-        d0Notified, d1Notified);
+    log.info("날씨 급변 감지 완료: 평가 격자 수={}, D0 알림={}, D1 알림={}, 실패 청크={}",
+        updatedGrids.size(), d0Notified, d1Notified, failedChunks);
     weatherFetchMetrics.countNotified("D0", d0Notified);
     weatherFetchMetrics.countNotified("D1", d1Notified);
   }
