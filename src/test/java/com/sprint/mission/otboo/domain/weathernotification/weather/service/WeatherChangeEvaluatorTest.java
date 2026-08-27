@@ -11,7 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("WeatherChangeEvaluator")
+@DisplayName("날씨 변화 평가")
 class WeatherChangeEvaluatorTest {
 
   private final WeatherChangeEvaluator evaluator = new WeatherChangeEvaluator(
@@ -25,7 +25,7 @@ class WeatherChangeEvaluatorTest {
   }
 
   @Nested
-  @DisplayName("Evaluate")
+  @DisplayName("평가")
   class Evaluate {
 
     @Test
@@ -150,7 +150,7 @@ class WeatherChangeEvaluatorTest {
   }
 
   @Nested
-  @DisplayName("EvaluateDaySummary")
+  @DisplayName("하루 요약 평가")
   class EvaluateDaySummary {
 
     @Test
@@ -231,7 +231,7 @@ class WeatherChangeEvaluatorTest {
   }
 
   @Nested
-  @DisplayName("ChangeResult")
+  @DisplayName("변화 결과")
   class ChangeResultTest {
 
     @Test

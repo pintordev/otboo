@@ -18,8 +18,6 @@ import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepositor
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
-import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.WindStrength;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator.ChangeResult;
@@ -40,7 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("WeatherSuddenChangeGridProcessor")
+@DisplayName("격자별 급변 처리")
 class WeatherSuddenChangeGridProcessorTest {
 
   private static final Instant FORECASTED_AT = Instant.parse("2026-07-27T08:00:00Z");
@@ -86,13 +84,19 @@ class WeatherSuddenChangeGridProcessorTest {
 
   private Weather weatherWithBaseline(WeatherGrid grid, Instant forecastAt,
       double baselineTemperature, double currentTemperature) {
-    return Weather.create(grid, FORECASTED_AT, forecastAt, SkyStatus.CLEAR,
-        PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, currentTemperature, 0.0, 25.0, 31.0, 2.5,
-        WindStrength.WEAK, baselineTemperature, PrecipitationType.NONE, 0.0, 0.0);
+    return ENTITY_FIXTURE_MONKEY.giveMeBuilder(Weather.class)
+        .set("weatherGrid", grid)
+        .set("forecastAt", forecastAt)
+        .set("temperatureCurrent", currentTemperature)
+        .set("precipitationType", PrecipitationType.NONE)
+        .set("precipitationProbability", 0.0)
+        .set("precipitationAmount", 0.0)
+        .set("baselineTemperatureCurrent", baselineTemperature)
+        .sample();
   }
 
   @Nested
-  @DisplayName("EvaluateD0")
+  @DisplayName("D0 평가")
   class EvaluateD0 {
 
     @Test
@@ -138,7 +142,7 @@ class WeatherSuddenChangeGridProcessorTest {
   }
 
   @Nested
-  @DisplayName("EvaluateD1")
+  @DisplayName("D1 평가")
   class EvaluateD1 {
 
     @Test
@@ -182,7 +186,7 @@ class WeatherSuddenChangeGridProcessorTest {
   }
 
   @Nested
-  @DisplayName("Publish")
+  @DisplayName("발행")
   class Publish {
 
     @Test
