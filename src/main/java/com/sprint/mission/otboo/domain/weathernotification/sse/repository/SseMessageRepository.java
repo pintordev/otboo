@@ -70,12 +70,18 @@ public class SseMessageRepository {
     String receiversKey = receiversKeyFor(withSeq.id());
     String json = objectMapper.writeValueAsString(withSeq);
 
-    redisTemplate.execute(new SessionCallback<Object>() {
+    boolean hasReceivers = !withSeq.receiverIds().isEmpty();
+    int expectedResultCount = 1 // SET
+        + (hasReceivers ? 2 : 0) // SADD + EXPIRE
+        + withSeq.receiverIds().size() // 수신자별 ZADD
+        + 1; // TIME_INDEX_KEY ZADD
+
+    List<Object> results = redisTemplate.execute(new SessionCallback<List<Object>>() {
       @Override
-      public Object execute(RedisOperations operations) {
+      public List<Object> execute(RedisOperations operations) {
         operations.multi();
         operations.opsForValue().set(messageKey, json, retention);
-        if (!withSeq.receiverIds().isEmpty()) { // SADD는 멤버 0개로 호출할 수 없음
+        if (hasReceivers) { // SADD는 멤버 0개로 호출할 수 없음
           operations.opsForSet().add(receiversKey,
               withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
           operations.expire(receiversKey, retention);
@@ -87,6 +93,10 @@ public class SseMessageRepository {
         return operations.exec();
       }
     });
+    if (results == null || results.size() != expectedResultCount) {
+      log.warn("SseMessage 저장 MULTI/EXEC 일부 실패 가능성: messageId={}, results={}",
+          withSeq.id(), results);
+    }
     return seq;
   }
 
