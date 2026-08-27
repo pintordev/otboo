@@ -106,6 +106,7 @@ class FeedReindexJobIntegrationTest extends IntegrationTestSupport {
       JobExecution execution = jobOperatorTestUtils.startJob(
           new JobParametersBuilder()
               .addLong("time", Instant.now().toEpochMilli())
+              .addString("targetIndex", FeedDocument.INDEX_NAME)
               .toJobParameters());
       operations.indexOps(FeedDocument.class).refresh();
 
@@ -127,6 +128,7 @@ class FeedReindexJobIntegrationTest extends IntegrationTestSupport {
       JobExecution execution = jobOperatorTestUtils.startJob(
           new JobParametersBuilder()
               .addLong("time", Instant.now().toEpochMilli())
+              .addString("targetIndex", FeedDocument.INDEX_NAME)
               .toJobParameters());
       operations.indexOps(FeedDocument.class).refresh();
 

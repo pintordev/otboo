@@ -11,6 +11,7 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.hibernate.exception.ConstraintViolationException;
@@ -182,6 +183,51 @@ class FeedLikeRepositoryTest {
 
       // then
       assertThat(result).containsExactly(likedFeed.getId());
+    }
+  }
+
+  @Nested
+  @DisplayName("insertIgnoreConflict")
+  class InsertIgnoreConflict {
+
+    @Test
+    @DisplayName("새로운 좋아요면 1을 반환하고 저장한다")
+    void 새로운_좋아요면_1을_반환하고_저장한다() {
+      // given
+      User author = persistUser("작성자");
+      User liker = persistUser("좋아요누른사람");
+      Feed feed = persistFeed(author.getId());
+      testEntityManager.flush();
+      UUID id = UUID.randomUUID();
+
+      // when
+      int inserted = feedLikeRepository.insertIgnoreConflict(
+          id, feed.getId(), liker.getId(), Instant.now());
+
+      // then
+      assertThat(inserted).isEqualTo(1);
+      assertThat(feedLikeRepository.findById(id)).isPresent();
+    }
+
+    @Test
+    @DisplayName("이미 존재하는 조합이면 예외 없이 0을 반환한다")
+    void 이미_존재하는_조합이면_예외_없이_0을_반환한다() {
+      // given
+      User author = persistUser("작성자");
+      User liker = persistUser("좋아요누른사람");
+      Feed feed = persistFeed(author.getId());
+      testEntityManager.flush();
+      feedLikeRepository.insertIgnoreConflict(
+          UUID.randomUUID(), feed.getId(), liker.getId(), Instant.now());
+
+      // when
+      int inserted = feedLikeRepository.insertIgnoreConflict(
+          UUID.randomUUID(), feed.getId(), liker.getId(), Instant.now());
+
+      // then
+      assertThat(inserted).isZero();
+      assertThat(feedLikeRepository.findLikedFeedIds(liker.getId(), List.of(feed.getId())))
+          .containsExactly(feed.getId());
     }
   }
 }

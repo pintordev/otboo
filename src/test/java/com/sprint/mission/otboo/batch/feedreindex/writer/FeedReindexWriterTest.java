@@ -44,7 +44,9 @@ class FeedReindexWriterTest {
       SkyStatus.CLEAR, PrecipitationType.NONE,
       0.0, 0.0, 28.0, 2.0, 16.0, 31.0);
   static final Instant FIXED_TIME = Instant.parse("2026-08-20T01:00:00Z");
+
   private static final String STEP_NAME = "feedReindexStep";
+  private static final String TARGET_INDEX = FeedDocument.INDEX_NAME;
 
   private FeedReindexWriter writer;
 
@@ -105,7 +107,7 @@ class FeedReindexWriterTest {
   @BeforeEach
   void setUp() {
     writer = new FeedReindexWriter(elasticsearchClient, feedSearchRepository,
-        entityManager, feedReindexMetrics, STEP_NAME);
+        entityManager, feedReindexMetrics, STEP_NAME, TARGET_INDEX);
   }
 
   @Nested

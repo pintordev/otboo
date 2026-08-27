@@ -13,14 +13,23 @@ import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
 import com.sprint.mission.otboo.global.testcontainers.IntegrationTestSupport;
 import jakarta.persistence.EntityManager;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -136,6 +145,86 @@ class FeedLikeIntegrationTest extends IntegrationTestSupport {
           feed.getId(), liker.getId())).isFalse();
       assertThat(feedRepository.findById(feed.getId()).orElseThrow().getLikeCount())
           .isZero();
+    }
+  }
+
+  /**
+   * 동시 요청의 트랜잭션 경합을 재현해야 하므로 상위 클래스의 {@code @Transactional}을 끈다.
+   *
+   * <p>테스트 트랜잭션 안에서 스레드를 띄우면 {@code @BeforeEach}가 저장한 User·Feed가 아직
+   * 커밋되지 않아 다른 스레드에서 보이지 않고, feed_likes의 FK 제약에 먼저 걸린다.
+   *
+   * <p>롤백이 없으므로 저장한 데이터는 {@code @AfterEach}에서 직접 지운다. 상위 클래스의
+   * {@code em}은 트랜잭션이 없어 의미가 없으므로 이 블록에서는 사용하지 않는다.
+   */
+  @Nested
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  @DisplayName("피드 좋아요 동시 요청")
+  class ConcurrentLike {
+
+    private static final int CONCURRENCY = 10;
+
+    private User author;
+    private User liker;
+    private Feed feed;
+
+    @BeforeEach
+    void setUp() {
+      author = persistUser("동시요청_작성자");
+      liker = persistUser("동시요청_좋아요누른사람");
+      feed = persistFeed(author.getId());
+    }
+
+    @AfterEach
+    void tearDown() {
+      feedLikeRepository.deleteAllInBatch(
+          feedLikeRepository.findAll().stream()
+              .filter(fl -> fl.getFeedId().equals(feed.getId()))
+              .toList());
+      feedRepository.deleteById(feed.getId());
+      userRepository.deleteAll(List.of(author, liker));
+    }
+
+    @Test
+    @DisplayName("동일한 좋아요를 동시에 요청해도 예외 없이 카운트가 1이 된다")
+    void 동일한_좋아요를_동시에_요청해도_예외_없이_카운트가_1이_된다() throws Exception {
+      // given
+      ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY);
+      CountDownLatch ready = new CountDownLatch(CONCURRENCY);
+      CountDownLatch start = new CountDownLatch(1);
+      CountDownLatch done = new CountDownLatch(CONCURRENCY);
+      List<Throwable> failures = Collections.synchronizedList(new ArrayList<>());
+
+      // when
+      for (int i = 0; i < CONCURRENCY; i++) {
+        executor.submit(() -> {
+          ready.countDown();
+          try {
+            start.await();
+            feedService.like(feed.getId(), liker.getId());
+          } catch (Throwable t) {
+            failures.add(t);
+          } finally {
+            done.countDown();
+          }
+        });
+      }
+      try {
+        assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+      } finally {
+        executor.shutdownNow();
+        assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+      }
+
+      // then
+      assertThat(failures)
+          .withFailMessage("동시 요청 %d건 중 %d건 실패: %s",
+              CONCURRENCY, failures.size(), failures)
+          .isEmpty();
+      assertThat(feedRepository.findById(feed.getId()).orElseThrow().getLikeCount())
+          .isEqualTo(1L);
     }
   }
 }

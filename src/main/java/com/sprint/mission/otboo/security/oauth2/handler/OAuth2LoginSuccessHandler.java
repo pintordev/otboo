@@ -8,8 +8,11 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.enums.OAuth2Provider
 import com.sprint.mission.otboo.security.cookie.provider.RefreshTokenCookieProvider;
 import com.sprint.mission.otboo.security.oauth2.OAuth2RedirectSupport;
 import com.sprint.mission.otboo.security.oauth2.properties.OAuth2Properties;
+import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
 import com.sprint.mission.otboo.security.token.exception.business.TokenException;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
+import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionException;
+import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -37,6 +40,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
   private final RefreshTokenCookieProvider refreshTokenCookieProvider;
   private final OAuth2Properties oAuth2Properties;
   private final TokenProvider tokenProvider;
+  private final UserSessionRegistry userSessionRegistry;
 
   @Override
   public void onAuthenticationSuccess(
@@ -83,8 +87,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
       throw LoginRequiredException.withNone();
     }
     try {
-      return tokenProvider.parseRefreshToken(refreshToken).userId();
-    } catch (TokenException e) {
+      RefreshTokenClaims claims = tokenProvider.parseRefreshToken(refreshToken);
+      userSessionRegistry.verifyUserSession(claims.userId(), claims.sessionId());
+      return claims.userId();
+    } catch (TokenException | UserSessionException e) {
       throw LoginRequiredException.withCause(e);
     }
   }

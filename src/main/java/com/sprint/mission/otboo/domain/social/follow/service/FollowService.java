@@ -19,6 +19,7 @@ import com.sprint.mission.otboo.domain.social.follow.repository.FollowRepository
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,9 +29,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,8 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class FollowService {
-
-  private static final String UQ_FOLLOWS = "uq_follows_follower_id_followee_id";
 
   private final FollowRepository followRepository;
   private final FollowMapper followMapper;
@@ -66,19 +63,19 @@ public class FollowService {
     if (followRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId)) {
       return findExistingFollow(followerId, followeeId);
     }
-    try {
-      Follow saved = followRepository.saveAndFlush(Follow.create(followerId, followeeId));
-      log.info("팔로우 생성 완료: followId={}", saved.getId());
-      publishFollowNotification(followeeId, followerName);
-      return saved;
-    } catch (DataIntegrityViolationException e) {
-      if (isUniqueViolation(e)) {
-        Follow existing = findExistingFollow(followerId, followeeId);
-        log.warn("팔로우 생성 중 동시성 충돌 발생: followId={}", existing.getId());
-        return existing;
-      }
-      throw e; // UQ 외 제약 위반은 전파
+
+    int inserted = followRepository.insertIgnoreConflict(
+        UUID.randomUUID(), followerId, followeeId, Instant.now());
+    Follow follow = findExistingFollow(followerId, followeeId);
+
+    if (inserted == 0) {
+      log.warn("팔로우 생성 중 동시성 충돌 발생: followId={}", follow.getId());
+      return follow;
     }
+
+    log.info("팔로우 생성 완료: followId={}", follow.getId());
+    publishFollowNotification(followeeId, followerName);
+    return follow;
   }
 
   public FollowSummaryDto getSummary(UUID userId, UUID currentUserId) {
@@ -173,10 +170,5 @@ public class FollowService {
   private Follow findExistingFollow(UUID followerId, UUID followeeId) {
     return followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId)
         .orElseThrow(FollowConflictException::withNone);
-  }
-
-  private boolean isUniqueViolation(DataIntegrityViolationException e) {
-    return e.getCause() instanceof ConstraintViolationException cve
-        && UQ_FOLLOWS.equalsIgnoreCase(cve.getConstraintName());
   }
 }

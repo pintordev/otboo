@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.authuser.user.entity.User;
 import com.sprint.mission.otboo.domain.social.follow.entity.Follow;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -216,6 +217,54 @@ class FollowRepositoryTest {
 
       // then
       assertThat(result).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("insertIgnoreConflict")
+  class InsertIgnoreConflict {
+
+    @Test
+    @DisplayName("새로운 팔로우면 1을 반환하고 저장한다")
+    void 새로운_팔로우면_1을_반환하고_저장한다() {
+      // given
+      User follower = persistUser("팔로워");
+      User followee = persistUser("팔로위");
+      testEntityManager.flush();
+      UUID id = UUID.randomUUID();
+
+      // when
+      int inserted = followRepository.insertIgnoreConflict(
+          id, follower.getId(), followee.getId(), Instant.now());
+
+      // then
+      assertThat(inserted).isEqualTo(1);
+      assertThat(followRepository.findByFollowerIdAndFolloweeId(
+          follower.getId(), followee.getId()))
+          .hasValueSatisfying(f -> assertThat(f.getId()).isEqualTo(id));
+    }
+
+    @Test
+    @DisplayName("이미 존재하는 조합이면 예외 없이 0을 반환한다")
+    void 이미_존재하는_조합이면_예외_없이_0을_반환한다() {
+      // given
+      User follower = persistUser("팔로워");
+      User followee = persistUser("팔로위");
+      testEntityManager.flush();
+      UUID firstId = UUID.randomUUID();
+      followRepository.insertIgnoreConflict(
+          firstId, follower.getId(), followee.getId(), Instant.now());
+
+      // when
+      int inserted = followRepository.insertIgnoreConflict(
+          UUID.randomUUID(), follower.getId(), followee.getId(), Instant.now());
+
+      // then
+      assertThat(inserted).isZero();
+      assertThat(followRepository.countByFolloweeId(followee.getId())).isEqualTo(1L);
+      assertThat(followRepository.findByFollowerIdAndFolloweeId(
+          follower.getId(), followee.getId()))
+          .hasValueSatisfying(f -> assertThat(f.getId()).isEqualTo(firstId));
     }
   }
 }

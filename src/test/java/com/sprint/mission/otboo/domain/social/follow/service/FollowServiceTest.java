@@ -33,11 +33,11 @@ import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FollowService")
@@ -73,12 +72,6 @@ class FollowServiceTest {
   @Mock
   private ApplicationEventPublisher eventPublisher;
 
-  private DataIntegrityViolationException uniqueViolation(String constraintName) {
-    ConstraintViolationException cause =
-        new ConstraintViolationException("unique violation", null, constraintName);
-    return new DataIntegrityViolationException("could not execute statement", cause);
-  }
-
   @Nested
   @DisplayName("팔로우 등록")
   class CreateFollow {
@@ -101,7 +94,11 @@ class FollowServiceTest {
           .set("userId", followeeId).sample();
       FollowDto expected = new FollowDto(persistedFollow.getId(), followeeSummary, followerSummary);
 
-      given(followRepository.saveAndFlush(any(Follow.class))).willReturn(persistedFollow);
+      given(followRepository.insertIgnoreConflict(
+          any(UUID.class), eq(followerId), eq(followeeId), any(Instant.class)))
+          .willReturn(1);
+      given(followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId))
+          .willReturn(Optional.of(persistedFollow));
       given(userSummaryQueryRepository.findByUserId(followerId)).willReturn(followerSummary);
       given(userSummaryQueryRepository.findByUserId(followeeId)).willReturn(followeeSummary);
       given(followMapper.toDto(eq(persistedFollow), eq(followerSummary), eq(followeeSummary)))
@@ -112,13 +109,8 @@ class FollowServiceTest {
 
       // then
       assertThat(result).isEqualTo(expected);
-
-      ArgumentCaptor<Follow> followCaptor = ArgumentCaptor.forClass(Follow.class);
-      verify(followRepository).saveAndFlush(followCaptor.capture());
-      Follow savedFollow = followCaptor.getValue();
-      assertThat(savedFollow.getFollowerId()).isEqualTo(followerId);
-      assertThat(savedFollow.getFolloweeId()).isEqualTo(followeeId);
-
+      verify(followRepository).insertIgnoreConflict(
+          any(UUID.class), eq(followerId), eq(followeeId), any(Instant.class));
       verify(userSummaryQueryRepository).findByUserId(followerId);
       verify(userSummaryQueryRepository).findByUserId(followeeId);
     }
@@ -187,13 +179,14 @@ class FollowServiceTest {
 
       // then
       assertThat(result).isEqualTo(expected);
-      verify(followRepository, never()).saveAndFlush(any(Follow.class));
+      verify(followRepository, never()).insertIgnoreConflict(
+          any(UUID.class), any(UUID.class), any(UUID.class), any(Instant.class));
       verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
-    @DisplayName("동시 저장으로 유니크 제약이 위반되면 기존 Follow로 멱등 반환한다")
-    void 동시_저장으로_유니크_제약이_위반되면_기존_Follow로_멱등_반환한다() {
+    @DisplayName("동시 요청으로 이미 저장되어 있으면 기존 Follow로 멱등 반환한다")
+    void 동시_요청으로_이미_저장되어_있으면_기존_Follow로_멱등_반환한다() {
       // given
       UUID followerId = UUID.randomUUID();
       UUID followeeId = UUID.randomUUID();
@@ -209,11 +202,12 @@ class FollowServiceTest {
           .set("userId", followeeId).sample();
       FollowDto expected = new FollowDto(existing.getId(), followeeSummary, followerSummary);
 
-      // exists는 false로 통과, saveAndFlush에서 UQ 위반
+      // exists는 false로 통과, INSERT가 충돌해 0건 삽입
       given(followRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId))
           .willReturn(false);
-      given(followRepository.saveAndFlush(any(Follow.class)))
-          .willThrow(uniqueViolation("uq_follows_follower_id_followee_id"));
+      given(followRepository.insertIgnoreConflict(
+          any(UUID.class), eq(followerId), eq(followeeId), any(Instant.class)))
+          .willReturn(0);
       given(followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId))
           .willReturn(Optional.of(existing));
       given(userSummaryQueryRepository.findByUserId(followerId)).willReturn(followerSummary);
@@ -258,34 +252,6 @@ class FollowServiceTest {
     }
 
     @Test
-    @DisplayName("유니크 제약이 아닌 제약 위반이면 예외를 전파한다")
-    void 유니크_제약이_아닌_제약_위반이면_예외를_전파한다() {
-      // given
-      UUID followerId = UUID.randomUUID();
-      UUID followeeId = UUID.randomUUID();
-      FollowCreateRequest request = fm.giveMeBuilder(FollowCreateRequest.class)
-          .set("followerId", followerId)
-          .set("followeeId", followeeId)
-          .sample();
-
-      UserSummary followerSummary = fm.giveMeBuilder(UserSummary.class)
-          .set("userId", followerId).sample();
-      UserSummary followeeSummary = fm.giveMeBuilder(UserSummary.class)
-          .set("userId", followeeId).sample();
-      given(userSummaryQueryRepository.findByUserId(followerId)).willReturn(followerSummary);
-      given(userSummaryQueryRepository.findByUserId(followeeId)).willReturn(followeeSummary);
-
-      given(followRepository.existsByFollowerIdAndFolloweeId(followerId, followeeId))
-          .willReturn(false);
-      given(followRepository.saveAndFlush(any(Follow.class)))
-          .willThrow(uniqueViolation("fk_users_to_follows_1"));
-
-      // when & then
-      assertThatThrownBy(() -> followService.create(request, followerId))
-          .isInstanceOf(DataIntegrityViolationException.class);
-    }
-
-    @Test
     @DisplayName("팔로우 생성에 성공하면 팔로위에게 알림 이벤트를 발행한다")
     void 팔로우_생성에_성공하면_팔로위에게_알림_이벤트를_발행한다() {
       // given
@@ -302,13 +268,17 @@ class FollowServiceTest {
           .sample();
       UserSummary followeeSummary = fm.giveMeBuilder(UserSummary.class)
           .set("userId", followeeId).sample();
-      FollowDto expected = new FollowDto(UUID.randomUUID(), followeeSummary, followerSummary);
+      Follow persistedFollow = Follow.create(followerId, followeeId);
+      FollowDto expected = new FollowDto(persistedFollow.getId(), followeeSummary, followerSummary);
 
-      given(followRepository.saveAndFlush(any(Follow.class)))
-          .willAnswer(inv -> inv.getArgument(0));
+      given(followRepository.insertIgnoreConflict(
+          any(UUID.class), eq(followerId), eq(followeeId), any(Instant.class)))
+          .willReturn(1);
+      given(followRepository.findByFollowerIdAndFolloweeId(followerId, followeeId))
+          .willReturn(Optional.of(persistedFollow));
       given(userSummaryQueryRepository.findByUserId(followerId)).willReturn(followerSummary);
       given(userSummaryQueryRepository.findByUserId(followeeId)).willReturn(followeeSummary);
-      given(followMapper.toDto(any(Follow.class), eq(followerSummary), eq(followeeSummary)))
+      given(followMapper.toDto(eq(persistedFollow), eq(followerSummary), eq(followeeSummary)))
           .willReturn(expected);
 
       // when

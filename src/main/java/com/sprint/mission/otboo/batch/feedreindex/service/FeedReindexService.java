@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.batch.feedreindex.service;
 
 import com.sprint.mission.otboo.batch.feedreindex.config.FeedReindexProperties;
 import com.sprint.mission.otboo.batch.feedreindex.exception.FeedReindexJobFailedException;
+import com.sprint.mission.otboo.domain.social.feed.document.FeedDocument;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +48,9 @@ public class FeedReindexService {
   }
 
   private JobParametersBuilder baseParameters() {
-    return new JobParametersBuilder().addLong("time", Instant.now().toEpochMilli());
+    return new JobParametersBuilder()
+        .addLong("time", Instant.now().toEpochMilli())
+        .addString("targetIndex", FeedDocument.INDEX_NAME);
   }
 
   private void run(Job job, JobParameters params) {

@@ -29,7 +29,6 @@ import com.sprint.mission.otboo.domain.social.feed.dto.OotdDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
-import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent.IndexAction;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
@@ -52,7 +51,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -62,7 +60,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -532,18 +529,17 @@ class FeedServiceTest {
       given(feedRepository.findAuthorId(feedId)).willReturn(Optional.of(UUID.randomUUID()));
       given(userSummaryQueryRepository.findByUserId(userId))
           .willReturn(new UserSummary(userId, "좋아요누른사람", "img.png"));
-      given(feedLikeRepository.saveAndFlush(any(FeedLike.class))).willAnswer(
-          inv -> inv.getArgument(0));
+      given(feedLikeRepository.insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class)))
+          .willReturn(1);
       given(feedRepository.incrementLikeCount(feedId)).willReturn(1);
 
       // when
       feedService.like(feedId, userId);
 
       // then
-      ArgumentCaptor<FeedLike> captor = ArgumentCaptor.forClass(FeedLike.class);
-      verify(feedLikeRepository).saveAndFlush(captor.capture());
-      assertThat(captor.getValue().getFeedId()).isEqualTo(feedId);
-      assertThat(captor.getValue().getUserId()).isEqualTo(userId);
+      verify(feedLikeRepository).insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class));
       verify(feedRepository).incrementLikeCount(feedId);
     }
 
@@ -560,48 +556,28 @@ class FeedServiceTest {
       feedService.like(feedId, userId);
 
       // then
-      verify(feedLikeRepository, never()).saveAndFlush(any());
+      verify(feedLikeRepository, never()).insertIgnoreConflict(
+          any(UUID.class), any(UUID.class), any(UUID.class), any(Instant.class));
       verify(feedRepository, never()).incrementLikeCount(any());
     }
 
     @Test
-    @DisplayName("저장 중 동시 좋아요로 UQ 위반이 나면 예외를 삼키고 카운트를 증가시키지 않는다")
-    void 저장_중_동시_좋아요로_UQ_위반이_나면_예외를_삼키고_카운트를_증가시키지_않는다() {
+    @DisplayName("동시 좋아요로 이미 저장되어 있으면 카운트를 증가시키지 않는다")
+    void 동시_좋아요로_이미_저장되어_있으면_카운트를_증가시키지_않는다() {
       // given
       UUID feedId = UUID.randomUUID();
       UUID userId = UUID.randomUUID();
       given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
       given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
-
-      ConstraintViolationException cause =
-          new ConstraintViolationException("UQ 위반", null, "UQ_feed_likes_feed_id_user_id");
-      given(feedLikeRepository.saveAndFlush(any()))
-          .willThrow(new DataIntegrityViolationException("UQ 위반", cause));
+      // exists는 false로 통과, INSERT가 충돌해 0건 삽입
+      given(feedLikeRepository.insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class)))
+          .willReturn(0);
 
       // when & then
       assertThatCode(() -> feedService.like(feedId, userId)).doesNotThrowAnyException();
       verify(feedRepository, never()).incrementLikeCount(any());
-    }
-
-    @Test
-    @DisplayName("UQ가 아닌 제약 위반이면 삼키지 않고 전파한다")
-    void UQ가_아닌_제약_위반이면_삼키지_않고_전파한다() {
-      // given
-      UUID feedId = UUID.randomUUID();
-      UUID userId = UUID.randomUUID();
-      given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
-      given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
-
-      // 원인 제약명이 UQ_feed_likes_feed_id_user_id 가 아닌 다른 제약
-      ConstraintViolationException cause =
-          new ConstraintViolationException("FK 위반", null, "FK_feeds_TO_feed_likes_1");
-      given(feedLikeRepository.saveAndFlush(any()))
-          .willThrow(new DataIntegrityViolationException("FK 위반", cause));
-
-      // when & then
-      assertThatThrownBy(() -> feedService.like(feedId, userId))
-          .isInstanceOf(DataIntegrityViolationException.class);
-      verify(feedRepository, never()).incrementLikeCount(any());
+      verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -629,8 +605,9 @@ class FeedServiceTest {
       given(feedRepository.findAuthorId(feedId)).willReturn(Optional.of(authorId));
       given(userSummaryQueryRepository.findByUserId(userId))
           .willReturn(new UserSummary(userId, "좋아요누른사람", "img.png"));
-      given(feedLikeRepository.saveAndFlush(any(FeedLike.class))).willAnswer(
-          inv -> inv.getArgument(0));
+      given(feedLikeRepository.insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class)))
+          .willReturn(1);
       given(feedRepository.incrementLikeCount(feedId)).willReturn(1);
 
       // when
@@ -653,8 +630,9 @@ class FeedServiceTest {
       UUID userId = UUID.randomUUID();
       given(feedRepository.existsByIdAndSoftDeletable_DeletedAtIsNull(feedId)).willReturn(true);
       given(feedLikeRepository.existsByFeedIdAndUserId(feedId, userId)).willReturn(false);
-      given(feedLikeRepository.saveAndFlush(any(FeedLike.class)))
-          .willAnswer(inv -> inv.getArgument(0));
+      given(feedLikeRepository.insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class)))
+          .willReturn(1);
       given(feedRepository.incrementLikeCount(feedId)).willReturn(0);
 
       // when & then
@@ -674,8 +652,9 @@ class FeedServiceTest {
       given(feedRepository.findAuthorId(feedId)).willReturn(Optional.of(UUID.randomUUID()));
       given(userSummaryQueryRepository.findByUserId(userId))
           .willReturn(new UserSummary(userId, "좋아요누른사람", "img.png"));
-      given(feedLikeRepository.saveAndFlush(any(FeedLike.class)))
-          .willAnswer(inv -> inv.getArgument(0));
+      given(feedLikeRepository.insertIgnoreConflict(
+          any(UUID.class), eq(feedId), eq(userId), any(Instant.class)))
+          .willReturn(1);
       given(feedRepository.incrementLikeCount(feedId)).willReturn(1);
 
       // when

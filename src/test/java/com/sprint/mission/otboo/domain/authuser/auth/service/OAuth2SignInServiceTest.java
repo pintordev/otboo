@@ -13,6 +13,7 @@ import com.sprint.mission.otboo.domain.authuser.auth.dto.response.JwtDto;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.AccountLockedException;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.EmailAlreadyRegisteredException;
+import com.sprint.mission.otboo.domain.authuser.auth.exception.SocialAccountAlreadyLinkedException;
 import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
 import com.sprint.mission.otboo.domain.authuser.user.dto.response.UserDto;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
@@ -184,12 +185,49 @@ class OAuth2SignInServiceTest {
 
       // then
       ArgumentCaptor<SocialAccount> captor = ArgumentCaptor.forClass(SocialAccount.class);
-      verify(socialAccountRepository).save(captor.capture());
+      verify(socialAccountRepository).saveAndFlush(captor.capture());
       assertThat(captor.getValue().getUser()).isEqualTo(linkingUser);
       assertThat(captor.getValue().getProvider()).isEqualTo(OAuth2Provider.KAKAO);
       assertThat(captor.getValue().getProviderId()).isEqualTo("kakao-99");
       assertThat(captor.getValue().getProviderEmail()).isEqualTo("hong@gmail.com");
       verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    @DisplayName("연동 요청이 동시에 들어와 소셜 계정 유니크 제약을 위반하면 SocialAccountAlreadyLinkedException으로 변환한다")
+    void 연동_요청이_동시에_들어와_소셜_계정_유니크_제약을_위반하면_SocialAccountAlreadyLinkedException으로_변환한다() {
+      // given
+      UUID linkingUserId = UUID.randomUUID();
+      User linkingUser = userWithId(linkingUserId, "홍길동", "hong@test.com");
+      given(socialAccountRepository.findByProviderAndProviderId(OAuth2Provider.KAKAO, "kakao-100"))
+          .willReturn(Optional.empty());
+      given(userRepository.findById(linkingUserId)).willReturn(Optional.of(linkingUser));
+      given(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+          .willThrow(uniqueViolation("uq_social_accounts_provider_provider_id"));
+
+      // when & then
+      assertThatThrownBy(() -> oAuth2SignInService.signIn(
+          OAuth2Provider.KAKAO, "kakao-100", "hong@gmail.com", "카카오닉네임", linkingUserId))
+          .isInstanceOf(SocialAccountAlreadyLinkedException.class);
+    }
+
+    @Test
+    @DisplayName("소셜 계정 제약과 무관한 위반이면 예외를 변환하지 않고 그대로 전파한다")
+    void 소셜_계정_제약과_무관한_위반이면_예외를_변환하지_않고_그대로_전파한다() {
+      // given
+      UUID linkingUserId = UUID.randomUUID();
+      User linkingUser = userWithId(linkingUserId, "홍길동", "hong@test.com");
+      given(socialAccountRepository.findByProviderAndProviderId(OAuth2Provider.KAKAO, "kakao-101"))
+          .willReturn(Optional.empty());
+      given(userRepository.findById(linkingUserId)).willReturn(Optional.of(linkingUser));
+      DataIntegrityViolationException otherViolation = uniqueViolation("uq_other_constraint");
+      given(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+          .willThrow(otherViolation);
+
+      // when & then
+      assertThatThrownBy(() -> oAuth2SignInService.signIn(
+          OAuth2Provider.KAKAO, "kakao-101", "hong@gmail.com", "카카오닉네임", linkingUserId))
+          .isSameAs(otherViolation);
     }
 
     @Test
@@ -207,7 +245,7 @@ class OAuth2SignInServiceTest {
           OAuth2Provider.GOOGLE, "google-2", "shared@gmail.com", "홍길동", linkingUserId))
           .isInstanceOf(EmailAlreadyRegisteredException.class);
       verify(userRepository, never()).findById(any());
-      verify(socialAccountRepository, never()).save(any());
+      verify(socialAccountRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -238,7 +276,7 @@ class OAuth2SignInServiceTest {
       assertThatCode(() -> oAuth2SignInService.signIn(
           OAuth2Provider.GOOGLE, "google-3", "hong@gmail.com", "홍길동", linkingUserId))
           .doesNotThrowAnyException();
-      verify(socialAccountRepository).save(any(SocialAccount.class));
+      verify(socialAccountRepository).saveAndFlush(any(SocialAccount.class));
     }
 
     @Test
@@ -255,7 +293,7 @@ class OAuth2SignInServiceTest {
       assertThatThrownBy(() -> oAuth2SignInService.signIn(
           OAuth2Provider.GOOGLE, "google-6", "hong@gmail.com", "홍길동", linkingUserId))
           .isInstanceOf(UserNotFoundException.class);
-      verify(socialAccountRepository, never()).save(any());
+      verify(socialAccountRepository, never()).saveAndFlush(any());
     }
   }
 
@@ -294,9 +332,27 @@ class OAuth2SignInServiceTest {
       assertThat(existingUser.getPassword()).isEqualTo("random-encoded-password");
       verify(userSessionRegistry).revokeAll(existingUser.getId());
       ArgumentCaptor<SocialAccount> captor = ArgumentCaptor.forClass(SocialAccount.class);
-      verify(socialAccountRepository).save(captor.capture());
+      verify(socialAccountRepository).saveAndFlush(captor.capture());
       assertThat(captor.getValue().getUser()).isEqualTo(existingUser);
       assertThat(captor.getValue().getProviderEmail()).isEqualTo("hong@gmail.com");
+    }
+
+    @Test
+    @DisplayName("병합 연동 요청이 동시에 들어와 소셜 계정 유니크 제약을 위반하면 SocialAccountAlreadyLinkedException으로 변환한다")
+    void 병합_연동_요청이_동시에_들어와_소셜_계정_유니크_제약을_위반하면_SocialAccountAlreadyLinkedException으로_변환한다() {
+      // given
+      User existingUser = userWithId(UUID.randomUUID(), "홍길동", "hong2@gmail.com");
+      given(socialAccountRepository.findByProviderAndProviderId(OAuth2Provider.GOOGLE, "google-9"))
+          .willReturn(Optional.empty());
+      given(userRepository.findByEmail("hong2@gmail.com")).willReturn(Optional.of(existingUser));
+      given(passwordEncoder.encode(any())).willReturn("random-encoded-password");
+      given(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+          .willThrow(uniqueViolation("uq_social_accounts_provider_provider_id"));
+
+      // when & then
+      assertThatThrownBy(() -> oAuth2SignInService.signIn(
+          OAuth2Provider.GOOGLE, "google-9", "hong2@gmail.com", "홍길동", null))
+          .isInstanceOf(SocialAccountAlreadyLinkedException.class);
     }
 
     @Test

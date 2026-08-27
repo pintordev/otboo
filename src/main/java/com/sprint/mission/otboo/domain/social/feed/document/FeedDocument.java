@@ -64,7 +64,7 @@ public class FeedDocument {
   @Field(type = FieldType.Keyword)
   private PrecipitationType precipitationType;
 
-  @Field(type = FieldType.Date, format = {}, pattern = "uuuu-MM-dd'T'HH:mm:ss[.SSSSSS][.SSS]X")
+  @Field(type = FieldType.Date)
   private Instant createdAt;
 
   @Field(type = FieldType.Long)

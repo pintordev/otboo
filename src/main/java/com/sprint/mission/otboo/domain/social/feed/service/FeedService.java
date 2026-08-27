@@ -10,7 +10,6 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
-import com.sprint.mission.otboo.domain.social.feed.entity.FeedLike;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
@@ -22,14 +21,13 @@ import com.sprint.mission.otboo.domain.social.follow.repository.FollowRepository
 import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Service
 public class FeedService {
-
-  private static final String UQ_FEED_LIKES = "uq_feed_likes_feed_id_user_id";
 
   private final FeedRepository feedRepository;
   private final UserSummaryQueryRepository userSummaryQueryRepository;
@@ -150,17 +146,17 @@ public class FeedService {
 
   // 저장 성공 시 true, 동시성 충돌로 이미 존재하면 false
   private boolean saveFeedLike(UUID feedId, UUID currentUserId) {
-    try {
-      FeedLike saved = feedLikeRepository.saveAndFlush(FeedLike.create(feedId, currentUserId));
-      log.info("피드 좋아요 저장 완료: feedLikeId={}", saved.getId());
-      return true;
-    } catch (DataIntegrityViolationException e) {
-      if (isUniqueViolation(e)) {
-        log.warn("피드 좋아요 중 동시성 충돌 발생: feedId={}", feedId);
-        return false;
-      }
-      throw e;
+    UUID feedLikeId = UUID.randomUUID();
+    int inserted = feedLikeRepository.insertIgnoreConflict(
+        feedLikeId, feedId, currentUserId, Instant.now());
+
+    if (inserted == 0) {
+      log.warn("피드 좋아요 중 동시성 충돌 발생: feedId={}", feedId);
+      return false;
     }
+
+    log.info("피드 좋아요 저장 완료: feedLikeId={}", feedLikeId);
+    return true;
   }
 
   private void validateFeedExists(UUID feedId) {
@@ -204,10 +200,5 @@ public class FeedService {
     eventPublisher.publishEvent(new NotificationRequestedEvent(
         Set.of(authorId), "좋아요",
         liker.name() + "님이 내 피드를 좋아합니다.", NotificationLevel.INFO));
-  }
-
-  private boolean isUniqueViolation(DataIntegrityViolationException e) {
-    return e.getCause() instanceof ConstraintViolationException cve
-        && UQ_FEED_LIKES.equalsIgnoreCase(cve.getConstraintName());
   }
 }

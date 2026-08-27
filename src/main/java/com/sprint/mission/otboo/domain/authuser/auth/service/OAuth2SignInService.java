@@ -3,6 +3,7 @@ package com.sprint.mission.otboo.domain.authuser.auth.service;
 import com.sprint.mission.otboo.domain.authuser.auth.dto.response.SignInDto;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.AccountLockedException;
 import com.sprint.mission.otboo.domain.authuser.auth.exception.EmailAlreadyRegisteredException;
+import com.sprint.mission.otboo.domain.authuser.auth.exception.SocialAccountAlreadyLinkedException;
 import com.sprint.mission.otboo.domain.authuser.auth.mapper.AuthMapper;
 import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
 import com.sprint.mission.otboo.domain.authuser.user.entity.SocialAccount;
@@ -33,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class OAuth2SignInService {
 
   private static final String UQ_USERS_EMAIL = "uq_users_email";
+  private static final String UQ_SOCIAL_ACCOUNTS_PROVIDER_PROVIDER_ID =
+      "uq_social_accounts_provider_provider_id";
 
   private final UserRepository userRepository;
   private final ProfileRepository profileRepository;
@@ -82,7 +85,7 @@ public class OAuth2SignInService {
 
     User linkingUser = userRepository.findById(linkingUserId)
         .orElseThrow(UserNotFoundException::withNone);
-    socialAccountRepository.save(SocialAccount.link(linkingUser, provider, providerId, email));
+    saveSocialAccountLink(linkingUser, provider, providerId, email);
     return linkingUser;
   }
 
@@ -102,8 +105,23 @@ public class OAuth2SignInService {
       String providerId, String email) {
     existingUser.changePassword(passwordEncoder.encode(UUID.randomUUID().toString()));
     userSessionRegistry.revokeAll(existingUser.getId());
-    socialAccountRepository.save(SocialAccount.link(existingUser, provider, providerId, email));
+    saveSocialAccountLink(existingUser, provider, providerId, email);
     return existingUser;
+  }
+
+  // 같은 (provider, providerId) 연동 요청이 동시에 들어오면 findLinkedUser가 둘 다
+  // "아직 연동 안 됨"으로 보고 통과시킬 수 있어서, 유니크 제약 위반을 여기서 붙잡아
+  // 이미 연동된 것으로 처리한다.
+  private void saveSocialAccountLink(User user, OAuth2Provider provider, String providerId,
+      String email) {
+    try {
+      socialAccountRepository.saveAndFlush(SocialAccount.link(user, provider, providerId, email));
+    } catch (DataIntegrityViolationException e) {
+      if (isSocialAccountUniqueViolation(e)) {
+        throw SocialAccountAlreadyLinkedException.withCause(e);
+      }
+      throw e;
+    }
   }
 
   private User createSocialUser(OAuth2Provider provider, String providerId, String email,
@@ -129,5 +147,10 @@ public class OAuth2SignInService {
   private boolean isEmailUniqueViolation(DataIntegrityViolationException e) {
     return e.getCause() instanceof ConstraintViolationException cve
         && UQ_USERS_EMAIL.equalsIgnoreCase(cve.getConstraintName());
+  }
+
+  private boolean isSocialAccountUniqueViolation(DataIntegrityViolationException e) {
+    return e.getCause() instanceof ConstraintViolationException cve
+        && UQ_SOCIAL_ACCOUNTS_PROVIDER_PROVIDER_ID.equalsIgnoreCase(cve.getConstraintName());
   }
 }

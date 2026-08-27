@@ -18,6 +18,9 @@ import com.sprint.mission.otboo.security.oauth2.properties.OAuth2Properties;
 import com.sprint.mission.otboo.security.token.dto.RefreshTokenClaims;
 import com.sprint.mission.otboo.security.token.exception.business.InvalidRefreshTokenException;
 import com.sprint.mission.otboo.security.token.provider.TokenProvider;
+import com.sprint.mission.otboo.security.usersession.dto.UserSession;
+import com.sprint.mission.otboo.security.usersession.exception.business.UserSessionExpiredException;
+import com.sprint.mission.otboo.security.usersession.registry.UserSessionRegistry;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.HashMap;
@@ -54,13 +57,17 @@ class OAuth2LoginSuccessHandlerTest {
   @Mock
   private TokenProvider tokenProvider;
 
+  @Mock
+  private UserSessionRegistry userSessionRegistry;
+
   private OAuth2LoginSuccessHandler successHandler;
 
   @BeforeEach
   void setUp() {
     OAuth2Properties oAuth2Properties = new OAuth2Properties(SUCCESS_URI, FAILURE_URI);
     successHandler = new OAuth2LoginSuccessHandler(
-        oAuth2SignInService, refreshTokenCookieProvider, oAuth2Properties, tokenProvider);
+        oAuth2SignInService, refreshTokenCookieProvider, oAuth2Properties, tokenProvider,
+        userSessionRegistry);
   }
 
   private OAuth2AuthenticationToken googleToken(String sub, String email, String name,
@@ -230,12 +237,15 @@ class OAuth2LoginSuccessHandlerTest {
   class ExplicitLink {
 
     @Test
-    @DisplayName("REFRESH_TOKEN 쿠키가 유효하면 해당 사용자 ID로 연동을 요청한다")
-    void REFRESH_TOKEN_쿠키가_유효하면_해당_사용자_ID로_연동을_요청한다() throws Exception {
+    @DisplayName("REFRESH_TOKEN 쿠키가 유효하고 세션이 살아있으면 해당 사용자 ID로 연동을 요청한다")
+    void REFRESH_TOKEN_쿠키가_유효하고_세션이_살아있으면_해당_사용자_ID로_연동을_요청한다() throws Exception {
       // given
       UUID loggedInUserId = UUID.randomUUID();
+      UUID sessionId = UUID.randomUUID();
       given(tokenProvider.parseRefreshToken("valid-refresh-token"))
-          .willReturn(new RefreshTokenClaims(loggedInUserId, UUID.randomUUID(), UUID.randomUUID()));
+          .willReturn(new RefreshTokenClaims(loggedInUserId, sessionId, UUID.randomUUID()));
+      given(userSessionRegistry.verifyUserSession(loggedInUserId, sessionId))
+          .willReturn(UserSession.issue(loggedInUserId, Instant.now()));
 
       OAuth2AuthenticationToken token =
           googleToken("google-sub-2", "hong@gmail.com", "홍길동", "google-link");
@@ -253,6 +263,32 @@ class OAuth2LoginSuccessHandlerTest {
       // then
       verify(oAuth2SignInService).signIn(
           OAuth2Provider.GOOGLE, "google-sub-2", "hong@gmail.com", "홍길동", loggedInUserId);
+    }
+
+    @Test
+    @DisplayName("REFRESH_TOKEN이 유효해도 세션이 회수됐으면 login_required 에러로 실패 URI로 리다이렉트한다")
+    void REFRESH_TOKEN이_유효해도_세션이_회수됐으면_login_required_에러로_실패_URI로_리다이렉트한다() throws Exception {
+      // given
+      UUID loggedInUserId = UUID.randomUUID();
+      UUID sessionId = UUID.randomUUID();
+      given(tokenProvider.parseRefreshToken("revoked-session-token"))
+          .willReturn(new RefreshTokenClaims(loggedInUserId, sessionId, UUID.randomUUID()));
+      given(userSessionRegistry.verifyUserSession(loggedInUserId, sessionId))
+          .willThrow(UserSessionExpiredException.withNone());
+
+      OAuth2AuthenticationToken token =
+          googleToken("google-sub-7", "hong@gmail.com", "홍길동", "google-link");
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      request.setCookies(
+          new Cookie(RefreshTokenCookieProvider.REFRESH_TOKEN, "revoked-session-token"));
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      // when
+      successHandler.onAuthenticationSuccess(request, response, token);
+
+      // then
+      assertThat(response.getRedirectedUrl()).contains("error_message=login_required");
+      verify(oAuth2SignInService, never()).signIn(any(), any(), any(), any(), any());
     }
 
     @Test
