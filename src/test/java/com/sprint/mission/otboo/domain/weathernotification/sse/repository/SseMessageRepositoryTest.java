@@ -301,7 +301,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       sseMessageRepository.save(expired);
 
       // when — 조회 메서드를 거치지 않고 save만 한 번 더 호출
-      sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "fresh"));
+      sseMessageRepository.save(new SseMessage(Set.of(userId), "notifications", "fresh", NOW));
 
       // then
       assertThat(redisTemplate.opsForZSet().rank("sse:message-index", expired.id().toString()))
@@ -334,7 +334,7 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
             ready.countDown();
             start.await();
             sseMessageRepository.save(
-                new SseMessage(Set.of(userId), "notifications", "payload-" + index));
+                new SseMessage(Set.of(userId), "notifications", "payload-" + index, NOW));
             return null;
           });
         }

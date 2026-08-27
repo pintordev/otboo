@@ -141,10 +141,10 @@ class SseServiceTest {
       // given
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1")
-          .withSeq(1L);
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2")
-          .withSeq(2L);
+      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1",
+          Instant.now()).withSeq(1L);
+      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2",
+          Instant.now()).withSeq(2L);
       given(sseMessageRepository.getLatestSequence()).willReturn(2L);
       given(sseMessageRepository.findAllAfter(lastEventId, userId)).willReturn(
           List.of(message1, message2));
@@ -165,12 +165,12 @@ class SseServiceTest {
       // given
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1")
-          .withSeq(1L);
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2")
-          .withSeq(2L);
-      SseMessage message3 = new SseMessage(Set.of(userId), "notifications", "payload3")
-          .withSeq(3L);
+      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1",
+          Instant.now()).withSeq(1L);
+      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2",
+          Instant.now()).withSeq(2L);
+      SseMessage message3 = new SseMessage(Set.of(userId), "notifications", "payload3",
+          Instant.now()).withSeq(3L);
       given(sseMessageRepository.getLatestSequence()).willReturn(2L);
       given(sseMessageRepository.findAllAfter(lastEventId, userId))
           .willReturn(List.of(message1, message2, message3));
@@ -192,10 +192,10 @@ class SseServiceTest {
       // given — 전역 최신 이벤트(스냅샷 근거)는 다른 사용자 대상이라 이 사용자의 missed 목록엔 존재하지 않는다
       UUID userId = UUID.randomUUID();
       UUID lastEventId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1")
-          .withSeq(1L);
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2")
-          .withSeq(3L);
+      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1",
+          Instant.now()).withSeq(1L);
+      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2",
+          Instant.now()).withSeq(3L);
       given(sseMessageRepository.getLatestSequence()).willReturn(2L);
       given(sseMessageRepository.findAllAfter(lastEventId, userId))
           .willReturn(List.of(message1, message2));
@@ -407,7 +407,8 @@ class SseServiceTest {
     void 로컬에_연결된_emitter로_전송한다() throws IOException {
       // given
       UUID userId = UUID.randomUUID();
-      SseMessage message = new SseMessage(Set.of(userId), "notifications", "payload");
+      SseMessage message =
+          new SseMessage(Set.of(userId), "notifications", "payload", Instant.now());
       SseEmitter emitter = mock(SseEmitter.class);
       given(sseEmitterRepository.findSnapshotSeq(userId)).willReturn(Optional.empty());
       given(sseEmitterRepository.findByUserId(userId)).willReturn(Optional.of(emitter));
@@ -426,7 +427,8 @@ class SseServiceTest {
       // 이미 재생으로 처리된 것과 같은 메시지가 뒤늦게 도착하는 상황을 재현
       UUID userId = UUID.randomUUID();
       SseMessage alreadyReplayed =
-          new SseMessage(Set.of(userId), "notifications", "payload").withSeq(1L);
+          new SseMessage(Set.of(userId), "notifications", "payload", Instant.now())
+              .withSeq(1L);
       given(sseEmitterRepository.findSnapshotSeq(userId)).willReturn(Optional.of(2L));
 
       // when
@@ -442,7 +444,8 @@ class SseServiceTest {
       // given — snapshotSeq가 이 메시지 자신의 seq와 같은 경계값(<=)인 경우
       UUID userId = UUID.randomUUID();
       SseMessage boundaryMessage =
-          new SseMessage(Set.of(userId), "notifications", "payload").withSeq(5L);
+          new SseMessage(Set.of(userId), "notifications", "payload", Instant.now())
+              .withSeq(5L);
       given(sseEmitterRepository.findSnapshotSeq(userId)).willReturn(Optional.of(5L));
 
       // when
@@ -458,8 +461,10 @@ class SseServiceTest {
       // given — message1의 emitter.send()를 인위적으로 블로킹시켜, 그 사이 message2의
       // 스냅샷 판정(findSnapshotAt)이 락에 막히지 않고 진행되는지 확인한다
       UUID userId = UUID.randomUUID();
-      SseMessage message1 = new SseMessage(Set.of(userId), "notifications", "payload1");
-      SseMessage message2 = new SseMessage(Set.of(userId), "notifications", "payload2");
+      SseMessage message1 =
+          new SseMessage(Set.of(userId), "notifications", "payload1", Instant.now());
+      SseMessage message2 =
+          new SseMessage(Set.of(userId), "notifications", "payload2", Instant.now());
       SseEmitter blockingEmitter = mock(SseEmitter.class);
       SseEmitter fastEmitter = mock(SseEmitter.class);
       CountDownLatch sendStarted = new CountDownLatch(1);
@@ -500,7 +505,7 @@ class SseServiceTest {
       UUID failingReceiverId = UUID.randomUUID();
       UUID okReceiverId = UUID.randomUUID();
       SseMessage message = new SseMessage(
-          Set.of(failingReceiverId, okReceiverId), "notifications", "payload");
+          Set.of(failingReceiverId, okReceiverId), "notifications", "payload", Instant.now());
       SseEmitter okEmitter = mock(SseEmitter.class);
       given(sseEmitterRepository.findSnapshotSeq(failingReceiverId))
           .willThrow(new RuntimeException("redis 장애"));

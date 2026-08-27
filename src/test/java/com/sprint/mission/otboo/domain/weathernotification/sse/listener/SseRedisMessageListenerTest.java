@@ -14,6 +14,7 @@ import com.sprint.mission.otboo.domain.weathernotification.notification.dto.Noti
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.service.SseService;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +44,8 @@ class SseRedisMessageListenerTest {
     @DisplayName("역직렬화한 메시지를 SseService로 로컬 전달한다")
     void 역직렬화한_메시지를_SseService로_로컬_전달한다() throws Exception {
       // given
-      SseMessage sseMessage = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload");
+      SseMessage sseMessage = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload",
+          Instant.now());
       byte[] body = objectMapper.writeValueAsBytes(sseMessage);
       Message message = new DefaultMessage("sse:notifications".getBytes(), body);
 
@@ -70,7 +72,8 @@ class SseRedisMessageListenerTest {
     @DisplayName("deliverLocally가 실패해도 예외를 전파하지 않는다")
     void deliverLocally가_실패해도_예외를_전파하지_않는다() throws Exception {
       // given
-      SseMessage sseMessage = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload");
+      SseMessage sseMessage = new SseMessage(Set.of(UUID.randomUUID()), "notifications", "payload",
+          Instant.now());
       byte[] body = objectMapper.writeValueAsBytes(sseMessage);
       Message message = new DefaultMessage("sse:notifications".getBytes(), body);
       willThrow(new RuntimeException("전달 실패")).given(sseService).deliverLocally(sseMessage);
@@ -86,7 +89,8 @@ class SseRedisMessageListenerTest {
       NotificationDto dto = fm.giveMeBuilder(NotificationDto.class)
           .set("receiverId", UUID.randomUUID())
           .sample();
-      SseMessage sseMessage = new SseMessage(Set.of(dto.receiverId()), "notifications", dto);
+      SseMessage sseMessage = new SseMessage(Set.of(dto.receiverId()), "notifications", dto,
+          Instant.now());
       byte[] body = objectMapper.writeValueAsBytes(sseMessage);
       Message message = new DefaultMessage("sse:notifications".getBytes(), body);
       ArgumentCaptor<SseMessage> captor = ArgumentCaptor.forClass(SseMessage.class);

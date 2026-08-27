@@ -7,7 +7,9 @@ import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +42,7 @@ public class SseService {
   private final SseMessageRepository sseMessageRepository;
   private final StringRedisTemplate stringRedisTemplate;
   private final ObjectMapper objectMapper;
+  private final Clock clock;
 
   private final ReentrantLock[] connectionLocks = Stream.generate(ReentrantLock::new)
       .limit(LOCK_STRIPES)
@@ -82,7 +85,8 @@ public class SseService {
   public void send(List<NotificationDto> notificationDtos, String eventName) {
     notificationDtos.forEach(dto -> {
       try {
-        SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
+        SseMessage message =
+            new SseMessage(Set.of(dto.receiverId()), eventName, dto, Instant.now(clock));
         long seq = sseMessageRepository.save(message);
         SseMessage withSeq = message.withSeq(seq);
         stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
