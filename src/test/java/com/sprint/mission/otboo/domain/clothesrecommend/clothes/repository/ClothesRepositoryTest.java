@@ -7,6 +7,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.entity.Clothes;
 import com.sprint.mission.otboo.global.config.JpaConfig;
 import com.sprint.mission.otboo.global.config.QuerydslConfig;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -120,6 +121,37 @@ class ClothesRepositoryTest {
 
       // then
       assertThat(result).isEmpty();
+    }
+  }
+
+  @Nested
+  @DisplayName("이미지 키 전체 조회 (findAllImageUrls)")
+  class FindAllImageUrls {
+
+    @Test
+    @DisplayName("이미지가_등록된_의상의_키만_모아서_반환하고_소프트_삭제된_의상도_포함한다")
+    void 이미지가_등록된_의상의_키만_모아서_반환하고_소프트_삭제된_의상도_포함한다() {
+      // given
+      UUID ownerId = UUID.randomUUID();
+      Clothes withImage = clothesRepository.save(Clothes.create(ownerId, "상의", ClothesType.TOP));
+      withImage.changeImageUrl("clothes/a.png");
+      clothesRepository.save(withImage);
+
+      Clothes deletedWithImage = clothesRepository.save(
+          Clothes.create(ownerId, "삭제된 하의", ClothesType.BOTTOM));
+      deletedWithImage.changeImageUrl("clothes/b.png");
+      deletedWithImage.delete();
+      clothesRepository.save(deletedWithImage);
+
+      clothesRepository.save(Clothes.create(ownerId, "이미지 없음", ClothesType.HAT));
+      testEntityManager.flush();
+      testEntityManager.clear();
+
+      // when
+      Set<String> imageUrls = clothesRepository.findAllImageUrls();
+
+      // then — 소프트 삭제 여부와 무관하게 이미지 키가 있으면 참조로 집계된다
+      assertThat(imageUrls).containsExactlyInAnyOrder("clothes/a.png", "clothes/b.png");
     }
   }
 }
