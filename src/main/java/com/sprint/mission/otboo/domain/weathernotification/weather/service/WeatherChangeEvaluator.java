@@ -50,6 +50,58 @@ public class WeatherChangeEvaluator {
     return reasons.isEmpty() ? Optional.empty() : Optional.of(new ChangeResult(reasons));
   }
 
+  // 시각별 비교를 하루 단위로 요약한다 - 지표별로 그날 |delta|가 가장 큰 시각의 문구 하나만
+  // 남긴다(D1 알림이 시각 수만큼 같은 문구를 반복하지 않도록). baselines/currents는 같은 인덱스가
+  // 같은 시각의 baseline/current 스냅샷 쌍이어야 한다.
+  public Optional<ChangeResult> evaluateDaySummary(List<WeatherChangeSnapshot> baselines,
+      List<WeatherChangeSnapshot> currents) {
+    double maxTemperatureDelta = 0.0;
+    double maxProbabilityDelta = 0.0;
+    double maxAmountDelta = 0.0;
+    PrecipitationType typeChangeFrom = null;
+    PrecipitationType typeChangeTo = null;
+
+    for (int i = 0; i < baselines.size(); i++) {
+      WeatherChangeSnapshot previous = baselines.get(i);
+      WeatherChangeSnapshot latest = currents.get(i);
+
+      double temperatureDelta = normalize(
+          latest.temperatureCurrent() - previous.temperatureCurrent());
+      if (Math.abs(temperatureDelta) > Math.abs(maxTemperatureDelta)) {
+        maxTemperatureDelta = temperatureDelta;
+      }
+      double probabilityDelta = normalize(
+          latest.precipitationProbability() - previous.precipitationProbability());
+      if (Math.abs(probabilityDelta) > Math.abs(maxProbabilityDelta)) {
+        maxProbabilityDelta = probabilityDelta;
+      }
+      double amountDelta = normalize(
+          latest.precipitationAmount() - previous.precipitationAmount());
+      if (Math.abs(amountDelta) > Math.abs(maxAmountDelta)) {
+        maxAmountDelta = amountDelta;
+      }
+      if (previous.precipitationType() != latest.precipitationType()) {
+        typeChangeFrom = previous.precipitationType();
+        typeChangeTo = latest.precipitationType();
+      }
+    }
+
+    List<String> reasons = new ArrayList<>();
+    if (Math.abs(maxTemperatureDelta) >= properties.temperatureThreshold()) {
+      reasons.add(temperatureMessage(maxTemperatureDelta));
+    }
+    if (typeChangeFrom != null) {
+      reasons.add(precipitationTypeMessage(typeChangeFrom, typeChangeTo));
+    }
+    if (Math.abs(maxProbabilityDelta) >= properties.precipitationProbabilityThreshold()) {
+      reasons.add(precipitationProbabilityMessage(maxProbabilityDelta));
+    }
+    if (Math.abs(maxAmountDelta) >= properties.precipitationAmountThreshold()) {
+      reasons.add(precipitationAmountMessage(maxAmountDelta));
+    }
+    return reasons.isEmpty() ? Optional.empty() : Optional.of(new ChangeResult(reasons));
+  }
+
   private double normalize(double delta) {
     return Math.round(delta * SCALE) / SCALE;
   }
