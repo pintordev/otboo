@@ -75,9 +75,11 @@ public class SseMessageRepository {
       public Object execute(RedisOperations operations) {
         operations.multi();
         operations.opsForValue().set(messageKey, json, retention);
-        operations.opsForSet().add(receiversKey,
-            withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
-        operations.expire(receiversKey, retention);
+        if (!withSeq.receiverIds().isEmpty()) { // SADD는 멤버 0개로 호출할 수 없음
+          operations.opsForSet().add(receiversKey,
+              withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
+          operations.expire(receiversKey, retention);
+        }
         withSeq.receiverIds().forEach(receiverId ->
             operations.opsForZSet().add(indexKeyFor(receiverId), withSeq.id().toString(), seq));
         operations.opsForZSet().add(TIME_INDEX_KEY, withSeq.id().toString(),
