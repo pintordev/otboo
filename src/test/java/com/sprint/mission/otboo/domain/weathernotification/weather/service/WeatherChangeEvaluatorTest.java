@@ -1,6 +1,7 @@
 package com.sprint.mission.otboo.domain.weathernotification.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sprint.mission.otboo.batch.weatherfetch.config.WeatherChangeProperties;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
@@ -211,6 +212,21 @@ class WeatherChangeEvaluatorTest {
 
       // then
       assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("baselines와_currents의_크기가_다르면_예외가_발생한다")
+    void baselines와_currents의_크기가_다르면_예외가_발생한다() {
+      // given
+      List<WeatherChangeSnapshot> baselines = List.of(
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0),
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0));
+      List<WeatherChangeSnapshot> currents = List.of(
+          snapshotOf(21.0, PrecipitationType.NONE, 0.0, 0.0));
+
+      // when / then
+      assertThatThrownBy(() -> evaluator.evaluateDaySummary(baselines, currents))
+          .isInstanceOf(IllegalArgumentException.class);
     }
   }
 
