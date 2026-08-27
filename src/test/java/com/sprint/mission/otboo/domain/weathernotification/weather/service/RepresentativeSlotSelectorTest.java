@@ -40,6 +40,23 @@ class RepresentativeSlotSelectorTest {
     }
 
     @Test
+    @DisplayName("거리가_같은_두_슬롯_중_입력_순서와_무관하게_이른_시각을_고른다")
+    void 거리가_같은_두_슬롯_중_입력_순서와_무관하게_이른_시각을_고른다() {
+      // given - 기준 시각 12:00 KST, 11:00/13:00 둘 다 거리 60분으로 동일
+      Weather earlier = slot("2026-07-27T02:00:00Z"); // 11:00 KST
+      Weather later = slot("2026-07-27T04:00:00Z");   // 13:00 KST
+      Instant referenceInstant = Instant.parse("2026-07-27T03:00:00Z"); // 12:00 KST
+
+      // when - 입력 순서를 바꿔 두 번 호출
+      Optional<Weather> resultA = selector.select(List.of(earlier, later), referenceInstant);
+      Optional<Weather> resultB = selector.select(List.of(later, earlier), referenceInstant);
+
+      // then - 순서와 무관하게 항상 이른 시각(earlier)이 선택돼야 한다
+      assertThat(resultA).contains(earlier);
+      assertThat(resultB).contains(earlier);
+    }
+
+    @Test
     @DisplayName("빈_슬롯_목록이면_빈_Optional을_반환한다")
     void 빈_슬롯_목록이면_빈_Optional을_반환한다() {
       // when
