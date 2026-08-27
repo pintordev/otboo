@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,6 +69,22 @@ class AsyncConfigTest {
 
       // then
       assertThat(captured.get(5, TimeUnit.SECONDS)).isEqualTo(requestId);
+    }
+  }
+
+  @Nested
+  @DisplayName("sseListenerExecutor")
+  class SseListenerExecutor {
+
+    @Test
+    @DisplayName("큐 포화 시 CallerRunsPolicy로 역압을 건다")
+    void 큐_포화_시_CallerRunsPolicy로_역압을_건다() {
+      // when
+      executor = (ThreadPoolTaskExecutor) asyncConfig.sseListenerExecutor();
+
+      // then
+      assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+          .isInstanceOf(ThreadPoolExecutor.CallerRunsPolicy.class);
     }
   }
 
