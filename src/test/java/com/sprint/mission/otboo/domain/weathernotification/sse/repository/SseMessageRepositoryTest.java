@@ -1,7 +1,15 @@
 package com.sprint.mission.otboo.domain.weathernotification.sse.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
@@ -22,13 +30,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 import tools.jackson.databind.ObjectMapper;
 
 class SseMessageRepositoryTest implements RedisTestContainerSupport {
@@ -37,12 +50,15 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
   private final FixtureMonkey fm = FixtureMonkey.builder()
       .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .defaultNotNull(true) // createdAt이 null이면 SseMessage 생성 자체가 NPE라 반드시 필요
       .build();
 
   static LettuceConnectionFactory connectionFactory;
   static StringRedisTemplate redisTemplate;
 
   private SseMessageRepository sseMessageRepository;
+  private ListAppender<ILoggingEvent> appender;
+  private Logger logger;
 
   @BeforeAll
   static void setUpRedis() {
@@ -69,6 +85,16 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
     sseMessageRepository = new SseMessageRepository(redisTemplate,
         new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
         new SseReplayBufferProperties(10, 1000));
+
+    logger = (Logger) LoggerFactory.getLogger(SseMessageRepository.class);
+    appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    logger.detachAppender(appender);
   }
 
   private void deleteByPattern(String pattern) {
@@ -135,6 +161,63 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
       // then - createdAt은 두 번째가 더 이르지만, 저장 순서(seq)는 항상 증가해야 한다
       assertThat(secondSeq).isGreaterThan(firstSeq);
+    }
+  }
+
+  @Nested
+  @DisplayName("MULTI/EXEC 결과 검사")
+  class MultiExecResultCheck {
+
+    @Test
+    @DisplayName("정상_저장이면_경고_로그를_남기지_않는다")
+    void 정상_저장이면_경고_로그를_남기지_않는다() {
+      // given
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("receiverIds", Set.of(UUID.randomUUID()))
+          .set("data", "payload")
+          .sample();
+
+      // when
+      sseMessageRepository.save(message);
+
+      // then
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .noneMatch(msg -> msg.contains("MULTI/EXEC 일부 실패"));
+    }
+
+    @Test
+    @DisplayName("MULTI_EXEC_결과_개수가_예상과_다르면_경고_로그를_남긴다")
+    void MULTI_EXEC_결과_개수가_예상과_다르면_경고_로그를_남긴다() {
+      // given - StringRedisTemplate을 목으로 대체해 exec() 결과 개수를 인위적으로 어긋나게 만든다
+      // (Lettuce 파이프라인 특성상 실제 부분 실패를 통합 테스트로 재현하긴 어려움)
+      StringRedisTemplate mockTemplate = mock(StringRedisTemplate.class);
+      ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+      @SuppressWarnings("unchecked")
+      ZSetOperations<String, String> zSetOpsMock = mock(ZSetOperations.class);
+      given(mockTemplate.opsForValue()).willReturn(valueOps);
+      given(mockTemplate.opsForZSet()).willReturn(zSetOpsMock);
+      given(valueOps.increment("sse:seq")).willReturn(1L);
+      given(zSetOpsMock.rangeByScore(anyString(), anyDouble(), anyDouble()))
+          .willReturn(Set.of());
+      given(mockTemplate.execute(any(SessionCallback.class)))
+          .willReturn(List.of("OK")); // 수신자 1명이면 기대 개수는 5(SET+SADD+EXPIRE+ZADD+ZADD)
+
+      SseMessageRepository repository = new SseMessageRepository(mockTemplate,
+          new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
+          new SseReplayBufferProperties(10, 1000));
+      SseMessage message = fm.giveMeBuilder(SseMessage.class)
+          .set("receiverIds", Set.of(UUID.randomUUID()))
+          .set("data", "payload")
+          .sample();
+
+      // when
+      repository.save(message);
+
+      // then
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anyMatch(msg -> msg.contains("MULTI/EXEC 일부 실패"));
     }
   }
 
