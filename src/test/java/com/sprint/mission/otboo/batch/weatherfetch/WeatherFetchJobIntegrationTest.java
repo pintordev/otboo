@@ -461,7 +461,9 @@ class WeatherFetchJobIntegrationTest extends IntegrationTestSupport {
       advanceClockTo(day1Now);
       weatherSuddenChangeNotifier.detectAndNotify(day1BaseTime);
 
-      assertThat(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
+      assertThat(weatherD1BaselineRepository
+          .findAllByWeatherGridIdInAndTargetDate(List.of(grid.getId()), d2Date).stream()
+          .findFirst())
           .isPresent();
 
       // 오늘(day2) 20시: 어제 캡처해둔 값과 달라진 현재 예보를 다시 채운다
@@ -482,7 +484,9 @@ class WeatherFetchJobIntegrationTest extends IntegrationTestSupport {
               }));
       // 다 쓴 D1 baseline 스냅샷은 비교 후에도 즉시 지우지 않는다 - target_date는 매일
       // 전진해 재사용되지 않으므로, retention 배치의 cutoff(오늘) 삭제에 맡긴다(#163).
-      assertThat(weatherD1BaselineRepository.findByWeatherGridAndTargetDate(grid, d2Date))
+      assertThat(weatherD1BaselineRepository
+          .findAllByWeatherGridIdInAndTargetDate(List.of(grid.getId()), d2Date).stream()
+          .findFirst())
           .isPresent();
     }
 

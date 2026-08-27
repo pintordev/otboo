@@ -96,48 +96,6 @@ class WeatherD1BaselineRepositoryTest {
   }
 
   @Nested
-  @DisplayName("FindByWeatherGridAndTargetDate")
-  class FindByWeatherGridAndTargetDate {
-
-    @Test
-    @DisplayName("격자와_날짜가_일치하는_baseline만_반환한다")
-    void 격자와_날짜가_일치하는_baseline만_반환한다() {
-      WeatherGrid targetGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
-      WeatherGrid otherGrid = weatherGridRepository.save(WeatherGrid.create(61, 128));
-      testEntityManager.flush();
-
-      LocalDate targetDate = LocalDate.parse("2026-07-29");
-      LocalDate otherDate = LocalDate.parse("2026-07-30");
-      WeatherD1Baseline matched = weatherD1BaselineRepository.save(WeatherD1Baseline.create(
-          targetGrid, targetDate, Map.of(), Instant.parse("2026-07-27T11:10:00Z")));
-      weatherD1BaselineRepository.save(WeatherD1Baseline.create(targetGrid, otherDate, Map.of(),
-          Instant.parse("2026-07-27T11:10:00Z")));
-      weatherD1BaselineRepository.save(WeatherD1Baseline.create(otherGrid, targetDate, Map.of(),
-          Instant.parse("2026-07-27T11:10:00Z")));
-      testEntityManager.flush();
-      testEntityManager.clear();
-
-      Optional<WeatherD1Baseline> found = weatherD1BaselineRepository
-          .findByWeatherGridAndTargetDate(targetGrid, targetDate);
-
-      assertThat(found).isPresent();
-      assertThat(found.orElseThrow().getId()).isEqualTo(matched.getId());
-    }
-
-    @Test
-    @DisplayName("일치하는_baseline이_없으면_빈_값을_반환한다")
-    void 일치하는_baseline이_없으면_빈_값을_반환한다() {
-      WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
-      testEntityManager.flush();
-
-      Optional<WeatherD1Baseline> found = weatherD1BaselineRepository
-          .findByWeatherGridAndTargetDate(grid, LocalDate.parse("2026-07-29"));
-
-      assertThat(found).isEmpty();
-    }
-  }
-
-  @Nested
   @DisplayName("FindForRetention")
   class FindForRetention {
 
