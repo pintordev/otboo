@@ -1,18 +1,13 @@
 package com.sprint.mission.otboo.batch.weatherfetch.service;
 
-import com.sprint.mission.otboo.domain.authuser.user.entity.Profile;
-import com.sprint.mission.otboo.domain.authuser.user.repository.ProfileRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.Weather;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherD1Baseline;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.WeatherGrid;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherD1BaselineRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.repository.WeatherRepository;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.RepresentativeSlotSelector;
-import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeEvaluator;
 import com.sprint.mission.otboo.domain.weathernotification.weather.service.WeatherChangeSnapshot;
 import com.sprint.mission.otboo.external.kma.KmaBaseTimeCalculator.BaseTime;
-import com.sprint.mission.otboo.global.event.NotificationLevel;
-import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,18 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 // 청크(그리드 일부) 단위 D0/D1 감지·발행 전용(#163, PR #131 리뷰 - 전체 격자를 한 트랜잭션에서
 // 처리하던 문제) - detectAndNotify()가 gridChunkSize만큼 잘라 넘긴 청크를 여기서 트랜잭션
-// 하나로 처리한다.
+// 하나로 처리한다. 격자 하나의 실제 평가·리셋·발행은 WeatherSuddenChangeGridProcessor에
+// 위임한다(#283 CodeRabbit 리뷰) - 한 격자에서 DB 오류가 나도 그 격자만 REQUIRES_NEW
+// 트랜잭션 안에서 실패하고, 같은 청크의 나머지 격자는 계속 처리된다.
 @Slf4j
 @RequiredArgsConstructor
 @Component
@@ -42,10 +37,8 @@ public class WeatherSuddenChangeChunkProcessor {
 
   private final WeatherRepository weatherRepository;
   private final RepresentativeSlotSelector representativeSlotSelector;
-  private final ProfileRepository profileRepository;
   private final WeatherD1BaselineRepository weatherD1BaselineRepository;
-  private final WeatherChangeEvaluator weatherChangeEvaluator;
-  private final ApplicationEventPublisher eventPublisher;
+  private final WeatherSuddenChangeGridProcessor gridProcessor;
   private final Clock clock;
 
   // 청크(그리드 일부) 하나를 트랜잭션 하나로 처리한다(#163, PR #131 리뷰 - 전체 격자
@@ -68,26 +61,31 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant from = today.atStartOfDay(KST).toInstant();
     Instant to = today.plusDays(1).atStartOfDay(KST).toInstant();
     Map<UUID, List<Weather>> slotsByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
-            to)
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
+            gridIds, from, to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
 
     int notified = 0;
     for (WeatherGrid grid : chunk) {
-      List<Weather> todaySlots = slotsByGridId.getOrDefault(grid.getId(), List.of());
-      Optional<Weather> target = representativeSlotSelector.select(todaySlots, baseTime.toInstant());
-      if (target.isEmpty()) {
-        log.warn("당일 슬롯이 없어 D0 평가를 건너뜀: weatherGridId={}, baseTime={}", grid.getId(),
-            baseTime.baseTime());
-        continue;
-      }
-      if (!hasCompleteBaseline(target.get())) {
-        log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.get().getId());
-        continue;
-      }
-      if (evaluateD0(target.get())) {
-        notified++;
+      try {
+        List<Weather> todaySlots = slotsByGridId.getOrDefault(grid.getId(), List.of());
+        Optional<Weather> target =
+            representativeSlotSelector.select(todaySlots, baseTime.toInstant());
+        if (target.isEmpty()) {
+          log.warn("당일 슬롯이 없어 D0 평가를 건너뜀: weatherGridId={}, baseTime={}", grid.getId(),
+              baseTime.baseTime());
+          continue;
+        }
+        if (!hasCompleteBaseline(target.get())) {
+          log.warn("baseline 컬럼 결측으로 D0 평가를 건너뜀: weatherId={}", target.get().getId());
+          continue;
+        }
+        if (gridProcessor.evaluateD0(target.get())) {
+          notified++;
+        }
+      } catch (RuntimeException e) {
+        log.error("D0 평가 실패, 다음 격자로 진행: weatherGridId={}", grid.getId(), e);
       }
     }
     return notified;
@@ -102,53 +100,6 @@ public class WeatherSuddenChangeChunkProcessor {
         && weather.getBaselinePrecipitationAmount() != null;
   }
 
-  // baseTime과 forecastAt이 정확히 일치해 이 슬롯은 하루에 한 번만 D0 평가된다 - 리셋 여부가
-  // 이후 재평가에 영향을 줄 일이 없으므로, 변경이 감지되면 수신자 유무와 무관하게 리셋한다.
-  // notified 카운트(로그용)만 실제 발행 성공 여부를 따른다.
-  private boolean evaluateD0(Weather weather) {
-    Optional<WeatherChangeEvaluator.ChangeResult> result = weatherChangeEvaluator.evaluate(
-        WeatherChangeSnapshot.baselineOf(weather), WeatherChangeSnapshot.currentOf(weather));
-    if (result.isEmpty()) {
-      return false;
-    }
-    resetBaseline(weather);
-    return publish(weather.getWeatherGrid(), result.get());
-  }
-
-  private void resetBaseline(Weather weather) {
-    weatherRepository.updateBaseline(weather.getId(), weather.getTemperatureCurrent(),
-        weather.getPrecipitationType(), weather.getPrecipitationProbability(),
-        weather.getPrecipitationAmount());
-  }
-
-  // D0/D1이 공유하는 단순화된 발행 - notificationLog 없이 이벤트 발행만 한다.
-  private boolean publish(WeatherGrid grid, WeatherChangeEvaluator.ChangeResult result) {
-    List<Profile> profiles = profileRepository.findByLocation(grid.getX(), grid.getY());
-    if (profiles.isEmpty()) {
-      return false;
-    }
-    Map<List<String>, List<UUID>> receiverIdsByRegion = profiles.stream()
-        .collect(Collectors.groupingBy(
-            profile -> normalizedLocationNames(profile.getLocation().getLocationNames()),
-            Collectors.mapping(Profile::getId, Collectors.toList())));
-
-    for (Map.Entry<List<String>, List<UUID>> entry : receiverIdsByRegion.entrySet()) {
-      List<String> locationNames = entry.getKey();
-      String regionName = locationNames.isEmpty() ? ""
-          : locationNames.get(locationNames.size() - 1) + " ";
-      String content = result.content(regionName);
-      eventPublisher.publishEvent(new NotificationRequestedEvent(
-          Set.copyOf(entry.getValue()), "날씨 급변", content, NotificationLevel.WARNING));
-    }
-    return true;
-  }
-
-  // LocationRequest.locationNames엔 @NotNull이 없어(api-docs.json에도 required 아님) null로
-  // 등록될 수 있다 - UserMapper.locationDtoFrom()과 동일하게 소비하는 쪽에서 방어한다
-  private List<String> normalizedLocationNames(List<String> locationNames) {
-    return locationNames == null ? List.of() : locationNames;
-  }
-
   // 오늘의 캡처가 내일의 D1 baseline이 된다 - 매일 20시 배치에서 청크 전체의 D2(오늘+2)
   // 24시간 스냅샷을 쿼리 2번(슬롯 조회 1번, 기존 baseline 조회 1번)으로 upsert한다(#163).
   void captureD2Snapshot(List<WeatherGrid> chunk, LocalDate d2Date) {
@@ -157,8 +108,8 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant to = d2Date.plusDays(1).atStartOfDay(KST).toInstant();
 
     Map<UUID, List<Weather>> slotsByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
-            to)
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
+            gridIds, from, to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
     Map<UUID, WeatherD1Baseline> existingByGridId = weatherD1BaselineRepository
@@ -214,8 +165,8 @@ public class WeatherSuddenChangeChunkProcessor {
     Instant from = d1Date.atStartOfDay(KST).toInstant();
     Instant to = d1Date.plusDays(1).atStartOfDay(KST).toInstant();
     Map<UUID, List<Weather>> currentByGridId = weatherRepository
-        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(gridIds, from,
-            to)
+        .findAllByWeatherGridIdInAndForecastAtGreaterThanEqualAndForecastAtLessThanOrderByForecastAtAsc(
+            gridIds, from, to)
         .stream()
         .collect(Collectors.groupingBy(weather -> weather.getWeatherGrid().getId()));
 
@@ -227,23 +178,26 @@ public class WeatherSuddenChangeChunkProcessor {
             grid.getId(), d1Date);
         continue;
       }
-      Map<Instant, WeatherChangeSnapshot> baselineByHour = baselineRow.getHourlySnapshot();
-      // 하루 요약(evaluateDaySummary)으로 grid당 1회만 평가한다 - 24개 시각을 개별로 비교해
-      // reasons를 이어붙이면 같은 문구가 시각 수만큼 반복될 수 있다.
-      List<WeatherChangeSnapshot> baselineSnapshots = new ArrayList<>();
-      List<WeatherChangeSnapshot> currentSnapshots = new ArrayList<>();
-      for (Weather current : currentByGridId.getOrDefault(grid.getId(), List.of())) {
-        WeatherChangeSnapshot baseline = baselineByHour.get(current.getForecastAt());
-        if (baseline == null) {
-          continue; // 어제는 없었던 슬롯(경계 케이스) - 비교 스킵
+      try {
+        Map<Instant, WeatherChangeSnapshot> baselineByHour = baselineRow.getHourlySnapshot();
+        // 하루 요약(evaluateDaySummary)으로 grid당 1회만 평가한다 - 24개 시각을 개별로 비교해
+        // reasons를 이어붙이면 같은 문구가 시각 수만큼 반복될 수 있다.
+        List<WeatherChangeSnapshot> baselineSnapshots = new ArrayList<>();
+        List<WeatherChangeSnapshot> currentSnapshots = new ArrayList<>();
+        for (Weather current : currentByGridId.getOrDefault(grid.getId(), List.of())) {
+          WeatherChangeSnapshot baseline = baselineByHour.get(current.getForecastAt());
+          if (baseline == null) {
+            continue; // 어제는 없었던 슬롯(경계 케이스) - 비교 스킵
+          }
+          baselineSnapshots.add(baseline);
+          currentSnapshots.add(WeatherChangeSnapshot.currentOf(current));
         }
-        baselineSnapshots.add(baseline);
-        currentSnapshots.add(WeatherChangeSnapshot.currentOf(current));
-      }
-      Optional<WeatherChangeEvaluator.ChangeResult> result =
-          weatherChangeEvaluator.evaluateDaySummary(baselineSnapshots, currentSnapshots);
-      if (result.isPresent() && publish(grid, result.get())) {
-        notified++;
+        if (gridProcessor.evaluateD1(grid, baselineSnapshots, currentSnapshots)) {
+          notified++;
+        }
+      } catch (RuntimeException e) {
+        log.error("D1 평가 실패, 다음 격자로 진행: weatherGridId={}, date={}", grid.getId(), d1Date,
+            e);
       }
     }
     return notified;
