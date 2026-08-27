@@ -5,6 +5,7 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.service.ClothesS
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.exception.ClothesOwnershipException;
 import com.sprint.mission.otboo.domain.social.feed.exception.OotdNotFoundException;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OotdSnapshotProvider {
 
   private final ClothesService clothesService;
+  private final FileUrlResolver fileUrlResolver;
 
   public List<OotdSnapshot> readOotds(List<UUID> clothesIds, UUID currentUserId) {
     if (clothesIds == null || clothesIds.isEmpty()) {
@@ -44,11 +46,13 @@ public class OotdSnapshotProvider {
         .toList();
   }
 
+  // 스냅샷은 저장 시점의 값을 박제하므로, publicBaseUrl이 바뀌어도 이미지를 찾을 수 있도록
+  // resolve된 URL이 아닌 원본 키를 보관한다. 응답 시 FeedMapper가 resolve한다.
   private OotdSnapshot toOotdSnapshot(ClothesDto clothes) {
     return new OotdSnapshot(
         clothes.id(),
         clothes.name(),
-        clothes.imageUrl(),
+        fileUrlResolver.extractKey(clothes.imageUrl()),
         clothes.type(),
         clothes.attributes()
     );

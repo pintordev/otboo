@@ -6,12 +6,17 @@ import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.FieldReflectionArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.social.common.dto.UserSummary;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedDto;
+import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.PrecipitationType;
 import com.sprint.mission.otboo.domain.weathernotification.weather.entity.enums.SkyStatus;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,7 +33,12 @@ class FeedMapperTest {
       SkyStatus.CLEAR, PrecipitationType.NONE,
       0.0, 0.0, 28.0, 2.0, 16.0, 31.0);
 
-  FeedMapper feedMapper = new FeedMapper();
+  static final String BASE_URL = "http://localhost:8080/uploads";
+
+  static final FileUrlResolver fileUrlResolver = new FileUrlResolver(
+      new FileProperties(FileImplType.LOCAL, BASE_URL, 5242880, Set.of("jpg"), null, null));
+
+  FeedMapper feedMapper = new FeedMapper(fileUrlResolver);
 
   @Nested
   @DisplayName("toDto 변환")
@@ -165,6 +175,42 @@ class FeedMapperTest {
 
       // then
       assertThat(result.ootds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("스냅샷의 원본 키를 완전한 URL로 변환해 반환한다")
+    void 스냅샷의_원본_키를_완전한_URL로_변환해_반환한다() {
+      // given
+      OotdSnapshot snapshot = new OotdSnapshot(
+          UUID.randomUUID(), "패딩", "clothes/uuid.jpg", null, List.of());
+      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of(snapshot));
+      UserSummary author = new UserSummary(UUID.randomUUID(), "작성자", null);
+
+      // when
+      FeedDto result = feedMapper.toDto(feed, author, false);
+
+      // then
+      assertThat(result.ootds().get(0).imageUrl())
+          .isEqualTo(BASE_URL + "/clothes/uuid.jpg");
+    }
+
+    @Test
+    @DisplayName("기존 스냅샷에 완전한 URL이 담겨 있어도 접두사가 중복되지 않는다")
+    void 기존_스냅샷에_완전한_URL이_담겨_있어도_접두사가_중복되지_않는다() {
+      // given
+      OotdSnapshot snapshot = new OotdSnapshot(
+          UUID.randomUUID(), "패딩", BASE_URL + "/clothes/uuid.jpg", null, List.of());
+      Feed feed = Feed.create(UUID.randomUUID(), UUID.randomUUID(), "내용",
+          DUMMY_SNAPSHOT, List.of(snapshot));
+      UserSummary author = new UserSummary(UUID.randomUUID(), "작성자", null);
+
+      // when
+      FeedDto result = feedMapper.toDto(feed, author, false);
+
+      // then
+      assertThat(result.ootds().get(0).imageUrl())
+          .isEqualTo(BASE_URL + "/clothes/uuid.jpg");
     }
   }
 }

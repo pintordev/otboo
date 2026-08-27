@@ -12,13 +12,17 @@ import com.sprint.mission.otboo.domain.clothesrecommend.clothes.service.ClothesS
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.exception.ClothesOwnershipException;
 import com.sprint.mission.otboo.domain.social.feed.exception.OotdNotFoundException;
+import com.sprint.mission.otboo.global.file.properties.FileImplType;
+import com.sprint.mission.otboo.global.file.properties.FileProperties;
+import com.sprint.mission.otboo.global.file.util.FileUrlResolver;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -32,11 +36,20 @@ class OotdSnapshotProviderTest {
       .plugin(new JakartaValidationPlugin())
       .build();
 
-  @InjectMocks
-  OotdSnapshotProvider ootdSnapshotProvider;
+  static final String BASE_URL = "http://localhost:8080/uploads";
+
+  static final FileUrlResolver fileUrlResolver = new FileUrlResolver(
+      new FileProperties(FileImplType.LOCAL, BASE_URL, 5242880, Set.of("jpg"), null, null));
 
   @Mock
   ClothesService clothesService;
+
+  OotdSnapshotProvider ootdSnapshotProvider;
+
+  @BeforeEach
+  void setUp() {
+    ootdSnapshotProvider = new OotdSnapshotProvider(clothesService, fileUrlResolver);
+  }
 
   @Nested
   @DisplayName("readOotds")
@@ -72,6 +85,48 @@ class OotdSnapshotProviderTest {
       assertThat(result.get(0).name()).isEqualTo("패딩");
       assertThat(result.get(1).clothesId()).isEqualTo(clothesId2);
       assertThat(result.get(1).name()).isEqualTo("청바지");
+    }
+
+    @Test
+    @DisplayName("resolve된 imageUrl은 원본 키로 변환해 저장한다")
+    void resolve된_imageUrl은_원본_키로_변환해_저장한다() {
+      // given
+      UUID authorId = UUID.randomUUID();
+      UUID clothesId = UUID.randomUUID();
+      List<UUID> clothesIds = List.of(clothesId);
+      ClothesDto dto = fm.giveMeBuilder(ClothesDto.class)
+          .set("id", clothesId)
+          .set("ownerId", authorId)
+          .set("imageUrl", BASE_URL + "/clothes/uuid.jpg")
+          .sample();
+      when(clothesService.getClothesByIds(clothesIds)).thenReturn(List.of(dto));
+
+      // when
+      List<OotdSnapshot> result = ootdSnapshotProvider.readOotds(clothesIds, authorId);
+
+      // then
+      assertThat(result.get(0).imageUrl()).isEqualTo("clothes/uuid.jpg");
+    }
+
+    @Test
+    @DisplayName("imageUrl이 null이면 null을 그대로 저장한다")
+    void imageUrl이_null이면_null을_그대로_저장한다() {
+      // given
+      UUID authorId = UUID.randomUUID();
+      UUID clothesId = UUID.randomUUID();
+      List<UUID> clothesIds = List.of(clothesId);
+      ClothesDto dto = fm.giveMeBuilder(ClothesDto.class)
+          .set("id", clothesId)
+          .set("ownerId", authorId)
+          .set("imageUrl", null)
+          .sample();
+      when(clothesService.getClothesByIds(clothesIds)).thenReturn(List.of(dto));
+
+      // when
+      List<OotdSnapshot> result = ootdSnapshotProvider.readOotds(clothesIds, authorId);
+
+      // then
+      assertThat(result.get(0).imageUrl()).isNull();
     }
 
     @Test
