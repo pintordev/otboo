@@ -149,6 +149,72 @@ class WeatherChangeEvaluatorTest {
   }
 
   @Nested
+  @DisplayName("EvaluateDaySummary")
+  class EvaluateDaySummary {
+
+    @Test
+    @DisplayName("여러_시각이_모두_임계값을_넘어도_기온_문구는_델타가_가장_큰_시각_1개만_남는다")
+    void 여러_시각이_모두_임계값을_넘어도_기온_문구는_델타가_가장_큰_시각_1개만_남는다() {
+      // given - 하루 종일 기온이 비슷한 폭으로 오르는 날, 마지막 시각이 가장 큰 폭
+      List<WeatherChangeSnapshot> baselines = List.of(
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0),
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0),
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0));
+      List<WeatherChangeSnapshot> currents = List.of(
+          snapshotOf(23.0, PrecipitationType.NONE, 0.0, 0.0), // +3.0
+          snapshotOf(23.5, PrecipitationType.NONE, 0.0, 0.0), // +3.5
+          snapshotOf(24.0, PrecipitationType.NONE, 0.0, 0.0)); // +4.0(최댓값)
+
+      // when
+      Optional<WeatherChangeEvaluator.ChangeResult> result =
+          evaluator.evaluateDaySummary(baselines, currents);
+
+      // then - 24개까지 반복되던 문구가 최댓값(+4.0) 1개로만 남는다
+      assertThat(result).isPresent();
+      assertThat(result.orElseThrow().reasons()).containsExactly("기온이 4.0도 올랐어요.");
+    }
+
+    @Test
+    @DisplayName("강수_형태가_하루_중_한_번이라도_바뀌면_문구가_하나_포함된다")
+    void 강수_형태가_하루_중_한_번이라도_바뀌면_문구가_하나_포함된다() {
+      // given
+      List<WeatherChangeSnapshot> baselines = List.of(
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0),
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0));
+      List<WeatherChangeSnapshot> currents = List.of(
+          snapshotOf(20.0, PrecipitationType.NONE, 0.0, 0.0),
+          snapshotOf(20.0, PrecipitationType.RAIN, 0.0, 0.0));
+
+      // when
+      Optional<WeatherChangeEvaluator.ChangeResult> result =
+          evaluator.evaluateDaySummary(baselines, currents);
+
+      // then
+      assertThat(result).isPresent();
+      assertThat(result.orElseThrow().reasons()).containsExactly("강수 형태가 없음에서 비 상태로 바뀌었어요.");
+    }
+
+    @Test
+    @DisplayName("어느_지표도_임계값을_넘지_않으면_감지되지_않는다")
+    void 어느_지표도_임계값을_넘지_않으면_감지되지_않는다() {
+      // given
+      List<WeatherChangeSnapshot> baselines = List.of(
+          snapshotOf(20.0, PrecipitationType.RAIN, 50.0, 5.0),
+          snapshotOf(20.0, PrecipitationType.RAIN, 50.0, 5.0));
+      List<WeatherChangeSnapshot> currents = List.of(
+          snapshotOf(21.0, PrecipitationType.RAIN, 55.0, 10.0),
+          snapshotOf(21.0, PrecipitationType.RAIN, 55.0, 10.0));
+
+      // when
+      Optional<WeatherChangeEvaluator.ChangeResult> result =
+          evaluator.evaluateDaySummary(baselines, currents);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+  }
+
+  @Nested
   @DisplayName("ChangeResult")
   class ChangeResultTest {
 
