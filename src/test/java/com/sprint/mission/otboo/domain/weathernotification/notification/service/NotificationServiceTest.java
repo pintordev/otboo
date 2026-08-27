@@ -24,6 +24,7 @@ import com.sprint.mission.otboo.global.dto.CursorPageResponse;
 import com.sprint.mission.otboo.global.dto.SortDirection;
 import com.sprint.mission.otboo.global.event.NotificationLevel;
 import com.sprint.mission.otboo.global.event.NotificationRequestedEvent;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +60,8 @@ class NotificationServiceTest {
   private NotificationRepository notificationRepository;
   @Mock
   private NotificationMapper notificationMapper;
+  @Mock
+  private Clock clock;
 
   @Nested
   @DisplayName("create")
@@ -212,6 +215,126 @@ class NotificationServiceTest {
       // then
       assertThat(result).isEmpty();
       verify(notificationRepository, never()).saveAll(anyList());
+    }
+  }
+
+  @Nested
+  @DisplayName("생성 및 미전달 알림 조회")
+  class CreateAndFindUndelivered {
+
+    @Test
+    @DisplayName("신규_생성분과_기존_미전달분을_합쳐_반환한다")
+    void 신규_생성분과_기존_미전달분을_합쳐_반환한다() {
+      // given
+      UUID eventId = UUID.randomUUID();
+      UUID newReceiverId = UUID.randomUUID();
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
+              NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(newReceiverId))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, newReceiverId))
+          .willReturn(false);
+
+      Notification newlySaved = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .set("receiverId", newReceiverId)
+          .sample();
+      given(notificationRepository.saveAll(anyList())).willReturn(List.of(newlySaved));
+
+      Notification stillUndelivered = entityFixtureMonkey.giveMeBuilder(Notification.class)
+          .sample();
+      given(notificationRepository.findByEventIdAndSseDeliveredAtIsNull(eventId))
+          .willReturn(List.of(newlySaved, stillUndelivered));
+
+      NotificationDto dto1 = new NotificationDto(newlySaved.getId(), newlySaved.getCreatedAt(),
+          newReceiverId, "제목", "내용", NotificationLevel.INFO);
+      NotificationDto dto2 = new NotificationDto(stillUndelivered.getId(),
+          stillUndelivered.getCreatedAt(), stillUndelivered.getReceiverId(),
+          stillUndelivered.getTitle(), stillUndelivered.getContent(), stillUndelivered.getLevel());
+      given(notificationMapper.toDto(newlySaved)).willReturn(dto1);
+      given(notificationMapper.toDto(stillUndelivered)).willReturn(dto2);
+
+      // when
+      List<NotificationDto> result =
+          notificationService.createAndFindUndelivered(eventId, event);
+
+      // then
+      assertThat(result).containsExactlyInAnyOrder(dto1, dto2);
+      verify(notificationRepository).saveAll(anyList());
+      verify(notificationRepository).findByEventIdAndSseDeliveredAtIsNull(eventId);
+    }
+
+    @Test
+    @DisplayName("모든_receiverId가_이미_처리됐으면_저장_없이_기존_미전달분만_반환한다")
+    void 모든_receiverId가_이미_처리됐으면_저장_없이_기존_미전달분만_반환한다() {
+      // given
+      UUID eventId = UUID.randomUUID();
+      UUID receiverId = UUID.randomUUID();
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(
+              NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(receiverId))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      given(notificationRepository.existsByEventIdAndReceiverId(eventId, receiverId))
+          .willReturn(true);
+
+      Notification undelivered = entityFixtureMonkey.giveMeBuilder(Notification.class).sample();
+      given(notificationRepository.findByEventIdAndSseDeliveredAtIsNull(eventId))
+          .willReturn(List.of(undelivered));
+      NotificationDto dto = new NotificationDto(undelivered.getId(), undelivered.getCreatedAt(),
+          undelivered.getReceiverId(), undelivered.getTitle(), undelivered.getContent(),
+          undelivered.getLevel());
+      given(notificationMapper.toDto(undelivered)).willReturn(dto);
+
+      // when
+      List<NotificationDto> result =
+          notificationService.createAndFindUndelivered(eventId, event);
+
+      // then
+      assertThat(result).containsExactly(dto);
+      verify(notificationRepository, never()).saveAll(anyList());
+    }
+  }
+
+  @Nested
+  @DisplayName("SSE 전달 완료 표시")
+  class MarkSseDelivered {
+
+    @Test
+    @DisplayName("전달된_알림들의_sse_delivered_at을_채운다")
+    void 전달된_알림들의_sse_delivered_at을_채운다() {
+      // given
+      UUID id1 = UUID.randomUUID();
+      UUID id2 = UUID.randomUUID();
+      Notification notification1 =
+          entityFixtureMonkey.giveMeBuilder(Notification.class).set("id", id1).sample();
+      Notification notification2 =
+          entityFixtureMonkey.giveMeBuilder(Notification.class).set("id", id2).sample();
+      Instant now = Instant.parse("2026-01-01T00:00:00Z");
+      given(clock.instant()).willReturn(now);
+      given(notificationRepository.findAllById(List.of(id1, id2)))
+          .willReturn(List.of(notification1, notification2));
+
+      // when
+      notificationService.markSseDelivered(List.of(id1, id2));
+
+      // then
+      assertThat(notification1.getSseDeliveredAt()).isEqualTo(now);
+      assertThat(notification2.getSseDeliveredAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("빈_목록이면_조회하지_않는다")
+    void 빈_목록이면_조회하지_않는다() {
+      // when
+      notificationService.markSseDelivered(List.of());
+
+      // then
+      verify(notificationRepository, never()).findAllById(any());
     }
   }
 
