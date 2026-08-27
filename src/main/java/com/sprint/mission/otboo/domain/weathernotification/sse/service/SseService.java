@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.domain.weathernotification.sse.service;
 
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.sse.config.SseConfig;
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.EmitterConnection;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
@@ -53,14 +54,16 @@ public class SseService {
     emitter.onError(e -> sseEmitterRepository.remove(userId, emitter));
 
     Instant snapshotAt;
+    Optional<EmitterConnection> previous;
     ReentrantLock lock = lockFor(userId);
     lock.lock();
     try {
       snapshotAt = lastEventId == null ? null : sseMessageRepository.getLatestCreatedAt();
-      sseEmitterRepository.save(userId, emitter, snapshotAt);
+      previous = sseEmitterRepository.save(userId, emitter, snapshotAt);
     } finally {
       lock.unlock();
     }
+    previous.ifPresent(p -> p.emitter().complete()); // 네트워크 IO는 락 밖에서
 
     if (!ping(emitter)) {
       return emitter;
