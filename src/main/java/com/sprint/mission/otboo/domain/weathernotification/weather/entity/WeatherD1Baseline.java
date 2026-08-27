@@ -46,6 +46,10 @@ public class WeatherD1Baseline {
   @Column(name = "target_date", nullable = false, updatable = false)
   private LocalDate targetDate;
 
+  // 주의: hourlySnapshot의 값 타입(WeatherChangeSnapshot)이 이 테이블의 jsonb 영속 포맷이다.
+  // WeatherChangeSnapshot의 필드를 변경/추가하면 이미 저장된 JSON과 형태가 어긋난다 - 필드가
+  // 늘어나는 경우 역직렬화 예외 없이 기본값(0.0/null)이 채워진 스냅샷이 조용히 만들어져 다음 날
+  // 비교 결과가 통째로 틀어질 수 있다. 변경 전 마이그레이션 필요 여부를 먼저 검토할 것.
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "hourly_snapshot", columnDefinition = "jsonb", nullable = false)
   private Map<Instant, WeatherChangeSnapshot> hourlySnapshot;
