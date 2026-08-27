@@ -231,6 +231,8 @@ class SseServiceTest {
       try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
         // when
         sseService.connect(userId, null);
+
+        assertThat(mocked.constructed()).hasSize(1);
       }
 
       // then - "save 반환"이 먼저, previousEmitter.complete() 호출은 그 뒤(락 밖)여야 한다
