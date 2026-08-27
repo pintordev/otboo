@@ -80,17 +80,24 @@ public class SseMessageRepository {
       @Override
       public List<Object> execute(RedisOperations operations) {
         operations.multi();
-        operations.opsForValue().set(messageKey, json, retention);
-        if (hasReceivers) { // SADD는 멤버 0개로 호출할 수 없음
-          operations.opsForSet().add(receiversKey,
-              withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
-          operations.expire(receiversKey, retention);
+        try {
+          operations.opsForValue().set(messageKey, json, retention);
+          if (hasReceivers) { // SADD는 멤버 0개로 호출할 수 없음
+            operations.opsForSet().add(receiversKey,
+                withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
+            operations.expire(receiversKey, retention);
+          }
+          withSeq.receiverIds().forEach(receiverId ->
+              operations.opsForZSet().add(indexKeyFor(receiverId), withSeq.id().toString(), seq));
+          operations.opsForZSet().add(TIME_INDEX_KEY, withSeq.id().toString(),
+              toEpochMicros(withSeq.createdAt()));
+          return operations.exec();
+        } catch (RuntimeException e) {
+          // multi() 이후 예외가 나면 discard()로 연결의 트랜잭션 상태를 정리하지 않으면, 이후 이
+          // 연결을 재사용하는 명령이 의도치 않게 트랜잭션 큐에 들어가거나 Redis 오류를 낼 수 있다.
+          operations.discard();
+          throw e;
         }
-        withSeq.receiverIds().forEach(receiverId ->
-            operations.opsForZSet().add(indexKeyFor(receiverId), withSeq.id().toString(), seq));
-        operations.opsForZSet().add(TIME_INDEX_KEY, withSeq.id().toString(),
-            toEpochMicros(withSeq.createdAt()));
-        return operations.exec();
       }
     });
     if (results == null || results.size() != expectedResultCount) {
