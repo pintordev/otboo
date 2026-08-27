@@ -91,8 +91,9 @@ public class KmaForecastParser {
         case "POP" -> precipitationProbability = Double.parseDouble(item.fcstValue());
         case "PCP" -> precipitationAmount = parsePrecipitationAmount(item.fcstValue());
         case "PTY" -> {
-          if (!"0".equals(item.fcstValue())) {
-            precipitationType = toPrecipitationType(item.fcstValue());
+          String pty = item.fcstValue();
+          if (pty != null && !"0".equals(pty)) {
+            precipitationType = toPrecipitationType(pty);
           }
         }
         default -> {
