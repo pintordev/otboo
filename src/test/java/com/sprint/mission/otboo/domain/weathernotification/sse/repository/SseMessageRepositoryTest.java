@@ -60,15 +60,22 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
   @BeforeEach
   void setUp() {
-    Set<String> messageKeys = redisTemplate.keys("sse:message:*");
-    if (messageKeys != null && !messageKeys.isEmpty()) {
-      redisTemplate.delete(messageKeys);
-    }
-    redisTemplate.delete("sse:message-index");
+    deleteByPattern("sse:message:*");
+    deleteByPattern("sse:message-receivers:*");
+    deleteByPattern("sse:message-index:*");
+    redisTemplate.delete("sse:message-index-by-time");
+    redisTemplate.delete("sse:seq");
 
     sseMessageRepository = new SseMessageRepository(redisTemplate,
         new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC),
         new SseReplayBufferProperties(10, 1000));
+  }
+
+  private void deleteByPattern(String pattern) {
+    Set<String> keys = redisTemplate.keys(pattern);
+    if (keys != null && !keys.isEmpty()) {
+      redisTemplate.delete(keys);
+    }
   }
 
   @Nested
@@ -319,11 +326,13 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
 
       // then
       assertThat(found).containsExactly(kept);
-      // 유저별 인덱스(sse:message-index:{userId})는 이번 스코프에서 능동적으로 정리하지 않는다
-      // (착수 시 결정 — 별도 배치로 미룸). 보관 기간 정리 전용 시각 인덱스만 검증한다.
       assertThat(redisTemplate.opsForZSet()
           .rank("sse:message-index-by-time", expired.id().toString()))
           .isNull();
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index:" + userId, expired.id().toString()))
+          .isNull();
+      assertThat(redisTemplate.hasKey("sse:message-receivers:" + expired.id())).isFalse();
     }
 
     @Test
@@ -341,6 +350,32 @@ class SseMessageRepositoryTest implements RedisTestContainerSupport {
       // then
       assertThat(redisTemplate.opsForZSet()
           .rank("sse:message-index-by-time", expired.id().toString()))
+          .isNull();
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index:" + userId, expired.id().toString()))
+          .isNull();
+    }
+
+    @Test
+    @DisplayName("한_메시지가_여러_수신자에게_갔어도_만료_시_모든_수신자_인덱스에서_제거된다")
+    void 한_메시지가_여러_수신자에게_갔어도_만료_시_모든_수신자_인덱스에서_제거된다() {
+      // given — 팬아웃 메시지(수신자 여러 명)
+      UUID receiver1 = UUID.randomUUID();
+      UUID receiver2 = UUID.randomUUID();
+      SseMessage expired = new SseMessage(UUID.randomUUID(), Set.of(receiver1, receiver2),
+          "notifications", "old", NOW.minus(Duration.ofMinutes(11)));
+      sseMessageRepository.save(expired);
+
+      // when — 조회 메서드를 거치지 않고 save만 한 번 더 호출해 evictExpired()를 태운다
+      sseMessageRepository.save(
+          new SseMessage(Set.of(receiver1), "notifications", "fresh", NOW));
+
+      // then — 두 수신자 인덱스에서 모두 제거된다
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index:" + receiver1, expired.id().toString()))
+          .isNull();
+      assertThat(redisTemplate.opsForZSet()
+          .rank("sse:message-index:" + receiver2, expired.id().toString()))
           .isNull();
     }
   }

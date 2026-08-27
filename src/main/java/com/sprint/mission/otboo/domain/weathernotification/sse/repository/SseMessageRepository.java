@@ -24,8 +24,14 @@ import tools.jackson.databind.ObjectMapper;
 @Repository
 public class SseMessageRepository {
 
-  private static final String INDEX_KEY = "sse:message-index"; // 정렬/재생용 — score는 seq
+  // 정렬/재생용 인덱스는 유저별로 분리한다(sse:message-index:{userId}) — 전역 인덱스 하나면
+  // 동시 접속자 수에 비례해 재생 상한(maxReplaySize)이 무효화된다.
+  private static final String INDEX_KEY_PREFIX = "sse:message-index:";
   private static final String TIME_INDEX_KEY = "sse:message-index-by-time"; // 보관 기간 정리 전용 — score는 createdAt(micros)
+  // 만료된 id가 어느 유저 인덱스들에 들어있었는지 evictExpired()가 알아내기 위한 역참조.
+  // 메시지 값 키와 동일한 TTL로 관리 — 유저별 인덱스를 정리 안 하고 방치하면 유저 활동량에
+  // 비례해 Redis 메모리가 무한 증식하므로 반드시 능동적으로 정리해야 한다.
+  private static final String RECEIVERS_KEY_PREFIX = "sse:message-receivers:";
   private static final String SEQ_KEY = "sse:seq";
   private static final String MESSAGE_KEY_PREFIX = "sse:message:";
   private static final RedisScript<List> FIND_REPLAY_IDS_SCRIPT = RedisScript.of(
@@ -48,11 +54,20 @@ public class SseMessageRepository {
     this.maxReplaySize = replayBufferProperties.maxSize();
   }
 
+  private static String indexKeyFor(UUID userId) {
+    return INDEX_KEY_PREFIX + userId;
+  }
+
+  private static String receiversKeyFor(UUID messageId) {
+    return RECEIVERS_KEY_PREFIX + messageId;
+  }
+
   public long save(SseMessage message) {
     evictExpired();
     long seq = redisTemplate.opsForValue().increment(SEQ_KEY);
     SseMessage withSeq = message.withSeq(seq);
     String messageKey = MESSAGE_KEY_PREFIX + withSeq.id();
+    String receiversKey = receiversKeyFor(withSeq.id());
     String json = objectMapper.writeValueAsString(withSeq);
 
     redisTemplate.execute(new SessionCallback<Object>() {
@@ -60,7 +75,11 @@ public class SseMessageRepository {
       public Object execute(RedisOperations operations) {
         operations.multi();
         operations.opsForValue().set(messageKey, json, retention);
-        operations.opsForZSet().add(INDEX_KEY, withSeq.id().toString(), seq);
+        operations.opsForSet().add(receiversKey,
+            withSeq.receiverIds().stream().map(UUID::toString).toArray(String[]::new));
+        operations.expire(receiversKey, retention);
+        withSeq.receiverIds().forEach(receiverId ->
+            operations.opsForZSet().add(indexKeyFor(receiverId), withSeq.id().toString(), seq));
         operations.opsForZSet().add(TIME_INDEX_KEY, withSeq.id().toString(),
             toEpochMicros(withSeq.createdAt()));
         return operations.exec();
@@ -75,8 +94,8 @@ public class SseMessageRepository {
       return List.of();
     }
     @SuppressWarnings("unchecked")
-    List<String> ids = redisTemplate.execute(FIND_REPLAY_IDS_SCRIPT, List.of(INDEX_KEY),
-        lastEventId.toString(), String.valueOf(maxReplaySize));
+    List<String> ids = redisTemplate.execute(FIND_REPLAY_IDS_SCRIPT,
+        List.of(indexKeyFor(userId)), lastEventId.toString(), String.valueOf(maxReplaySize));
     if (ids == null || ids.isEmpty()) {
       return List.of();
     }
@@ -86,8 +105,7 @@ public class SseMessageRepository {
         .filter(Objects::nonNull)
         .map(this::readJsonSafely)
         .filter(Objects::nonNull)
-        .filter(message -> message.isTargetedTo(userId))
-        .toList();
+        .toList(); // isTargetedTo 필터 불필요 - 인덱스 자체가 이미 유저별
   }
 
   private SseMessage readJsonSafely(String json) {
@@ -99,28 +117,33 @@ public class SseMessageRepository {
     }
   }
 
+  // sse:seq 카운터 자체가 이미 전역 단조 시퀀스이므로, 이 값을 그대로 읽으면 인덱스를 유저별로
+  // 쪼갠 뒤에도(7번) 전역 최신 seq를 별도 자료구조 없이 구할 수 있다.
   public Long getLatestSequence() {
     evictExpired();
-    Set<ZSetOperations.TypedTuple<String>> latest = zSetOps.reverseRangeWithScores(INDEX_KEY, 0, 0);
-    if (latest == null || latest.isEmpty()) {
-      return null;
-    }
-    Double score = latest.iterator().next().getScore();
-    return score != null ? score.longValue() : null;
+    String value = redisTemplate.opsForValue().get(SEQ_KEY);
+    return value != null ? Long.valueOf(value) : null;
   }
 
-  // 만료 판정은 TIME_INDEX_KEY(createdAt 기준)에서 하고, 만료된 id를 INDEX_KEY(seq 기준)에서도
-  // 같이 제거한다 — 두 인덱스가 score 의미(정렬용 seq / 정리용 시각)가 달라 하나로 합칠 수 없다.
+  // 만료 판정은 TIME_INDEX_KEY(createdAt 기준)로 한다. 만료된 id마다 RECEIVERS_KEY로 그 id가
+  // 들어있던 유저 인덱스들을 역추적해 함께 제거한다 — 유저별 인덱스를 정리하지 않고 방치하면
+  // 유저 활동량에 비례해 Redis 메모리가 무한 증식한다.
   private void evictExpired() {
     Instant threshold = Instant.now(clock).minus(retention);
-    Set<String> expiredIds = redisTemplate.opsForZSet()
-        .rangeByScore(TIME_INDEX_KEY, 0, toEpochMicros(threshold));
+    Set<String> expiredIds = zSetOps.rangeByScore(TIME_INDEX_KEY, 0, toEpochMicros(threshold));
     if (expiredIds == null || expiredIds.isEmpty()) {
       return;
     }
-    Object[] ids = expiredIds.toArray();
-    zSetOps.remove(TIME_INDEX_KEY, ids);
-    zSetOps.remove(INDEX_KEY, ids);
+    for (String id : expiredIds) {
+      String receiversKey = receiversKeyFor(UUID.fromString(id));
+      Set<String> receiverIds = redisTemplate.opsForSet().members(receiversKey);
+      if (receiverIds != null) {
+        receiverIds.forEach(receiverId ->
+            zSetOps.remove(indexKeyFor(UUID.fromString(receiverId)), id));
+      }
+      redisTemplate.delete(receiversKey);
+    }
+    zSetOps.remove(TIME_INDEX_KEY, expiredIds.toArray());
   }
 
   private static double toEpochMicros(Instant instant) {
