@@ -383,6 +383,32 @@ class SseServiceTest {
       verify(sseMessageRepository, times(2)).save(any(SseMessage.class));
       verify(stringRedisTemplate, times(2)).convertAndSend(eq(SseConfig.SSE_CHANNEL), anyString());
     }
+
+    @Test
+    @DisplayName("한_수신자_저장이_실패해도_나머지_수신자는_계속_처리된다")
+    void 한_수신자_저장이_실패해도_나머지_수신자는_계속_처리된다() {
+      // given
+      NotificationDto dto1 = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", UUID.randomUUID())
+          .sample();
+      NotificationDto dto2 = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", UUID.randomUUID())
+          .sample();
+      NotificationDto dto3 = fm.giveMeBuilder(NotificationDto.class)
+          .set("receiverId", UUID.randomUUID())
+          .sample();
+      given(sseMessageRepository.save(any()))
+          .willReturn(UUID.randomUUID())
+          .willThrow(new RuntimeException("저장 실패"))
+          .willReturn(UUID.randomUUID());
+
+      // when
+      sseService.send(List.of(dto1, dto2, dto3), "notifications");
+
+      // then - 2번째가 실패해도 3번째까지 시도돼야 한다
+      verify(sseMessageRepository, times(3)).save(any());
+      verify(stringRedisTemplate, times(2)).convertAndSend(eq(SseConfig.SSE_CHANNEL), anyString());
+    }
   }
 
   @Nested
