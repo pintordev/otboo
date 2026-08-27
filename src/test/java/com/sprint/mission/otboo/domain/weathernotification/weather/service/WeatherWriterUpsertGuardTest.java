@@ -97,4 +97,32 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getForecastedAt()).isEqualTo(newerForecastedAt);
   }
+
+  @Test
+  @DisplayName("같은_슬롯을_다른_값으로_재저장하면_current는_갱신되고_baseline은_최초값을_유지한다")
+  void 같은_슬롯을_다른_값으로_재저장하면_current는_갱신되고_baseline은_최초값을_유지한다() {
+    // given
+    WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+    Instant slotAt = Instant.parse("2026-08-24T12:00:00Z");
+    Instant forecastedAt1 = Instant.parse("2026-08-24T05:00:00Z");
+    Instant forecastedAt2 = Instant.parse("2026-08-24T08:00:00Z"); // 더 최신 - upsert 가드 통과
+    WeatherForecastSlotDto first = new WeatherForecastSlotDto(
+        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
+        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0);
+    WeatherForecastSlotDto second = new WeatherForecastSlotDto(
+        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
+        0.0, 0.0, 50.0, 23.0, 15.0, 25.0, 2.0); // temperatureCurrent만 20.0 -> 23.0
+
+    // when
+    weatherWriter.saveSlots(weatherGrid, forecastedAt1, List.of(first), Map.of());
+    weatherWriter.saveSlots(weatherGrid, forecastedAt2, List.of(second), Map.of());
+
+    // then
+    List<Weather> all = weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(
+        weatherGrid, slotAt.minus(1, java.time.temporal.ChronoUnit.DAYS));
+    assertThat(all).hasSize(1);
+    Weather saved = all.get(0);
+    assertThat(saved.getTemperatureCurrent()).isEqualTo(23.0);
+    assertThat(saved.getBaselineTemperatureCurrent()).isEqualTo(20.0);
+  }
 }
