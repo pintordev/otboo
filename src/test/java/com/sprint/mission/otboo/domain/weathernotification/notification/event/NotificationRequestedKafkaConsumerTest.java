@@ -1,10 +1,10 @@
 package com.sprint.mission.otboo.domain.weathernotification.notification.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -12,6 +12,7 @@ import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.navercorp.fixturemonkey.jakarta.validation.plugin.JakartaValidationPlugin;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
+import com.sprint.mission.otboo.domain.weathernotification.notification.exception.NotificationSseDeliveryFailedException;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationKafkaTopics;
 import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.NotificationOutboxPayload;
 import com.sprint.mission.otboo.domain.weathernotification.notification.service.NotificationService;
@@ -66,6 +67,8 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
   private EmbeddedKafkaBroker embeddedKafkaBroker;
   @Autowired
   private KafkaListenerEndpointRegistry registry;
+  @Autowired
+  private NotificationRequestedKafkaConsumer notificationRequestedKafkaConsumer;
   @MockitoBean
   private NotificationService notificationService;
   @MockitoBean
@@ -99,14 +102,19 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
           NotificationLevel.INFO));
       given(notificationService.createAndFindUndelivered(eventId, event))
           .willReturn(notificationDtos);
+      given(sseService.send(notificationDtos, "notifications"))
+          .willReturn(notificationDtos.stream().map(NotificationDto::id).toList());
 
       // when
       kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
           objectMapper.writeValueAsString(new NotificationOutboxPayload(eventId, event)));
 
       // then
-      await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
-          verify(sseService).send(notificationDtos, "notifications"));
+      await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        verify(sseService).send(notificationDtos, "notifications");
+        verify(notificationService).markSseDelivered(
+            notificationDtos.stream().map(NotificationDto::id).toList());
+      });
     }
   }
 
@@ -169,9 +177,9 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
           UUID.randomUUID(), Instant.now(), event.receiverIds().iterator().next(), "제목", "내용",
           NotificationLevel.INFO);
       given(notificationService.createAndFindUndelivered(eventId, event)).willReturn(List.of(dto));
-      doThrow(new RuntimeException("SSE 전송 실패"))
-          .doNothing()
-          .when(sseService).send(List.of(dto), "notifications");
+      given(sseService.send(List.of(dto), "notifications"))
+          .willThrow(new RuntimeException("SSE 전송 실패"))
+          .willReturn(List.of(dto.id()));
 
       // when - 1차 처리는 sseService.send() 실패로 재시도 대상이 되고, 2차 처리에서 정상 전달된다
       kafkaTemplate.send(NotificationKafkaTopics.NOTIFICATION_REQUESTED,
@@ -181,6 +189,41 @@ class NotificationRequestedKafkaConsumerTest extends IntegrationTestSupport {
       await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
           verify(sseService, times(2)).send(List.of(dto), "notifications"));
       verify(notificationService, times(1)).markSseDelivered(List.of(dto.id()));
+    }
+  }
+
+  @Nested
+  @DisplayName("일부 수신자만 전달 실패")
+  class PartialDeliveryFailure {
+
+    @Test
+    @DisplayName("성공한_수신자만_전달_완료_처리하고_예외를_던져_재시도되게_한다")
+    void 성공한_수신자만_전달_완료_처리하고_예외를_던져_재시도되게_한다() {
+      // given - send()가 예외 없이 "일부만 성공"을 반환하는 상황(개별 수신자 실패는 send() 내부에서
+      // 삼켜지므로 반환값으로만 드러남)을 재현한다.
+      UUID eventId = UUID.randomUUID();
+      NotificationRequestedEvent event = fixtureMonkey.giveMeBuilder(NotificationRequestedEvent.class)
+          .set("receiverIds", Set.of(UUID.randomUUID(), UUID.randomUUID()))
+          .set("title", "제목")
+          .set("content", "내용")
+          .set("level", NotificationLevel.INFO)
+          .sample();
+      NotificationDto succeeded = new NotificationDto(
+          UUID.randomUUID(), Instant.now(), UUID.randomUUID(), "제목", "내용", NotificationLevel.INFO);
+      NotificationDto failed = new NotificationDto(
+          UUID.randomUUID(), Instant.now(), UUID.randomUUID(), "제목", "내용", NotificationLevel.INFO);
+      List<NotificationDto> notificationDtos = List.of(succeeded, failed);
+      given(notificationService.createAndFindUndelivered(eventId, event))
+          .willReturn(notificationDtos);
+      given(sseService.send(notificationDtos, "notifications"))
+          .willReturn(List.of(succeeded.id())); // failed는 전달 실패 — 반환 목록에서 빠짐
+      String payload = objectMapper.writeValueAsString(new NotificationOutboxPayload(eventId, event));
+
+      // when & then - Kafka를 거치지 않고 컨슈머를 직접 호출해 분기 로직만 검증한다
+      // (@KafkaListener 배선 자체는 위 Consume/RetryExhausted에서 이미 검증됨)
+      assertThatThrownBy(() -> notificationRequestedKafkaConsumer.consume(payload))
+          .isInstanceOf(NotificationSseDeliveryFailedException.class);
+      verify(notificationService).markSseDelivered(List.of(succeeded.id()));
     }
   }
 }
