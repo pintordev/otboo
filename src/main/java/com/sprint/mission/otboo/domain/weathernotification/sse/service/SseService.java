@@ -83,10 +83,14 @@ public class SseService {
 
   public void send(List<NotificationDto> notificationDtos, String eventName) {
     notificationDtos.forEach(dto -> {
-      SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
-      sseMessageRepository.save(message);
-      stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
-          objectMapper.writeValueAsString(message));
+      try {
+        SseMessage message = new SseMessage(Set.of(dto.receiverId()), eventName, dto);
+        sseMessageRepository.save(message);
+        stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
+            objectMapper.writeValueAsString(message));
+      } catch (Exception e) {
+        log.error("SSE 발행 실패: receiverId={}", dto.receiverId(), e);
+      }
     });
   }
 
