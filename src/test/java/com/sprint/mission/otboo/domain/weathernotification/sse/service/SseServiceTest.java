@@ -19,6 +19,7 @@ import com.navercorp.fixturemonkey.FixtureMonkey;
 import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.domain.weathernotification.notification.dto.NotificationDto;
 import com.sprint.mission.otboo.domain.weathernotification.sse.config.SseConfig;
+import com.sprint.mission.otboo.domain.weathernotification.sse.dto.EmitterConnection;
 import com.sprint.mission.otboo.domain.weathernotification.sse.dto.SseMessage;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseEmitterRepository;
 import com.sprint.mission.otboo.domain.weathernotification.sse.repository.SseMessageRepository;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -236,6 +238,33 @@ class SseServiceTest {
         SseEmitter createdEmitter = mocked.constructed().get(0);
         verify(createdEmitter, times(2)).send(any(SseEmitter.SseEventBuilder.class));
       }
+    }
+
+    @Test
+    @DisplayName("기존_연결의_complete_호출은_락_해제_후에_일어난다")
+    void 기존_연결의_complete_호출은_락_해제_후에_일어난다() {
+      // given
+      UUID userId = UUID.randomUUID();
+      SseEmitter previousEmitter = mock(SseEmitter.class);
+      List<String> callOrder = new ArrayList<>();
+      doAnswer(inv -> {
+        callOrder.add("complete");
+        return null;
+      }).when(previousEmitter).complete();
+      given(sseEmitterRepository.save(eq(userId), any(), isNull()))
+          .willAnswer(inv -> {
+            callOrder.add("save-returned");
+            return Optional.of(new EmitterConnection(previousEmitter, null));
+          });
+      given(sseMessageRepository.findAllAfter(any(), any())).willReturn(List.of());
+
+      try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class)) {
+        // when
+        sseService.connect(userId, null);
+      }
+
+      // then - "save 반환"이 먼저, previousEmitter.complete() 호출은 그 뒤(락 밖)여야 한다
+      assertThat(callOrder).containsExactly("save-returned", "complete");
     }
   }
 
