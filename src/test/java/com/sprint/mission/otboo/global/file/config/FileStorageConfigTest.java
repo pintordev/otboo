@@ -20,7 +20,10 @@ class FileStorageConfigTest {
           "otboo.file.public-base-url=http://localhost:8080/uploads",
           "otboo.file.max-size-bytes=5242880",
           "otboo.file.allowed-extensions=jpg,png",
-          "otboo.file.local.upload-dir=./uploads");
+          "otboo.file.local.upload-dir=./uploads",
+          // s3Client 빈이 impl과 무관하게 항상 만들어지므로 local 시나리오에도 필요하다
+          "otboo.file.s3.bucket=otboo-image",
+          "otboo.file.s3.region=ap-northeast-2");
 
   @Nested
   @DisplayName("impl 값에 따른 빈 선택")
@@ -42,10 +45,7 @@ class FileStorageConfigTest {
     @DisplayName("impl이 s3면 S3FileStorageService 빈이 등록된다")
     void impl이_s3면_S3FileStorageService_빈이_등록된다() {
       // when & then
-      contextRunner.withPropertyValues(
-              "otboo.file.impl=s3",
-              "otboo.file.s3.bucket=otboo-image",
-              "otboo.file.s3.region=ap-northeast-2")
+      contextRunner.withPropertyValues("otboo.file.impl=s3")
           .run(context -> {
             assertThat(context).hasSingleBean(FileStorageService.class);
             assertThat(context.getBean(FileStorageService.class))
