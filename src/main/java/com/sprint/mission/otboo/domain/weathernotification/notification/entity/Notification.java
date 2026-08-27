@@ -50,6 +50,9 @@ public class Notification {
   @Column(name = "level", nullable = false, updatable = false)
   private NotificationLevel level;
 
+  @Column(name = "sse_delivered_at")
+  private Instant sseDeliveredAt;
+
   private Notification(
       UUID eventId, UUID receiverId, String title, String content, NotificationLevel level) {
     this.eventId = eventId;
@@ -62,5 +65,9 @@ public class Notification {
   public static Notification create(
       UUID eventId, UUID receiverId, String title, String content, NotificationLevel level) {
     return new Notification(eventId, receiverId, title, content, level);
+  }
+
+  public void markSseDelivered(Instant deliveredAt) {
+    this.sseDeliveredAt = deliveredAt;
   }
 }
