@@ -15,12 +15,10 @@ public class SseEmitterRepository {
 
   private final Map<UUID, EmitterConnection> connections = new ConcurrentHashMap<>();
 
-  public void save(UUID userId, SseEmitter emitter, Instant snapshotAt) {
+  public Optional<EmitterConnection> save(UUID userId, SseEmitter emitter, Instant snapshotAt) {
     EmitterConnection previous =
         connections.put(userId, new EmitterConnection(emitter, snapshotAt));
-    if (previous != null) {
-      previous.emitter().complete();
-    }
+    return Optional.ofNullable(previous);
   }
 
   public Optional<SseEmitter> findByUserId(UUID userId) {
