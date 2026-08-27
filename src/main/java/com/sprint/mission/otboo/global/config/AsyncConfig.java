@@ -53,6 +53,9 @@ public class AsyncConfig implements AsyncConfigurer {
     executor.setQueueCapacity(100);
     executor.setThreadNamePrefix("sse-listener-");
     executor.setTaskDecorator(new MdcTaskDecorator());
+    // 큐가 차면 기본 AbortPolicy가 태스크를 버려 SSE 알림이 조용히 유실된다(dmListenerExecutor와
+    // 동일 이유). Redis 구독 스레드에서 직접 실행해 백프레셔를 건다.
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     executor.initialize();
     return executor;
   }
