@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -82,7 +83,8 @@ public class SseService {
     return emitter;
   }
 
-  public void send(List<NotificationDto> notificationDtos, String eventName) {
+  public List<UUID> send(List<NotificationDto> notificationDtos, String eventName) {
+    List<UUID> delivered = new ArrayList<>();
     notificationDtos.forEach(dto -> {
       try {
         SseMessage message =
@@ -91,10 +93,12 @@ public class SseService {
         SseMessage withSeq = message.withSeq(seq);
         stringRedisTemplate.convertAndSend(SseConfig.SSE_CHANNEL,
             objectMapper.writeValueAsString(withSeq));
+        delivered.add(dto.id());
       } catch (Exception e) {
         log.error("SSE 발행 실패: receiverId={}", dto.receiverId(), e);
       }
     });
+    return delivered;
   }
 
   public void deliverLocally(SseMessage message) {
