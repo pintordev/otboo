@@ -192,5 +192,25 @@ class WeatherSuddenChangeNotifierTest {
 
       verify(chunkProcessor).process(any(), eq(baseTime), any(), anyBoolean(), eq(false));
     }
+
+    @Test
+    @DisplayName("한_청크가_예외로_실패해도_나머지_청크는_계속_처리된다")
+    void 한_청크가_예외로_실패해도_나머지_청크는_계속_처리된다() {
+      notifier = notifierWithChunkSize(1);
+      BaseTime baseTime = new BaseTime("20260727", "0800");
+      List<WeatherGrid> grids = List.of(gridWithId(60, 127), gridWithId(61, 128),
+          gridWithId(62, 129));
+      given(weatherRepository.findGridsUpdatedAt(baseTime.toInstant())).willReturn(grids);
+      given(chunkProcessor.process(any(), any(), any(), anyBoolean(), anyBoolean()))
+          .willReturn(new WeatherSuddenChangeChunkProcessor.ChunkResult(1, 0))
+          .willThrow(new RuntimeException("청크 처리 실패"))
+          .willReturn(new WeatherSuddenChangeChunkProcessor.ChunkResult(1, 0));
+
+      notifier.detectAndNotify(baseTime);
+
+      // then - 실패한 2번째 청크와 무관하게 3번째 청크까지 전부 호출돼야 한다
+      verify(chunkProcessor, times(3)).process(any(), any(), any(), anyBoolean(), anyBoolean());
+      verify(weatherFetchMetrics).countNotified("D0", 2); // 1번째+3번째 청크 합산, 2번째는 실패로 0
+    }
   }
 }
