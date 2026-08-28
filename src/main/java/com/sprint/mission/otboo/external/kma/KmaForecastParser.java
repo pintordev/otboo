@@ -24,21 +24,36 @@ public class KmaForecastParser {
 
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+  // 예보 범위 끝자락 날짜는 항상 3시간 간격 그리드(하루 8개)로 온다 - 실응답으로 확인됨.
+  private static final int FULL_DAY_SLOT_COUNT = 8;
 
   // 슬롯 단위 파싱 - 날짜별 대표시각 1개로 압축하지 않고, distinct
   // fcstTime마다 슬롯 DTO를 그대로 만든다. now 파라미터가 없다 - 어느 슬롯도 "지금과 가장
   // 가까운 슬롯"으로 선별되지 않고 응답에 있는 슬롯을 전부 반환하기 때문이다.
   public List<WeatherForecastSlotDto> parseSlotForecast(KmaWeatherResponse response) {
-    Map<String, List<Item>> itemsByDate = response.response().body().items().item().stream()
+    List<Item> allItems = response.response().body().items().item();
+    String baseDate = allItems.isEmpty() ? null : allItems.get(0).baseDate();
+    TreeMap<String, List<Item>> itemsByDate = allItems.stream()
         .collect(Collectors.groupingBy(Item::fcstDate, TreeMap::new, Collectors.toList()));
+    // fcstDate가 "yyyyMMdd" 고정 폭 문자열이라 사전순 정렬이 곧 날짜순 정렬이다.
+    String lastFcstDate = itemsByDate.isEmpty() ? null : itemsByDate.lastKey();
 
     List<WeatherForecastSlotDto> result = new ArrayList<>();
     for (Map.Entry<String, List<Item>> entry : itemsByDate.entrySet()) {
+      String fcstDate = entry.getKey();
       List<Item> dayItems = entry.getValue();
       if (!hasTemperatureData(dayItems)) {
         continue;
       }
-      LocalDate date = LocalDate.parse(entry.getKey(), DATE_FORMATTER);
+      // 끝자락(응답에 있는 가장 마지막) 날짜만 완결성을 확인한다 - base_date(오늘)는 원래도
+      // 남은 시간만 오는 게 정상이라 제외하고, D1~D3처럼 중간 날짜는 이 검증 대상이 아니다.
+      if (fcstDate.equals(lastFcstDate) && !fcstDate.equals(baseDate)
+          && !hasFullDayGrid(dayItems)) {
+        log.warn("끝자락 날짜 슬롯 미달로 통째로 제외: fcstDate={}, 슬롯수={}", fcstDate,
+            dayItems.stream().map(Item::fcstTime).distinct().count());
+        continue;
+      }
+      LocalDate date = LocalDate.parse(fcstDate, DATE_FORMATTER);
       DailyTemperatureRange range = temperatureRange(dayItems);
       DailyPrecipitationSummary precipitationSummary = precipitationSummary(dayItems);
       Map<String, List<Item>> itemsBySlot = dayItems.stream()
@@ -142,6 +157,11 @@ public class KmaForecastParser {
 
   private boolean hasTemperatureData(List<Item> dayItems) {
     return dayItems.stream().anyMatch(item -> "TMP".equals(item.category()));
+  }
+
+  private boolean hasFullDayGrid(List<Item> dayItems) {
+    long distinctSlotCount = dayItems.stream().map(Item::fcstTime).distinct().count();
+    return distinctSlotCount >= FULL_DAY_SLOT_COUNT;
   }
 
   private double parsePrecipitationAmount(String fcstValue) {
