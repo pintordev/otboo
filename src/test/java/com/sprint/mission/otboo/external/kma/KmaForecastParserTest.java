@@ -314,11 +314,47 @@ class KmaForecastParserTest {
       // then
       assertThat(result).hasSize(3);
     }
+
+    @Test
+    @DisplayName("끝자락_3시간_그리드_날짜가_8개_미만이면_그_날짜는_통째로_제외된다")
+    void 끝자락_3시간_그리드_날짜가_8개_미만이면_그_날짜는_통째로_제외된다() {
+      // given - 실응답 재현(2026-08-28 17시 base_time 09/01): 3시간 그리드인데 00~12시 5개뿐
+      List<Item> items = new ArrayList<>();
+      for (String time : new String[]{"0000", "0300", "0600", "0900", "1200"}) {
+        items.add(item("TMP", "20260828", "20260901", time, "22"));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("끝자락이라도_3시간_그리드_8개가_전부_있으면_제외되지_않는다")
+    void 끝자락이라도_3시간_그리드_8개가_전부_있으면_제외되지_않는다() {
+      // given
+      List<Item> items = new ArrayList<>();
+      for (String time : new String[]{"0000", "0300", "0600", "0900", "1200", "1500", "1800",
+          "2100"}) {
+        items.add(item("TMP", "20260828", "20260831", time, "22"));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).hasSize(8);
+    }
   }
 
-  private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
+  private Item item(String category, String baseDate, String fcstDate, String fcstTime,
+      String fcstValue) {
     return FIXTURE_MONKEY.giveMeBuilder(Item.class)
-        .set("baseDate", "20260727")
+        .set("baseDate", baseDate)
         .set("baseTime", "1700")
         .set("category", category)
         .set("fcstDate", fcstDate)
@@ -327,6 +363,12 @@ class KmaForecastParserTest {
         .set("nx", 60)
         .set("ny", 127)
         .sample();
+  }
+
+  // baseDate를 fcstDate와 같게(=오늘) 채운다 - 끝자락 게이트는 오늘(baseDate)을 예외로 두므로,
+  // 이 게이트와 무관한 기존 테스트는 전부 이 4-인자 버전을 그대로 써서 게이트 영향을 안 받는다.
+  private Item item(String category, String fcstDate, String fcstTime, String fcstValue) {
+    return item(category, fcstDate, fcstDate, fcstTime, fcstValue);
   }
 
   private KmaWeatherResponse responseOf(List<Item> items) {
