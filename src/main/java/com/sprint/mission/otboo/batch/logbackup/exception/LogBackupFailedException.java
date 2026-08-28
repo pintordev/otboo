@@ -9,8 +9,4 @@ public class LogBackupFailedException extends RuntimeException {
   public static LogBackupFailedException withKey(String s3Key, Throwable cause) {
     return new LogBackupFailedException("로그 백업 실패: s3Key=" + s3Key, cause);
   }
-
-  public static LogBackupFailedException onRead(Throwable cause) {
-    return new LogBackupFailedException("로그 백업 실패: CloudWatch Logs 조회 중 오류", cause);
-  }
 }

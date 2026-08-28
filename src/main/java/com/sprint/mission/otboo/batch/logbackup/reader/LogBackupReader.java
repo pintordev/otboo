@@ -3,7 +3,7 @@ package com.sprint.mission.otboo.batch.logbackup.reader;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties.LogGroupTarget;
 import com.sprint.mission.otboo.batch.logbackup.dto.LogContent;
-import com.sprint.mission.otboo.batch.logbackup.exception.LogBackupFailedException;
+import com.sprint.mission.otboo.batch.logbackup.exception.LogBackupReadFailedException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -89,7 +89,7 @@ public class LogBackupReader implements ItemReader<LogContent> {
       try {
         response = cloudWatchLogsClient.filterLogEvents(requestBuilder.build());
       } catch (SdkException e) {
-        throw LogBackupFailedException.onRead(e);
+        throw LogBackupReadFailedException.wrap(e);
       }
       List<String> lines = response.events().stream().map(e -> e.message()).toList();
 

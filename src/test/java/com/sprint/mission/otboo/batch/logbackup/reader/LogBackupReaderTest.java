@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties.LogGroupTarget;
 import com.sprint.mission.otboo.batch.logbackup.dto.LogContent;
-import com.sprint.mission.otboo.batch.logbackup.exception.LogBackupFailedException;
+import com.sprint.mission.otboo.batch.logbackup.exception.LogBackupReadFailedException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,15 +163,15 @@ class LogBackupReaderTest {
     }
 
     @Test
-    @DisplayName("CloudWatch_호출이_실패하면_LogBackupFailedException으로_감싸_던진다")
-    void CloudWatch_호출이_실패하면_LogBackupFailedException으로_감싸_던진다() {
+    @DisplayName("CloudWatch_호출이_실패하면_LogBackupReadFailedException으로_감싸_던진다")
+    void CloudWatch_호출이_실패하면_LogBackupReadFailedException으로_감싸_던진다() {
       // given
       given(cloudWatchLogsClient.filterLogEvents(any(FilterLogEventsRequest.class)))
           .willThrow(SdkException.builder().message("throttled").build());
 
       // when & then
       assertThatThrownBy(() -> reader.read())
-          .isInstanceOf(LogBackupFailedException.class);
+          .isInstanceOf(LogBackupReadFailedException.class);
     }
   }
 }

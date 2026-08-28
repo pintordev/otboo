@@ -57,6 +57,10 @@ public class LogBackupJobConfig {
         .retryLimit(logBackupProperties.retryLimit())
         .retry(TransientDataAccessException.class)
         .retry(LogBackupFailedException.class)
+        // LogBackupReadFailedException(Reader 실패)은 의도적으로 제외한다 - Reader는 실패 시
+        // nextToken/currentTargetDone 등 페이지네이션 상태를 전진시키지 않으므로, skip 대상에 넣으면
+        // Spring Batch가 다음 read()에서 같은 요청을 그대로 반복해 skipLimit만 소모하고 진행이 없다.
+        // 등록하지 않은 예외는 곧바로 Step을 실패시키므로 CloudWatch 조회 실패는 즉시 Job 실패로 처리한다.
         .skip(LogBackupFailedException.class)
         .skipLimit(logBackupProperties.skipLimit())
         .skipListener(skipLoggingListener)
