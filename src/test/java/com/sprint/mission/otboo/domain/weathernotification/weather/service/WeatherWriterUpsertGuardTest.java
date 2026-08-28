@@ -155,6 +155,8 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
       WeatherForecastSlotDto slotDto = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
           .set("date", LocalDate.of(2026, 8, 24))
           .set("slotAt", slotAt)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
           .set("skyStatusWorst", SkyStatus.CLOUDY)
           .set("precipitationTypeMode", PrecipitationType.SNOW)
           .set("humidityMax", 90.0)
