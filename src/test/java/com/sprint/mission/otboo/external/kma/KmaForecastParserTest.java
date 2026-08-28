@@ -349,6 +349,67 @@ class KmaForecastParserTest {
       // then
       assertThat(result).hasSize(8);
     }
+
+    @Test
+    @DisplayName("하늘상태는_그날_슬롯_중_가장_안_좋은_값으로_모든_슬롯에_동일하게_적용된다")
+    void 하늘상태는_그날_슬롯_중_가장_안_좋은_값으로_모든_슬롯에_동일하게_적용된다() {
+      // given - 0시 CLEAR, 6시 MOSTLY_CLOUDY, 12시 CLOUDY(가장 안 좋음), 18시 CLEAR
+      List<Item> items = new ArrayList<>();
+      String[] times = {"0000", "0600", "1200", "1800"};
+      String[] skies = {"1", "3", "4", "1"};
+      for (int i = 0; i < times.length; i++) {
+        items.add(item("TMP", "20260829", times[i], "20"));
+        items.add(item("SKY", "20260829", times[i], skies[i]));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).extracting(WeatherForecastSlotDto::skyStatusWorst)
+          .containsOnly(SkyStatus.CLOUDY);
+    }
+
+    @Test
+    @DisplayName("강수형태는_그날_슬롯_중_최다_등장값이고_동률이면_나중_enum값이_우선한다")
+    void 강수형태는_그날_슬롯_중_최다_등장값이고_동률이면_나중_enum값이_우선한다() {
+      // given - RAIN 2회, SNOW 2회(동률) → enum 선언 순서상 나중인 SNOW가 이겨야 한다
+      List<Item> items = new ArrayList<>();
+      String[] times = {"0000", "0300", "0600", "0900"};
+      String[] ptys = {"1", "1", "3", "3"}; // 1=RAIN, 3=SNOW
+      for (int i = 0; i < times.length; i++) {
+        items.add(item("TMP", "20260829", times[i], "20"));
+        items.add(item("PTY", "20260829", times[i], ptys[i]));
+      }
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).extracting(WeatherForecastSlotDto::precipitationTypeMode)
+          .containsOnly(PrecipitationType.SNOW);
+    }
+
+    @Test
+    @DisplayName("습도는_그날_슬롯_중_최댓값으로_모든_슬롯에_동일하게_적용된다")
+    void 습도는_그날_슬롯_중_최댓값으로_모든_슬롯에_동일하게_적용된다() {
+      // given
+      List<Item> items = List.of(
+          item("TMP", "20260829", "0000", "20"),
+          item("REH", "20260829", "0000", "55"),
+          item("TMP", "20260829", "1200", "25"),
+          item("REH", "20260829", "1200", "80")
+      );
+      KmaWeatherResponse response = responseOf(items);
+
+      // when
+      List<WeatherForecastSlotDto> result = parser.parseSlotForecast(response);
+
+      // then
+      assertThat(result).extracting(WeatherForecastSlotDto::humidityMax).containsOnly(80.0);
+    }
   }
 
   private Item item(String category, String baseDate, String fcstDate, String fcstTime,
