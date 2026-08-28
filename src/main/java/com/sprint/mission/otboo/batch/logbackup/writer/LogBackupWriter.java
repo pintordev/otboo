@@ -47,6 +47,7 @@ public class LogBackupWriter implements ItemWriter<UploadPayload> {
     } catch (NoSuchKeyException e) {
       return false;
     } catch (Exception e) {
+      metrics.countFailed();
       log.error("S3 존재 여부 확인 중 오류 발생: {}", key, e);
       throw LogBackupFailedException.withKey(key, e);
     }

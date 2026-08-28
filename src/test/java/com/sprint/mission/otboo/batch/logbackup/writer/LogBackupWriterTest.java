@@ -97,5 +97,21 @@ class LogBackupWriterTest {
           .isInstanceOf(LogBackupFailedException.class);
       verify(metrics).countFailed();
     }
+
+    @Test
+    @DisplayName("S3_존재_확인_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다")
+    void S3_존재_확인_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다() {
+      // given
+      UploadPayload payload = new UploadPayload("logs/app/2026/08/20/app-20260820-001.log.gz",
+          "gzipped".getBytes(StandardCharsets.UTF_8));
+      given(s3Client.headObject(any(Consumer.class)))
+          .willThrow(SdkException.builder().message("throttled").build());
+
+      // when & then
+      assertThatThrownBy(() -> writer.write(Chunk.of(payload)))
+          .isInstanceOf(LogBackupFailedException.class);
+      verify(metrics).countFailed();
+      verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
   }
 }
