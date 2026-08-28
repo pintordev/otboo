@@ -202,6 +202,40 @@ class WeatherFetchWriterTest {
     }
 
     @Test
+    @DisplayName("일별_요약_컬럼도_INSERT_목록과_PreparedStatement_바인딩에_포함된다")
+    void 일별_요약_컬럼도_INSERT_목록과_PreparedStatement_바인딩에_포함된다() throws Exception {
+      // given
+      WeatherGrid grid = WeatherGrid.create(60, 127);
+      Weather weatherWithSummary = Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
+          Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
+          60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, 26.0, PrecipitationType.RAIN,
+          40.0, 1.5, SkyStatus.CLOUDY, PrecipitationType.SNOW, 80.0);
+      Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weatherWithSummary)));
+      given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
+          .willReturn(new int[]{1});
+
+      // when
+      writer.write(chunk);
+
+      // then
+      ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+      ArgumentCaptor<BatchPreparedStatementSetter> setterCaptor = ArgumentCaptor.forClass(
+          BatchPreparedStatementSetter.class);
+      verify(jdbcTemplate).batchUpdate(sqlCaptor.capture(), setterCaptor.capture());
+      assertThat(sqlCaptor.getValue())
+          .contains("sky_status_worst", "precipitation_type_mode", "humidity_max")
+          .contains("sky_status_worst = EXCLUDED.sky_status_worst")
+          .contains("precipitation_type_mode = EXCLUDED.precipitation_type_mode")
+          .contains("humidity_max = EXCLUDED.humidity_max");
+
+      PreparedStatement preparedStatement = mock(PreparedStatement.class);
+      setterCaptor.getValue().setValues(preparedStatement, 0);
+      verify(preparedStatement).setString(21, "CLOUDY");
+      verify(preparedStatement).setString(22, "SNOW");
+      verify(preparedStatement).setObject(23, 80.0, Types.DOUBLE);
+    }
+
+    @Test
     @DisplayName("SUCCESS_NO_INFO_결과는_삽입이_아니라_결과불명_건수로_로그에_남는다")
     void SUCCESS_NO_INFO_결과는_삽입이_아니라_결과불명_건수로_로그에_남는다() {
       // given - pgjdbc가 배치를 재작성하면 개별 영향 행 수 대신 SUCCESS_NO_INFO(-2)를 반환할 수 있다
