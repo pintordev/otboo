@@ -33,13 +33,13 @@ public class LogBackupMetrics {
     this.bytesCounter = Counter.builder(BYTES).baseUnit("bytes")
         .description("S3에 업로드된 압축 로그 총 바이트").register(registry);
     this.jobCompletedCounter = Counter.builder(JOB_COMPLETED)
-        .description("Log Backup Job 성공 횟수").register(registry);
+        .description("LogBackup Job 성공 횟수").register(registry);
     this.jobFailedCounter = Counter.builder(JOB_FAILED)
-        .description("Log Backup Job 실패 횟수").register(registry);
+        .description("LogBackup Job 실패 횟수").register(registry);
     this.jobDurationTimer = Timer.builder(JOB_DURATION)
-        .description("로그 백업 Job 전체 실행 시간").register(registry);
+        .description("LogBackup Job 실행 시간").register(registry);
     this.stepSkippedCounter = Counter.builder(STEP_SKIPPED)
-        .description("로그 백업 Step 스킵 건수").register(registry);
+        .description("LogBackup Step 스킵 건수").register(registry);
     Gauge.builder(LAST_SUCCESS, lastSuccessEpochSeconds, AtomicLong::get)
         .baseUnit("seconds")
         .description("로그 백업 배치가 마지막으로 정상 완료된 시각(epoch seconds)")
