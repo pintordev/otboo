@@ -16,7 +16,10 @@ public record WeatherForecastSlotDto(
     double temperatureCurrent,
     double temperatureMin,
     double temperatureMax,
-    double windSpeed
+    double windSpeed,
+    SkyStatus skyStatusWorst,
+    PrecipitationType precipitationTypeMode,
+    double humidityMax
 ) {
 
 }

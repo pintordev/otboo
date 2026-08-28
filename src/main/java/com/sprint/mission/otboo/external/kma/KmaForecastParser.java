@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,11 +58,12 @@ public class KmaForecastParser {
       LocalDate date = LocalDate.parse(fcstDate, DATE_FORMATTER);
       DailyTemperatureRange range = temperatureRange(dayItems);
       DailyPrecipitationSummary precipitationSummary = precipitationSummary(dayItems);
+      DailyCategoricalSummary categorical = categoricalSummary(dayItems);
       Map<String, List<Item>> itemsBySlot = dayItems.stream()
           .collect(Collectors.groupingBy(Item::fcstTime, TreeMap::new, Collectors.toList()));
       for (Map.Entry<String, List<Item>> slot : itemsBySlot.entrySet()) {
-        toSlotForecast(date, slot.getKey(), slot.getValue(), range, precipitationSummary)
-            .ifPresent(result::add);
+        toSlotForecast(date, slot.getKey(), slot.getValue(), range, precipitationSummary,
+            categorical).ifPresent(result::add);
       }
     }
     return result;
@@ -107,9 +110,49 @@ public class KmaForecastParser {
     return new DailyPrecipitationSummary(probabilityMax, amountSum);
   }
 
+  // temperatureRange()/precipitationSummary()와 같은 자리 - 그날 슬롯 전체를 훑어 하늘상태는
+  // 가장 안 좋은 값, 강수형태는 최다 등장값, 습도는 최댓값으로 계산해 그날 모든 슬롯에 동일하게
+  // 적용한다.
+  private DailyCategoricalSummary categoricalSummary(List<Item> dayItems) {
+    SkyStatus worstSky = SkyStatus.CLEAR;
+    double maxHumidity = 0.0;
+    Map<PrecipitationType, Long> precipitationTypeCounts = new EnumMap<>(PrecipitationType.class);
+
+    for (Item item : dayItems) {
+      switch (item.category()) {
+        case "SKY" -> {
+          SkyStatus sky = toSkyStatus(item.fcstValue());
+          if (sky.ordinal() > worstSky.ordinal()) {
+            worstSky = sky;
+          }
+        }
+        case "REH" -> maxHumidity = Math.max(maxHumidity, Double.parseDouble(item.fcstValue()));
+        case "PTY" -> {
+          String pty = item.fcstValue();
+          PrecipitationType type = (pty == null || "0".equals(pty))
+              ? PrecipitationType.NONE : toPrecipitationType(pty);
+          precipitationTypeCounts.merge(type, 1L, Long::sum);
+        }
+        default -> {
+        }
+      }
+    }
+    return new DailyCategoricalSummary(worstSky, precipitationTypeMode(precipitationTypeCounts),
+        maxHumidity);
+  }
+
+  // 최다 등장값 - 동률이면 enum 선언 순서상 나중 값(ordinal이 큰 쪽) 우선.
+  private PrecipitationType precipitationTypeMode(Map<PrecipitationType, Long> counts) {
+    return counts.entrySet().stream()
+        .max(Comparator.<Map.Entry<PrecipitationType, Long>>comparingLong(Map.Entry::getValue)
+            .thenComparing(entry -> entry.getKey().ordinal()))
+        .map(Map.Entry::getKey)
+        .orElse(PrecipitationType.NONE);
+  }
+
   private Optional<WeatherForecastSlotDto> toSlotForecast(LocalDate date, String slotTime,
       List<Item> slotItems, DailyTemperatureRange range,
-      DailyPrecipitationSummary precipitationSummary) {
+      DailyPrecipitationSummary precipitationSummary, DailyCategoricalSummary categorical) {
     Double tempCurrent = null;
     double humidityCurrent = 0.0;
     double windSpeed = 0.0;
@@ -138,7 +181,9 @@ public class KmaForecastParser {
     }
     return Optional.of(new WeatherForecastSlotDto(date, toInstant(date, slotTime), skyStatus,
         precipitationType, precipitationSummary.amountSum(), precipitationSummary.probabilityMax(),
-        humidityCurrent, tempCurrent, range.min(), range.max(), windSpeed));
+        humidityCurrent, tempCurrent, range.min(), range.max(), windSpeed,
+        categorical.skyStatusWorst(), categorical.precipitationTypeMode(),
+        categorical.humidityMax()));
   }
 
   private Instant toInstant(LocalDate date, String slotTime) {
@@ -152,6 +197,11 @@ public class KmaForecastParser {
   }
 
   private record DailyPrecipitationSummary(double probabilityMax, double amountSum) {
+
+  }
+
+  private record DailyCategoricalSummary(SkyStatus skyStatusWorst,
+      PrecipitationType precipitationTypeMode, double humidityMax) {
 
   }
 

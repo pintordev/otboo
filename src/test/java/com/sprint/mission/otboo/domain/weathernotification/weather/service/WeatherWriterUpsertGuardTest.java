@@ -67,7 +67,7 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
     Instant newerForecastedAt = Instant.parse("2026-08-24T08:00:00Z"); // 17시(KST) 배치(더 최신)
     WeatherForecastSlotDto slotDto = new WeatherForecastSlotDto(
         LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
-        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0);
+        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
 
     // when - 17시(최신) 먼저 저장 → 14시(더 이전)가 뒤늦게 도착해 같은 슬롯에 upsert
     weatherWriter.saveSlots(weatherGrid, newerForecastedAt, List.of(slotDto), Map.of());
@@ -90,7 +90,7 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
     Instant newerForecastedAt = Instant.parse("2026-08-24T08:00:00Z");
     WeatherForecastSlotDto slotDto = new WeatherForecastSlotDto(
         LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
-        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0);
+        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
     weatherWriter.saveSlots(weatherGrid, newerForecastedAt, List.of(slotDto), Map.of());
 
     // when - 이미 반영된 최신값보다 오래된 forecastedAt으로 같은 슬롯을 다시 저장 시도(가드에 걸려
