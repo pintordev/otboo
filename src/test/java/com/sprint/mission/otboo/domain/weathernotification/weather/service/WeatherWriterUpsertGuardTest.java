@@ -139,4 +139,27 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
     assertThat(saved.getTemperatureCurrent()).isEqualTo(23.0);
     assertThat(saved.getBaselineTemperatureCurrent()).isEqualTo(20.0);
   }
+
+  @Test
+  @DisplayName("일별_요약_컬럼도_upsert로_저장되고_재조회된다")
+  void 일별_요약_컬럼도_upsert로_저장되고_재조회된다() {
+    // given
+    WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
+    Instant slotAt = Instant.parse("2026-08-24T12:00:00Z");
+    Instant forecastedAt = Instant.parse("2026-08-24T05:00:00Z");
+    WeatherForecastSlotDto slotDto = new WeatherForecastSlotDto(
+        LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
+        0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0, SkyStatus.CLOUDY, PrecipitationType.SNOW, 90.0);
+
+    // when
+    weatherWriter.saveSlots(weatherGrid, forecastedAt, List.of(slotDto), Map.of());
+
+    // then
+    Weather saved = weatherRepository
+        .findByWeatherGridAndForecastAtAndForecastedAt(weatherGrid, slotAt, forecastedAt)
+        .orElseThrow();
+    assertThat(saved.getSkyStatusWorst()).isEqualTo(SkyStatus.CLOUDY);
+    assertThat(saved.getPrecipitationTypeMode()).isEqualTo(PrecipitationType.SNOW);
+    assertThat(saved.getHumidityMax()).isEqualTo(90.0);
+  }
 }

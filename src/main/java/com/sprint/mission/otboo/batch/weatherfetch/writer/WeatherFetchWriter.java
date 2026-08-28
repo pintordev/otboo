@@ -32,8 +32,9 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
           humidity_current, humidity_compared, temperature_current, temperature_compared,
           temperature_min, temperature_max, wind_speed, wind_as_word,
           baseline_temperature_current, baseline_precipitation_type,
-          baseline_precipitation_probability, baseline_precipitation_amount, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+          baseline_precipitation_probability, baseline_precipitation_amount,
+          sky_status_worst, precipitation_type_mode, humidity_max, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
       ON CONFLICT (weather_grid_id, forecast_at) DO UPDATE SET
           forecasted_at = EXCLUDED.forecasted_at,
           sky_status = EXCLUDED.sky_status,
@@ -47,7 +48,10 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
           temperature_min = EXCLUDED.temperature_min,
           temperature_max = EXCLUDED.temperature_max,
           wind_speed = EXCLUDED.wind_speed,
-          wind_as_word = EXCLUDED.wind_as_word
+          wind_as_word = EXCLUDED.wind_as_word,
+          sky_status_worst = EXCLUDED.sky_status_worst,
+          precipitation_type_mode = EXCLUDED.precipitation_type_mode,
+          humidity_max = EXCLUDED.humidity_max
       WHERE weathers.forecasted_at < EXCLUDED.forecasted_at
       """;
 
@@ -86,6 +90,11 @@ public class WeatherFetchWriter implements ItemWriter<List<Weather>> {
             : weather.getBaselinePrecipitationType().name());
         ps.setObject(19, weather.getBaselinePrecipitationProbability(), Types.DOUBLE);
         ps.setObject(20, weather.getBaselinePrecipitationAmount(), Types.DOUBLE);
+        ps.setString(21, weather.getSkyStatusWorst() == null ? null
+            : weather.getSkyStatusWorst().name());
+        ps.setString(22, weather.getPrecipitationTypeMode() == null ? null
+            : weather.getPrecipitationTypeMode().name());
+        ps.setObject(23, weather.getHumidityMax(), Types.DOUBLE);
       }
 
       @Override
