@@ -2,6 +2,8 @@ package com.sprint.mission.otboo.batch.logbackup.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.batch.logbackup.dto.LogContent;
 import com.sprint.mission.otboo.batch.logbackup.dto.UploadPayload;
 import java.io.ByteArrayInputStream;
@@ -14,6 +16,10 @@ import org.junit.jupiter.api.Test;
 
 class LogBackupProcessorTest {
 
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
+
   @Nested
   @DisplayName("페이지 변환")
   class Process {
@@ -25,8 +31,12 @@ class LogBackupProcessorTest {
     void 페이지를_gzip_압축해_그룹별_폴더의_S3_키와_함께_UploadPayload로_반환한다() throws Exception {
       // given
       LocalDate date = LocalDate.of(2026, 8, 20);
-      LogContent content = new LogContent("nginx", date,
-          "line1\nline2".getBytes(StandardCharsets.UTF_8), 1);
+      LogContent content = FIXTURE_MONKEY.giveMeBuilder(LogContent.class)
+          .set("groupLabel", "nginx")
+          .set("date", date)
+          .set("lines", "line1\nline2".getBytes(StandardCharsets.UTF_8))
+          .set("pageNumber", 1)
+          .sample();
 
       // when
       UploadPayload payload = processor.process(content);

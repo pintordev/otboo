@@ -6,6 +6,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.navercorp.fixturemonkey.FixtureMonkey;
+import com.navercorp.fixturemonkey.api.introspector.ConstructorPropertiesArbitraryIntrospector;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties;
 import com.sprint.mission.otboo.batch.logbackup.config.LogBackupProperties.LogGroupTarget;
 import com.sprint.mission.otboo.batch.logbackup.dto.UploadPayload;
@@ -32,6 +34,10 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @ExtendWith(MockitoExtension.class)
 class LogBackupWriterTest {
 
+  private static final FixtureMonkey FIXTURE_MONKEY = FixtureMonkey.builder()
+      .objectIntrospector(ConstructorPropertiesArbitraryIntrospector.INSTANCE)
+      .build();
+
   @Mock
   private S3Client s3Client;
   @Mock
@@ -45,6 +51,13 @@ class LogBackupWriterTest {
     writer = new LogBackupWriter(s3Client, metrics, properties);
   }
 
+  private UploadPayload uploadPayload() {
+    return FIXTURE_MONKEY.giveMeBuilder(UploadPayload.class)
+        .set("s3Key", "logs/app/2026/08/20/app-20260820-001.log.gz")
+        .set("compressedData", "gzipped".getBytes(StandardCharsets.UTF_8))
+        .sample();
+  }
+
   @Nested
   @DisplayName("업로드")
   class Write {
@@ -53,8 +66,7 @@ class LogBackupWriterTest {
     @DisplayName("존재하지_않는_키는_업로드하고_업로드_건수와_바이트를_계측한다")
     void 존재하지_않는_키는_업로드하고_업로드_건수와_바이트를_계측한다() {
       // given
-      UploadPayload payload = new UploadPayload("logs/app/2026/08/20/app-20260820-001.log.gz",
-          "gzipped".getBytes(StandardCharsets.UTF_8));
+      UploadPayload payload = uploadPayload();
       given(s3Client.headObject(any(Consumer.class))).willThrow(NoSuchKeyException.builder().build());
 
       // when
@@ -70,8 +82,7 @@ class LogBackupWriterTest {
     @DisplayName("이미_존재하는_키는_업로드를_건너뛰고_스킵_건수만_계측한다")
     void 이미_존재하는_키는_업로드를_건너뛰고_스킵_건수만_계측한다() {
       // given
-      UploadPayload payload = new UploadPayload("logs/app/2026/08/20/app-20260820-001.log.gz",
-          "gzipped".getBytes(StandardCharsets.UTF_8));
+      UploadPayload payload = uploadPayload();
       given(s3Client.headObject(any(Consumer.class))).willReturn(HeadObjectResponse.builder().build());
 
       // when
@@ -86,8 +97,7 @@ class LogBackupWriterTest {
     @DisplayName("업로드_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다")
     void 업로드_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다() {
       // given
-      UploadPayload payload = new UploadPayload("logs/app/2026/08/20/app-20260820-001.log.gz",
-          "gzipped".getBytes(StandardCharsets.UTF_8));
+      UploadPayload payload = uploadPayload();
       given(s3Client.headObject(any(Consumer.class))).willThrow(NoSuchKeyException.builder().build());
       given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
           .willThrow(SdkException.builder().message("boom").build());
@@ -102,8 +112,7 @@ class LogBackupWriterTest {
     @DisplayName("S3_존재_확인_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다")
     void S3_존재_확인_실패_시_실패_건수를_계측하고_LogBackupFailedException을_던진다() {
       // given
-      UploadPayload payload = new UploadPayload("logs/app/2026/08/20/app-20260820-001.log.gz",
-          "gzipped".getBytes(StandardCharsets.UTF_8));
+      UploadPayload payload = uploadPayload();
       given(s3Client.headObject(any(Consumer.class)))
           .willThrow(SdkException.builder().message("throttled").build());
 
