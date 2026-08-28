@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
 import io.micrometer.core.instrument.step.StepRegistryConfig;
+import io.micrometer.core.instrument.util.NamedThreadFactory;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class CloudWatchEmfMeterRegistry extends StepMeterRegistry {
     this.namespace = namespace;
     this.whitelist = whitelist;
     this.jsonMapper = jsonMapper;
+    start(new NamedThreadFactory("cloudwatch-emf-metrics-publisher"));
   }
 
   @Override
