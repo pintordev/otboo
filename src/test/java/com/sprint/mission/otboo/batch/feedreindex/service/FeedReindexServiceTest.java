@@ -5,29 +5,37 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.sprint.mission.otboo.batch.feedreindex.config.FeedReindexProperties;
+import com.sprint.mission.otboo.batch.feedreindex.dto.FeedReindexResult;
+import com.sprint.mission.otboo.batch.feedreindex.exception.FeedReindexAlreadyRunningException;
 import com.sprint.mission.otboo.batch.feedreindex.exception.FeedReindexJobFailedException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
+import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.launch.JobRestartException;
+import org.springframework.batch.core.step.StepExecution;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FeedReindexService")
@@ -77,30 +85,51 @@ class FeedReindexServiceTest {
     }
 
     @Test
-    @DisplayName("실행에 실패하면 FeedReindexJobFailedException으로 감싸서 던진다")
-    void 실행에_실패하면_FeedReindexJobFailedException으로_감싸서_던진다() throws Exception {
+    @DisplayName("이미 실행 중이면 FeedReindexAlreadyRunningException을 던진다")
+    void 이미_실행_중이면_FeedReindexAlreadyRunningException을_던진다() throws Exception {
       // given
       given(jobOperator.start(any(Job.class), any(JobParameters.class)))
           .willThrow(new JobExecutionAlreadyRunningException("이미 실행 중"));
 
       // when & then
       assertThatThrownBy(() -> feedReindexService.executeReindexAll())
-          .isInstanceOf(FeedReindexJobFailedException.class)
-          .hasCauseInstanceOf(JobExecutionAlreadyRunningException.class);
+          .isInstanceOf(FeedReindexAlreadyRunningException.class);
     }
 
-    @ParameterizedTest(name = "JobExecution 상태={0}")
-    @EnumSource(value = BatchStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "COMPLETED")
-    @DisplayName("COMPLETED가 아니면 FeedReindexJobFailedException을 던진다")
-    void COMPLETED가_아니면_FeedReindexJobFailedException을_던진다(BatchStatus status)
-        throws Exception {
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(classes = {
+        JobRestartException.class,
+        JobInstanceAlreadyCompleteException.class,
+        InvalidJobParametersException.class})
+    @DisplayName("이미 실행 중이 아닌 이유로 실패하면 FeedReindexJobFailedException으로 감싼다")
+    void 이미_실행_중이_아닌_이유로_실패하면_FeedReindexJobFailedException으로_감싼다(
+        Class<? extends Throwable> type) throws Exception {
       // given
-      given(jobOperator.start(any(Job.class), any(JobParameters.class))).willReturn(jobExecution);
-      given(jobExecution.getStatus()).willReturn(status);
+      given(jobOperator.start(any(Job.class), any(JobParameters.class))).willThrow(type);
 
       // when & then
       assertThatThrownBy(() -> feedReindexService.executeReindexAll())
-          .isInstanceOf(FeedReindexJobFailedException.class);
+          .isInstanceOf(FeedReindexJobFailedException.class)
+          .hasCauseInstanceOf(type);
+    }
+
+    @Test
+    @DisplayName("Step 실행 결과를 집계해 반환한다")
+    void Step_실행_결과를_집계해_반환한다() throws Exception {
+      // given
+      StepExecution stepExecution = mock(StepExecution.class);
+      given(stepExecution.getReadCount()).willReturn(26L);
+      given(stepExecution.getWriteCount()).willReturn(24L);
+      given(jobExecution.getStepExecutions()).willReturn(List.of(stepExecution));
+      given(jobOperator.start(any(Job.class), any(JobParameters.class))).willReturn(jobExecution);
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+
+      // when
+      FeedReindexResult result = feedReindexService.executeReindexAll();
+
+      // then
+      assertThat(result.readCount()).isEqualTo(26L);
+      assertThat(result.writeCount()).isEqualTo(24L);
     }
   }
 

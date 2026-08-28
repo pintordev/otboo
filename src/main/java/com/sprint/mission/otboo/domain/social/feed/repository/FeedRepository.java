@@ -73,4 +73,7 @@ public interface FeedRepository extends JpaRepository<Feed, UUID> {
       where elem ->> 'imageUrl' is not null
       """, nativeQuery = true)
   Set<String> findAllOotdImageKeys();
+
+  @Query("select count(f) from Feed f where f.softDeletable.deletedAt is null")
+  long countActive();
 }

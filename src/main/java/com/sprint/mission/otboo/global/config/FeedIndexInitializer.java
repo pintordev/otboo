@@ -1,15 +1,13 @@
 package com.sprint.mission.otboo.global.config;
 
+import com.sprint.mission.otboo.batch.feedmigration.service.FeedIndexInspector;
 import com.sprint.mission.otboo.domain.social.feed.document.FeedDocument;
-import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.elasticsearch.ResourceNotFoundException;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.data.elasticsearch.core.index.AliasAction;
@@ -37,45 +35,32 @@ public class FeedIndexInitializer implements ApplicationRunner {
   private static final String INITIAL_INDEX_NAME = FeedDocument.INDEX_NAME + "_v1";
   private static final String MIGRATION_REQUIRED_MARKER = "FEED_INDEX_MIGRATION_REQUIRED";
   private static final String MAPPING_MISMATCH_MARKER = "FEED_INDEX_MAPPING_MISMATCH";
-  private static final String PROPERTIES = "properties";
 
   private final ElasticsearchOperations elasticsearchOperations;
+  private final FeedIndexInspector feedIndexInspector;
 
   @Override
   public void run(ApplicationArguments args) {
-    IndexOperations aliasOps =
-        elasticsearchOperations.indexOps(IndexCoordinates.of(FeedDocument.INDEX_NAME));
-
-    if (aliasOps.exists()) {
-      warnIfNotAlias(aliasOps);
-      warnIfMappingMismatch(aliasOps);
+    if (feedIndexInspector.exists()) {
+      warnIfNotAlias();
+      warnIfMappingMismatch();
       return;
     }
 
-    createInitialIndex(aliasOps);
+    createInitialIndex();
   }
 
   // exists()는 HEAD 요청이라 alias와 실제 인덱스를 구분하지 않는다.
   // alias 구조 도입 전에 만들어진 인덱스가 남아 있으면 매핑 마이그레이션 배치를 쓸 수 없으므로 로그로 드러낸다.
-  private void warnIfNotAlias(IndexOperations aliasOps) {
-    if (isAlias(aliasOps)) {
+  private void warnIfNotAlias() {
+    if (feedIndexInspector.isAlias()) {
       return;
     }
     log.warn("{}: {}가 alias가 아닌 실제 인덱스 — 매핑 마이그레이션 전 전환 필요",
         MIGRATION_REQUIRED_MARKER, FeedDocument.INDEX_NAME);
   }
 
-  // getAliases는 alias가 아니면 ResourceNotFoundException을 던진다.
-  // "alias가 아니다"는 정상 상태이므로 예외를 흡수해 boolean으로 바꾼다.
-  private boolean isAlias(IndexOperations aliasOps) {
-    try {
-      return !aliasOps.getAliases(FeedDocument.INDEX_NAME).isEmpty();
-    } catch (ResourceNotFoundException e) {
-      return false;
-    }
-  }
-
-  private void createInitialIndex(IndexOperations aliasOps) {
+  private void createInitialIndex() {
     IndexOperations entityOps = elasticsearchOperations.indexOps(FeedDocument.class);
     IndexOperations targetOps =
         elasticsearchOperations.indexOps(IndexCoordinates.of(INITIAL_INDEX_NAME));
@@ -94,7 +79,7 @@ public class FeedIndexInitializer implements ApplicationRunner {
 
     // 생성 성공 여부와 무관하게 alias를 보장한다. 다른 인스턴스가 인덱스만 만들고
     // alias 부여 전에 죽으면, 인덱스는 있는데 alias가 없는 상태가 계속 남는다.
-    if (!isAlias(aliasOps)) {
+    if (!feedIndexInspector.isAlias()) {
       targetOps.alias(addAliasAction());
       log.info("피드 검색 인덱스 alias 부여 완료: index={}, alias={}",
           INITIAL_INDEX_NAME, FeedDocument.INDEX_NAME);
@@ -118,43 +103,15 @@ public class FeedIndexInitializer implements ApplicationRunner {
    * FeedDocument가 기대하는 필드가 실제 매핑에 있는지 확인한다.
    *
    * <p>매핑에 없는 필드는 색인되지 않아 검색 결과가 조용히 비므로, 마이그레이션이 필요한 상태를
-   * 기동 시점에 드러낸다. 필드 이름만 비교한다 — 타입·analyzer는 ES가 정규화해 돌려주므로 그대로 비교하면 오탐이 난다.
+   * 기동 시점에 드러낸다.
    */
-  private void warnIfMappingMismatch(IndexOperations aliasOps) {
-    Set<String> expected = fieldNames(
-        elasticsearchOperations.indexOps(FeedDocument.class).createMapping());
-    Set<String> actual = fieldNames(aliasOps.getMapping());
-
-    Set<String> missing = new LinkedHashSet<>(expected);
-    missing.removeAll(actual);
+  private void warnIfMappingMismatch() {
+    Set<String> missing = feedIndexInspector.missingFields();
 
     if (missing.isEmpty()) {
       return;
     }
     log.warn("{}: 실제 매핑 누락 필드 존재 — 매핑 마이그레이션 필요: fields={}",
         MAPPING_MISMATCH_MARKER, missing);
-  }
-
-  // getMapping()은 인덱스 이름과 mappings로 감싸져 올 수 있어 properties를 찾아 내려간다.
-  private Set<String> fieldNames(Map<String, Object> mapping) {
-    Map<String, Object> properties = findProperties(mapping);
-    return properties == null ? Set.of() : new LinkedHashSet<>(properties.keySet());
-  }
-
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> findProperties(Map<String, Object> node) {
-    Object properties = node.get(PROPERTIES);
-    if (properties instanceof Map<?, ?> map) {
-      return (Map<String, Object>) map;
-    }
-    for (Object value : node.values()) {
-      if (value instanceof Map<?, ?> child) {
-        Map<String, Object> found = findProperties((Map<String, Object>) child);
-        if (found != null) {
-          return found;
-        }
-      }
-    }
-    return null;
   }
 }

@@ -1,5 +1,6 @@
 package com.sprint.mission.otboo.batch.feedmigration.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -7,11 +8,15 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.batch.feedmigration.dto.FeedIndexMigrationResult;
 import com.sprint.mission.otboo.domain.social.feed.document.FeedDocument;
+import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
 import com.sprint.mission.otboo.global.config.SchedulerLockConfig;
 import com.sprint.mission.otboo.global.testcontainers.RedisTestContainerSupport;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +33,7 @@ import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -54,12 +60,25 @@ class FeedIndexMigrationLockTest implements RedisTestContainerSupport {
   private final IndexOperations aliasOperations = mock(IndexOperations.class);
   private final IndexOperations entityOperations = mock(IndexOperations.class);
   private final IndexOperations newIndexOperations = mock(IndexOperations.class);
+
   @Autowired
   private FeedIndexMigrationService feedIndexMigrationService;
+
   @MockitoBean
   private JobOperator jobOperator;
+
   @MockitoBean
   private ElasticsearchOperations elasticsearchOperations;
+
+  @MockitoBean
+  private FeedIndexInspector feedIndexInspector;
+
+  @MockitoBean
+  private FeedRepository feedRepository;
+
+  @MockitoBean
+  private JobRepository jobRepository;
+
   @MockitoBean(name = "feedIndexMigrationJob")
   private Job feedIndexMigrationJob;
 
@@ -98,8 +117,8 @@ class FeedIndexMigrationLockTest implements RedisTestContainerSupport {
   class MigrationLock {
 
     @Test
-    @DisplayName("동시에 호출해도 실제 실행은 한 번뿐이다")
-    void 동시에_호출해도_실제_실행은_한_번뿐이다() throws Exception {
+    @DisplayName("동시에 호출하면 하나만 실행되고 나머지는 null을 반환한다")
+    void 동시에_호출하면_하나만_실행되고_나머지는_null을_반환한다() throws Exception {
       // given
       CountDownLatch ready = new CountDownLatch(2);
       CountDownLatch start = new CountDownLatch(1);
@@ -107,21 +126,24 @@ class FeedIndexMigrationLockTest implements RedisTestContainerSupport {
 
       try {
         // when
-        List<Future<Object>> futures = IntStream.range(0, 2)
-            .<Future<Object>>mapToObj(i -> executor.submit(() -> {
+        List<Future<FeedIndexMigrationResult>> futures = IntStream.range(0, 2)
+            .<Future<FeedIndexMigrationResult>>mapToObj(i -> executor.submit(() -> {
               ready.countDown();
               start.await();
-              feedIndexMigrationService.migrate();
-              return null;
+              return feedIndexMigrationService.migrate();
             }))
             .toList();
         ready.await();
         start.countDown();
-        for (Future<Object> future : futures) {
-          future.get(15, TimeUnit.SECONDS);
+
+        List<FeedIndexMigrationResult> results = new ArrayList<>();
+        for (Future<FeedIndexMigrationResult> future : futures) {
+          results.add(future.get(15, TimeUnit.SECONDS));
         }
 
         // then
+        assertThat(results.stream().filter(Objects::nonNull).toList()).hasSize(1);
+
         verify(jobOperator, times(1)).start(any(Job.class), any(JobParameters.class));
       } finally {
         executor.shutdownNow();

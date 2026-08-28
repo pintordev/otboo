@@ -1,8 +1,12 @@
 package com.sprint.mission.otboo.batch.feedmigration.endpoint;
 
+import com.sprint.mission.otboo.batch.feedmigration.dto.FeedIndexMigrationResult;
+import com.sprint.mission.otboo.batch.feedmigration.dto.FeedIndexStatus;
+import com.sprint.mission.otboo.batch.feedmigration.exception.FeedIndexMigrationAlreadyRunningException;
 import com.sprint.mission.otboo.batch.feedmigration.service.FeedIndexMigrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.boot.actuate.endpoint.annotation.WriteOperation;
 import org.springframework.stereotype.Component;
 
@@ -22,7 +26,17 @@ public class FeedIndexMigrationEndpoint {
   private final FeedIndexMigrationService feedIndexMigrationService;
 
   @WriteOperation
-  public void migrate() {
-    feedIndexMigrationService.migrate();
+  public FeedIndexMigrationResult migrate() {
+    FeedIndexMigrationResult result = feedIndexMigrationService.migrate();
+    // @SchedulerLock이 락을 얻지 못하면 메서드를 건너뛰고 null을 반환한다.
+    if (result == null) {
+      throw FeedIndexMigrationAlreadyRunningException.occurred();
+    }
+    return result;
+  }
+
+  @ReadOperation
+  public FeedIndexStatus status() {
+    return feedIndexMigrationService.readStatus();
   }
 }

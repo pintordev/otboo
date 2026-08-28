@@ -5,13 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.sprint.mission.otboo.batch.feedmigration.dto.FeedIndexStatus;
 import com.sprint.mission.otboo.batch.feedmigration.exception.FeedIndexMigrationFailedException;
 import com.sprint.mission.otboo.domain.social.feed.document.FeedDocument;
+import com.sprint.mission.otboo.domain.social.feed.repository.FeedRepository;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,8 +33,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.JobInstance;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.data.elasticsearch.core.document.Document;
@@ -68,10 +78,20 @@ class FeedIndexMigrationServiceTest {
 
   private FeedIndexMigrationService feedIndexMigrationService;
 
+  @Mock
+  private FeedIndexInspector feedIndexInspector;
+
+  @Mock
+  private FeedRepository feedRepository;
+
+  @Mock
+  private JobRepository jobRepository;
+
   @BeforeEach
   void setUp() {
     feedIndexMigrationService = new FeedIndexMigrationService(
-        jobOperator, elasticsearchOperations, feedIndexMigrationJob);
+        jobOperator, elasticsearchOperations, feedIndexInspector,
+        feedRepository, jobRepository, feedIndexMigrationJob);
   }
 
   private void givenAliasPointsToCurrentIndex() {
@@ -110,7 +130,7 @@ class FeedIndexMigrationServiceTest {
       feedIndexMigrationService.migrate();
 
       // then
-      verify(elasticsearchOperations).indexOps(eq(NEW_INDEX));
+      verify(elasticsearchOperations, atLeastOnce()).indexOps(eq(NEW_INDEX));
       verify(newIndexOperations).create(any(Settings.class), any(Document.class));
     }
 
@@ -147,6 +167,23 @@ class FeedIndexMigrationServiceTest {
       InOrder inOrder = inOrder(jobOperator, aliasOperations);
       inOrder.verify(jobOperator).start(eq(feedIndexMigrationJob), any(JobParameters.class));
       inOrder.verify(aliasOperations).alias(any(AliasActions.class));
+    }
+
+    @Test
+    @DisplayName("alias 전환 후 새 인덱스를 refresh한다")
+    void alias_전환_후_새_인덱스를_refresh한다() throws Exception {
+      // given
+      givenAliasPointsToCurrentIndex();
+      givenNewIndexCreated();
+      givenJobCompleted();
+
+      // when
+      feedIndexMigrationService.migrate();
+
+      // then
+      InOrder inOrder = inOrder(aliasOperations, newIndexOperations);
+      inOrder.verify(aliasOperations).alias(any(AliasActions.class));
+      inOrder.verify(newIndexOperations).refresh();
     }
 
     @Test
@@ -272,6 +309,111 @@ class FeedIndexMigrationServiceTest {
       // when & then
       assertThatThrownBy(() -> feedIndexMigrationService.migrate())
           .isInstanceOf(FeedIndexMigrationFailedException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("인덱스 상태 조회")
+  class ReadStatus {
+
+    @Test
+    @DisplayName("alias 여부와 누락 필드, 문서 수를 조합해 반환한다")
+    void alias_여부와_누락_필드_문서_수를_조합해_반환한다() {
+      // given
+      given(feedIndexInspector.currentIndexName()).willReturn(Optional.of("feeds_v1"));
+      given(feedIndexInspector.isAlias()).willReturn(true);
+      given(feedIndexInspector.missingFields()).willReturn(Set.of("searchText"));
+      given(feedIndexInspector.indexedCount()).willReturn(26L);
+      given(feedRepository.countActive()).willReturn(30L);
+
+      // when
+      FeedIndexStatus status = feedIndexMigrationService.readStatus();
+
+      // then
+      assertThat(status).isEqualTo(new FeedIndexStatus(
+          "feeds", "feeds_v1", true, Set.of("searchText"), 26L, 30L, null, null));
+    }
+
+    @Test
+    @DisplayName("alias가 아니면 현재 인덱스가 비어 있다")
+    void alias가_아니면_현재_인덱스가_비어_있다() {
+      // given
+      given(feedIndexInspector.currentIndexName()).willReturn(Optional.empty());
+      given(feedIndexInspector.isAlias()).willReturn(false);
+      given(feedIndexInspector.missingFields()).willReturn(Set.of());
+      given(feedIndexInspector.indexedCount()).willReturn(0L);
+      given(feedRepository.countActive()).willReturn(30L);
+
+      // when
+      FeedIndexStatus status = feedIndexMigrationService.readStatus();
+
+      // then
+      assertThat(status.currentIndex()).isNull();
+      assertThat(status.alias()).isFalse();
+    }
+
+    @Test
+    @DisplayName("마지막으로 완료된 Job 실행 시각을 반환한다")
+    void 마지막으로_완료된_Job_실행_시각을_반환한다() {
+      // given
+      given(feedIndexInspector.currentIndexName()).willReturn(Optional.of("feeds_v1"));
+      given(feedIndexInspector.isAlias()).willReturn(true);
+      given(feedIndexInspector.missingFields()).willReturn(Set.of());
+      given(feedIndexInspector.indexedCount()).willReturn(26L);
+      given(feedRepository.countActive()).willReturn(26L);
+
+      JobInstance instance = new JobInstance(1L, "feedReindexJob");
+      LocalDateTime endTime = LocalDateTime.of(2026, 8, 28, 5, 0);
+      given(jobRepository.getJobInstances("feedReindexJob", 0, 10))
+          .willReturn(List.of(instance));
+      given(jobRepository.getJobExecutions(instance)).willReturn(List.of(jobExecution));
+      given(jobExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(jobExecution.getEndTime()).willReturn(endTime);
+      given(jobRepository.getJobInstances("feedIndexMigrationJob", 0, 10))
+          .willReturn(List.of());
+
+      // when
+      FeedIndexStatus status = feedIndexMigrationService.readStatus();
+
+      // then
+      assertThat(status.lastReindexAt())
+          .isEqualTo(endTime.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    @Test
+    @DisplayName("최근 인스턴스가 실패했으면 이전 완료 인스턴스를 찾는다")
+    void 최근_인스턴스가_실패했으면_이전_완료_인스턴스를_찾는다() {
+      // given
+      given(feedIndexInspector.currentIndexName()).willReturn(Optional.of("feeds_v1"));
+      given(feedIndexInspector.isAlias()).willReturn(true);
+      given(feedIndexInspector.missingFields()).willReturn(Set.of());
+      given(feedIndexInspector.indexedCount()).willReturn(26L);
+      given(feedRepository.countActive()).willReturn(26L);
+
+      JobInstance failedInstance = new JobInstance(2L, "feedReindexJob");
+      JobInstance completedInstance = new JobInstance(1L, "feedReindexJob");
+      JobExecution failedExecution = mock(JobExecution.class);
+      JobExecution completedExecution = mock(JobExecution.class);
+      LocalDateTime endTime = LocalDateTime.of(2026, 8, 28, 5, 0);
+
+      given(jobRepository.getJobInstances("feedReindexJob", 0, 10))
+          .willReturn(List.of(failedInstance, completedInstance));
+      given(jobRepository.getJobExecutions(failedInstance)).willReturn(List.of(failedExecution));
+      given(failedExecution.getStatus()).willReturn(BatchStatus.FAILED);
+      given(jobRepository.getJobExecutions(completedInstance)).willReturn(
+          List.of(completedExecution));
+      given(completedExecution.getStatus()).willReturn(BatchStatus.COMPLETED);
+      given(completedExecution.getEndTime()).willReturn(endTime);
+
+      given(jobRepository.getJobInstances("feedIndexMigrationJob", 0, 10))
+          .willReturn(List.of());
+
+      // when
+      FeedIndexStatus status = feedIndexMigrationService.readStatus();
+
+      // then
+      assertThat(status.lastReindexAt())
+          .isEqualTo(endTime.atZone(ZoneId.systemDefault()).toInstant());
     }
   }
 }
