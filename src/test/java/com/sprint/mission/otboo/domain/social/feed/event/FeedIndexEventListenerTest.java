@@ -29,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FeedIndexEventListener")
@@ -47,6 +48,9 @@ class FeedIndexEventListenerTest {
 
   @Mock
   FeedSearchRepository feedSearchRepository;
+
+  @Mock
+  ElasticsearchOperations elasticsearchOperations;
 
   private static void setField(Feed feed, String name, Object value) {
     try {
@@ -181,6 +185,76 @@ class FeedIndexEventListenerTest {
       assertThatCode(() -> listener.handle(FeedIndexRequestedEvent.upsert(feedId)))
           .doesNotThrowAnyException();
       verify(feedSearchRepository).save(any(FeedDocument.class));
+    }
+  }
+
+  @Nested
+  @DisplayName("비동기 인덱싱 이벤트 처리")
+  class HandleAsync {
+
+    @Test
+    @DisplayName("피드를 조회해 인덱스에 저장한다")
+    void 피드를_조회해_인덱스에_저장한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = feedWith(feedId, "오늘의 착장");
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when
+      listener.handleAsync(FeedIndexAsyncRequestedEvent.upsert(feedId));
+
+      // then
+      ArgumentCaptor<FeedDocument> captor = ArgumentCaptor.forClass(FeedDocument.class);
+      verify(elasticsearchOperations).save(captor.capture());
+      assertThat(captor.getValue().getId()).isEqualTo(feedId.toString());
+    }
+
+    @Test
+    @DisplayName("강제 refresh를 유발하는 리포지토리를 쓰지 않는다")
+    void 강제_refresh를_유발하는_리포지토리를_쓰지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = feedWith(feedId, "오늘의 착장");
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when
+      listener.handleAsync(FeedIndexAsyncRequestedEvent.upsert(feedId));
+
+      // then
+      verify(feedSearchRepository, never()).save(any(FeedDocument.class));
+    }
+
+    @Test
+    @DisplayName("소프트 삭제된 피드면 인덱스에서 제거한다")
+    void 소프트_삭제된_피드면_인덱스에서_제거한다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = feedWith(feedId, "삭제된 피드");
+      feed.delete();
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+
+      // when
+      listener.handleAsync(FeedIndexAsyncRequestedEvent.upsert(feedId));
+
+      // then
+      verify(elasticsearchOperations).delete(feedId.toString(), FeedDocument.class);
+      verify(elasticsearchOperations, never()).save(any(FeedDocument.class));
+    }
+
+    @Test
+    @DisplayName("인덱스 저장에 실패해도 예외를 던지지 않는다")
+    void 인덱스_저장에_실패해도_예외를_던지지_않는다() {
+      // given
+      UUID feedId = UUID.randomUUID();
+      Feed feed = feedWith(feedId, "오늘의 착장");
+      given(feedRepository.findById(feedId)).willReturn(Optional.of(feed));
+      willThrow(new DataAccessResourceFailureException("ES 연결 실패"))
+          .given(elasticsearchOperations).save(any(FeedDocument.class));
+
+      // when & then
+      assertThatCode(() -> listener.handleAsync(FeedIndexAsyncRequestedEvent.upsert(feedId)))
+          .doesNotThrowAnyException();
+      verify(elasticsearchOperations).save(any(FeedDocument.class));
     }
   }
 }

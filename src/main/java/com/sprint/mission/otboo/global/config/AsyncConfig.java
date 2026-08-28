@@ -77,6 +77,22 @@ public class AsyncConfig implements AsyncConfigurer {
     return executor;
   }
 
+  @Bean(name = "feedIndexExecutor")
+  public Executor feedIndexExecutor() {
+    // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(2);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(100);
+    executor.setThreadNamePrefix("feed-index-async-");
+    executor.setTaskDecorator(new MdcTaskDecorator());
+    // 큐가 차면 기본 AbortPolicy가 태스크를 버려 색인이 조용히 유실된다.
+    // 요청 스레드에서 직접 실행해 백프레셔를 건다 — 이 경우 응답이 느려질 뿐 인덱스는 맞는다.
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    executor.initialize();
+    return executor;
+  }
+
   @Bean(name = "singleFlightListenerExecutor")
   public Executor singleFlightListenerExecutor() {
     // TODO: 현재 아래 설정은 임시 값. 팀 논의 필요 지점

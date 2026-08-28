@@ -29,6 +29,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.OotdDto;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
+import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexAsyncRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent.IndexAction;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
@@ -642,8 +643,8 @@ class FeedServiceTest {
     }
 
     @Test
-    @DisplayName("좋아요에 성공하면 검색 인덱싱 이벤트를 발행한다")
-    void 좋아요에_성공하면_검색_인덱싱_이벤트를_발행한다() {
+    @DisplayName("좋아요에 성공하면 비동기 인덱싱 이벤트를 발행한다")
+    void 좋아요에_성공하면_비동기_인덱싱_이벤트를_발행한다() {
       // given
       UUID feedId = UUID.randomUUID();
       UUID userId = UUID.randomUUID();
@@ -664,8 +665,11 @@ class FeedServiceTest {
       ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
       verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
       assertThat(captor.getAllValues())
+          .filteredOn(FeedIndexAsyncRequestedEvent.class::isInstance)
+          .containsExactly(FeedIndexAsyncRequestedEvent.upsert(feedId));
+      assertThat(captor.getAllValues())
           .filteredOn(FeedIndexRequestedEvent.class::isInstance)
-          .containsExactly(FeedIndexRequestedEvent.upsert(feedId));
+          .isEmpty();
     }
   }
 
@@ -735,8 +739,8 @@ class FeedServiceTest {
     }
 
     @Test
-    @DisplayName("좋아요를 취소하면 검색 인덱싱 이벤트를 발행한다")
-    void 좋아요를_취소하면_검색_인덱싱_이벤트를_발행한다() {
+    @DisplayName("좋아요를 취소하면 비동기 인덱싱 이벤트를 발행한다")
+    void 좋아요를_취소하면_비동기_인덱싱_이벤트를_발행한다() {
       // given
       UUID feedId = UUID.randomUUID();
       UUID userId = UUID.randomUUID();
@@ -748,10 +752,14 @@ class FeedServiceTest {
       feedService.unlike(feedId, userId);
 
       // then
-      ArgumentCaptor<FeedIndexRequestedEvent> captor =
-          ArgumentCaptor.forClass(FeedIndexRequestedEvent.class);
-      verify(eventPublisher).publishEvent(captor.capture());
-      assertThat(captor.getValue()).isEqualTo(FeedIndexRequestedEvent.upsert(feedId));
+      ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+      verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
+      assertThat(captor.getAllValues())
+          .filteredOn(FeedIndexAsyncRequestedEvent.class::isInstance)
+          .containsExactly(FeedIndexAsyncRequestedEvent.upsert(feedId));
+      assertThat(captor.getAllValues())
+          .filteredOn(FeedIndexRequestedEvent.class::isInstance)
+          .isEmpty();
     }
   }
 

@@ -10,6 +10,7 @@ import com.sprint.mission.otboo.domain.social.feed.dto.FeedUpdateRequest;
 import com.sprint.mission.otboo.domain.social.feed.dto.OotdSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.dto.WeatherSnapshot;
 import com.sprint.mission.otboo.domain.social.feed.entity.Feed;
+import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexAsyncRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.event.FeedIndexRequestedEvent;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedForbiddenException;
 import com.sprint.mission.otboo.domain.social.feed.exception.FeedNotFoundException;
@@ -82,7 +83,7 @@ public class FeedService {
     increaseLikeCount(feedId);
     log.info("피드 좋아요 완료: feedId={}", feedId);
 
-    eventPublisher.publishEvent(FeedIndexRequestedEvent.upsert(feedId));
+    eventPublisher.publishEvent(FeedIndexAsyncRequestedEvent.upsert(feedId));
     publishFeedLikedNotification(feedId, currentUserId);
   }
 
@@ -93,7 +94,7 @@ public class FeedService {
       decreaseLikeCount(feedId);
       log.info("피드 좋아요 취소 완료: feedId={}", feedId);
 
-      eventPublisher.publishEvent(FeedIndexRequestedEvent.upsert(feedId));
+      eventPublisher.publishEvent(FeedIndexAsyncRequestedEvent.upsert(feedId));
     }
   }
 
