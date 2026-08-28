@@ -120,7 +120,7 @@ class WeatherServiceTest {
           .set("forecastAt", todaySlot.getForecastAt())
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(todaySlot, weatherGrid, latitude, longitude, locationNames))
+      given(weatherMapper.toDto(todaySlot, weatherGrid, latitude, longitude, locationNames, true))
           .willReturn(expectedDto);
 
       // when
@@ -157,7 +157,7 @@ class WeatherServiceTest {
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
       given(weatherMapper.toDto(savedSlot, createdWeatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
+          List.of("서울특별시", "중구", "명동"), true)).willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
@@ -223,7 +223,7 @@ class WeatherServiceTest {
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
       given(weatherMapper.toDto(staleTodaySlot, weatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(expectedDto);
+          List.of("서울특별시", "중구", "명동"), true)).willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
@@ -269,9 +269,9 @@ class WeatherServiceTest {
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
       given(weatherMapper.toDto(refreshedTodaySlot, weatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(todayDto);
+          List.of("서울특별시", "중구", "명동"), true)).willReturn(todayDto);
       given(weatherMapper.toDto(tomorrowSlot, weatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(tomorrowDto);
+          List.of("서울특별시", "중구", "명동"), false)).willReturn(tomorrowDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
@@ -321,12 +321,12 @@ class WeatherServiceTest {
           new HumidityDto(28.0, 0.0), new TemperatureDto(25.0, 0.0, 25.0, 31.0),
           new WindSpeedDto(2.0, WindStrength.WEAK));
       given(weatherMapper.toDto(todayClosest, weatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(todayDto);
+          List.of("서울특별시", "중구", "명동"), true)).willReturn(todayDto);
       WeatherDto tomorrowDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
       given(weatherMapper.toDto(tomorrowSlot, weatherGrid, latitude, longitude,
-          List.of("서울특별시", "중구", "명동"))).willReturn(tomorrowDto);
+          List.of("서울특별시", "중구", "명동"), false)).willReturn(tomorrowDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeather(latitude, longitude);
@@ -472,7 +472,7 @@ class WeatherServiceTest {
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(cachedSlot, weatherGrid, latitude, longitude, locationNames))
+      given(weatherMapper.toDto(cachedSlot, weatherGrid, latitude, longitude, locationNames, true))
           .willReturn(expectedDto);
 
       // when
@@ -509,7 +509,7 @@ class WeatherServiceTest {
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(dbSlot, weatherGrid, latitude, longitude, locationNames))
+      given(weatherMapper.toDto(dbSlot, weatherGrid, latitude, longitude, locationNames, true))
           .willReturn(expectedDto);
 
       // when
@@ -548,8 +548,8 @@ class WeatherServiceTest {
       WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
           .set("skyStatus", SkyStatus.CLEAR)
           .sample();
-      given(weatherMapper.toDto(refreshedSlot, weatherGrid, latitude, longitude, locationNames))
-          .willReturn(expectedDto);
+      given(weatherMapper.toDto(refreshedSlot, weatherGrid, latitude, longitude, locationNames,
+          true)).willReturn(expectedDto);
 
       // when
       List<WeatherDto> result = weatherService.getWeatherAsync(latitude, longitude).join();

@@ -82,7 +82,7 @@ public class WeatherService {
           return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
                   representativesFrom(slots, today).stream()
                       .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
-                          locationNames))
+                          locationNames, toForecastDate(w).equals(today)))
                       .toList())
               // orTimeout의 타임아웃 완료는 JDK 공유 delay scheduler 스레드에서 실행될 수 있어,
               // 그 스레드에서 동기 DB 조회를 돌리면 다른 타임아웃 처리까지 지연시킬 수 있다.
@@ -94,7 +94,7 @@ public class WeatherService {
                 List<String> fallbackNames = List.of();
                 return representativesFrom(fallbackSlots, today).stream()
                     .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
-                        fallbackNames))
+                        fallbackNames, toForecastDate(w).equals(today)))
                     .toList();
               }, weatherRefreshExecutor);
         });
@@ -158,7 +158,7 @@ public class WeatherService {
     List<String> locationNames = locationResolver.resolveLocationNames(latitude, longitude);
     return result.stream()
         .map(weather -> weatherMapper.toDto(weather, weatherGrid, latitude, longitude,
-            locationNames))
+            locationNames, toForecastDate(weather).equals(today)))
         .toList();
   }
 
