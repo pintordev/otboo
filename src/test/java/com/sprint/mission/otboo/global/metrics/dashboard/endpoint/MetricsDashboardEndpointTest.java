@@ -39,7 +39,23 @@ class MetricsDashboardEndpointTest {
 
       // when
       MetricsTimeseriesDto actual =
-          endpoint.timeseries("batch.weather-fetch.job.completed", MetricsRange.ONE_HOUR);
+          endpoint.timeseries("batch.weather-fetch.job.completed", "1h");
+
+      // then
+      assertThat(actual).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("range 문자열은 Actuator 파라미터 매핑을 거치지 않고 엔드포인트 안에서 직접 MetricsRange로 변환한다")
+    void range_문자열을_직접_MetricsRange로_변환한다() {
+      // given
+      MetricsTimeseriesDto expected = new MetricsTimeseriesDto(List.of());
+      given(metricsDashboardService.getTimeseries("batch.weather-fetch.job.completed", MetricsRange.SIX_HOURS))
+          .willReturn(expected);
+
+      // when
+      MetricsTimeseriesDto actual =
+          endpoint.timeseries("batch.weather-fetch.job.completed", "알수없는값");
 
       // then
       assertThat(actual).isEqualTo(expected);

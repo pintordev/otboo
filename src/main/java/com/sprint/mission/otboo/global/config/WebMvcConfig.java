@@ -3,7 +3,6 @@ package com.sprint.mission.otboo.global.config;
 import com.sprint.mission.otboo.domain.clothesrecommend.attributedef.dto.AttributeDefSortBy;
 import com.sprint.mission.otboo.domain.social.feed.dto.FeedSortBy;
 import com.sprint.mission.otboo.global.interceptor.MdcLoggingInterceptor;
-import com.sprint.mission.otboo.global.metrics.dashboard.MetricsRange;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -49,14 +48,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
       case "createdAt" -> AttributeDefSortBy.CREATED_AT;
       case "name" -> AttributeDefSortBy.NAME;
       default -> AttributeDefSortBy.NAME;
-    });
-    registry.addConverter(String.class, MetricsRange.class, value -> switch (value) {
-      case "1h" -> MetricsRange.ONE_HOUR;
-      case "12h" -> MetricsRange.TWELVE_HOURS;
-      case "24h" -> MetricsRange.ONE_DAY;
-      case "7d" -> MetricsRange.SEVEN_DAYS;
-      case "14d" -> MetricsRange.FOURTEEN_DAYS;
-      default -> MetricsRange.SIX_HOURS;
     });
     // 정렬 기준 enum이 있는 도메인마다 추가
   }

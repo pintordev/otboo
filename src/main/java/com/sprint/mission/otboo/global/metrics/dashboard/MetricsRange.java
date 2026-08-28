@@ -44,4 +44,15 @@ public enum MetricsRange {
   public Duration period() {
     return period;
   }
+
+  public static MetricsRange fromParam(String param) {
+    return switch (param) {
+      case "1h" -> ONE_HOUR;
+      case "12h" -> TWELVE_HOURS;
+      case "24h" -> ONE_DAY;
+      case "7d" -> SEVEN_DAYS;
+      case "14d" -> FOURTEEN_DAYS;
+      default -> SIX_HOURS;
+    };
+  }
 }

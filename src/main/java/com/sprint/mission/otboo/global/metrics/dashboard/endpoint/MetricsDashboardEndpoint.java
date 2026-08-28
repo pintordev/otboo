@@ -21,7 +21,7 @@ public class MetricsDashboardEndpoint {
   private final MetricsDashboardService metricsDashboardService;
 
   @ReadOperation
-  public MetricsTimeseriesDto timeseries(String metric, MetricsRange range) {
-    return metricsDashboardService.getTimeseries(metric, range);
+  public MetricsTimeseriesDto timeseries(String metric, String range) {
+    return metricsDashboardService.getTimeseries(metric, MetricsRange.fromParam(range));
   }
 }
