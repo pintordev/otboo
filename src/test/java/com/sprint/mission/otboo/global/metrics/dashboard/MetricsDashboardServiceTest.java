@@ -1,0 +1,87 @@
+package com.sprint.mission.otboo.global.metrics.dashboard;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+
+import com.sprint.mission.otboo.global.metrics.dashboard.config.MetricsDashboardProperties;
+import com.sprint.mission.otboo.global.metrics.dashboard.dto.MetricsTimeseriesDto;
+import com.sprint.mission.otboo.global.metrics.dashboard.exception.MetricsDashboardNotWhitelistedException;
+import com.sprint.mission.otboo.global.metrics.dashboard.filter.MetricsDashboardWhitelist;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
+import software.amazon.awssdk.services.cloudwatch.model.GetMetricDataRequest;
+import software.amazon.awssdk.services.cloudwatch.model.GetMetricDataResponse;
+import software.amazon.awssdk.services.cloudwatch.model.MetricDataResult;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("MetricsDashboardService")
+class MetricsDashboardServiceTest {
+
+  @InjectMocks
+  MetricsDashboardService metricsDashboardService;
+
+  @Mock
+  CloudWatchClient cloudWatchClient;
+  @Mock
+  MetricsDashboardWhitelist whitelist;
+  @Mock
+  MetricsDashboardProperties properties;
+
+  @Nested
+  @DisplayName("시계열 조회")
+  class GetTimeseries {
+
+    @Test
+    @DisplayName("화이트리스트에 없는 메트릭이면 CloudWatch를 호출하지 않고 예외를 던진다")
+    void 화이트리스트에_없는_메트릭이면_예외를_던진다() {
+      // given
+      given(whitelist.matches("jvm.memory.used")).willReturn(false);
+
+      // when & then
+      assertThatThrownBy(() ->
+          metricsDashboardService.getTimeseries("jvm.memory.used", MetricsRange.ONE_HOUR))
+          .isInstanceOf(MetricsDashboardNotWhitelistedException.class);
+      then(cloudWatchClient).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("화이트리스트에 있으면 GetMetricData 결과를 시계열 DTO로 변환한다")
+    void 화이트리스트에_있으면_결과를_DTO로_변환한다() {
+      // given
+      given(whitelist.matches("batch.weather-fetch.job.completed")).willReturn(true);
+      given(properties.namespace()).willReturn("otboo");
+
+      Instant timestamp = Instant.parse("2026-08-28T00:00:00Z");
+      MetricDataResult result = MetricDataResult.builder()
+          .id("metric")
+          .timestamps(timestamp)
+          .values(3.0)
+          .build();
+      GetMetricDataResponse response = GetMetricDataResponse.builder()
+          .metricDataResults(result)
+          .build();
+      given(cloudWatchClient.getMetricData(any(GetMetricDataRequest.class)))
+          .willReturn(response);
+
+      // when
+      MetricsTimeseriesDto actual =
+          metricsDashboardService.getTimeseries("batch.weather-fetch.job.completed", MetricsRange.ONE_HOUR);
+
+      // then
+      assertThat(actual.values()).hasSize(1);
+      assertThat(actual.values().get(0).timestamp()).isEqualTo(timestamp);
+      assertThat(actual.values().get(0).value()).isEqualTo(3.0);
+    }
+  }
+}
