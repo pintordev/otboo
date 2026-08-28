@@ -152,9 +152,13 @@ class WeatherWriterUpsertGuardTest extends IntegrationTestSupport {
       WeatherGrid weatherGrid = weatherGridRepository.save(WeatherGrid.create(60, 127));
       Instant slotAt = Instant.parse("2026-08-24T12:00:00Z");
       Instant forecastedAt = Instant.parse("2026-08-24T05:00:00Z");
-      WeatherForecastSlotDto slotDto = new WeatherForecastSlotDto(
-          LocalDate.of(2026, 8, 24), slotAt, SkyStatus.CLEAR, PrecipitationType.NONE,
-          0.0, 0.0, 50.0, 20.0, 15.0, 25.0, 2.0, SkyStatus.CLOUDY, PrecipitationType.SNOW, 90.0);
+      WeatherForecastSlotDto slotDto = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
+          .set("date", LocalDate.of(2026, 8, 24))
+          .set("slotAt", slotAt)
+          .set("skyStatusWorst", SkyStatus.CLOUDY)
+          .set("precipitationTypeMode", PrecipitationType.SNOW)
+          .set("humidityMax", 90.0)
+          .sample();
 
       // when
       weatherWriter.saveSlots(weatherGrid, forecastedAt, List.of(slotDto), Map.of());
