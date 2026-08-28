@@ -121,7 +121,7 @@ class WeatherRefresherTest {
 
       Weather savedWeather = Weather.create(weatherGrid, BASE_TIME.toInstant(),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
-          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null);
+          0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.0, WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
       given(weatherWriter.saveSlots(weatherGrid, BASE_TIME.toInstant(), List.of(todaySlot),
           Map.of())).willReturn(List.of(savedWeather));
 
@@ -140,7 +140,7 @@ class WeatherRefresherTest {
       Weather yesterdaySlot = Weather.create(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), Instant.parse("2026-07-26T00:00:00Z"),
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0,
-          WindStrength.WEAK, null, null, null, null);
+          WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
       given(weatherRepository.findAllByWeatherGridAndForecastAtGreaterThanEqual(eq(weatherGrid),
           any())).willReturn(List.of(yesterdaySlot));
 

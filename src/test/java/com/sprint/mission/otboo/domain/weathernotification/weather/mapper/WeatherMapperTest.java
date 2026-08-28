@@ -43,7 +43,7 @@ class WeatherMapperTest {
           31.0,
           2.5,
           WindStrength.WEAK
-      , null, null, null, null);
+      , null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
 
       double requestLatitude = 37.1234567;
       double requestLongitude = 127.1234567;

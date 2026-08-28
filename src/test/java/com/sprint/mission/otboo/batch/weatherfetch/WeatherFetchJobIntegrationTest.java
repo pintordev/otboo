@@ -403,7 +403,7 @@ class WeatherFetchJobIntegrationTest extends IntegrationTestSupport {
       WeatherGrid grid = weatherGridRepository.save(WeatherGrid.create(60, 127));
       weatherRepository.save(Weather.create(grid, previousForecastedAt, forecastAt,
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 65.0, 0.0, 20.0, 0.0, 15.0, 25.0, 2.0,
-          WindStrength.WEAK, 20.0, PrecipitationType.NONE, 0.0, 0.0));
+          WindStrength.WEAK, 20.0, PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0));
 
       User user = userRepository.save(
           User.create("홍길동", "sudden-change@test.com", "encoded-password"));

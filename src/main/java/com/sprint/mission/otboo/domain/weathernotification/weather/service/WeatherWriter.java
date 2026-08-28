@@ -81,7 +81,8 @@ public class WeatherWriter {
           // SET 목록에서 뺀 뒤부터는 이미 존재하는 슬롯 갱신 시 이 인자가 무시되고 기존
           // baseline이 유지된다 - 최초 삽입일 때만 실제로 반영된다.
           dto.temperatureCurrent(), dto.precipitationType(), dto.precipitationProbability(),
-          dto.precipitationAmount()));
+          dto.precipitationAmount(), dto.skyStatusWorst(), dto.precipitationTypeMode(),
+          dto.humidityMax()));
     }
     return built;
   }

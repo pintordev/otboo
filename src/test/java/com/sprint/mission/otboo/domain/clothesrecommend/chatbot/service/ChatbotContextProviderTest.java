@@ -55,7 +55,7 @@ class ChatbotContextProviderTest {
         temperature, 0.0, temperature - 3, temperature + 3,
         windStrength == WindStrength.STRONG ? 15.0 : 3.0,
         windStrength,
-        null, null, null, null);
+        null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
     ReflectionTestUtils.setField(weather, "id", UUID.randomUUID());
     return weather;
   }

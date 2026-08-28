@@ -71,6 +71,6 @@ class RepresentativeSlotSelectorTest {
     WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
     return Weather.create(weatherGrid, Instant.parse("2026-07-27T08:00:00Z"),
         Instant.parse(forecastAt), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, null,
-        26.0, null, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
+        26.0, null, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
   }
 }

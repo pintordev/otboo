@@ -100,7 +100,7 @@ class WeatherWriterTest {
       Weather yesterdaySameSlot = Weather.create(weatherGrid,
           Instant.parse("2026-07-26T08:00:00Z"), slotAt.minus(1, ChronoUnit.DAYS),
           SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 60.0, null, 26.0, null, 24.0, 29.0,
-          2.0, WindStrength.WEAK, 26.0, PrecipitationType.NONE, 0.0, 0.0);
+          2.0, WindStrength.WEAK, 26.0, PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
       WeatherForecastSlotDto slot = FIXTURE_MONKEY.giveMeBuilder(WeatherForecastSlotDto.class)
           .set("date", LocalDate.of(2026, 7, 27))
           .set("slotAt", slotAt)

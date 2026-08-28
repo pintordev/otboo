@@ -126,7 +126,7 @@ class WeatherFetchWriterTest {
       Weather weatherWithBaseline = Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
           60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, 26.0, PrecipitationType.RAIN,
-          40.0, 1.5);
+          40.0, 1.5, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
       Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weatherWithBaseline)));
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willReturn(new int[]{1});
@@ -153,7 +153,7 @@ class WeatherFetchWriterTest {
       WeatherGrid grid = WeatherGrid.create(60, 127);
       Weather weatherWithNullCompared = Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
-          60.0, null, 26.0, null, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
+          60.0, null, 26.0, null, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
       Chunk<List<Weather>> chunk = new Chunk<>(List.of(List.of(weatherWithNullCompared)));
       given(jdbcTemplate.batchUpdate(anyString(), any(BatchPreparedStatementSetter.class)))
           .willReturn(new int[]{1});
@@ -226,6 +226,6 @@ class WeatherFetchWriterTest {
   private Weather weather(WeatherGrid grid) {
     return Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
         Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0,
-        60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null);
+        60.0, 0.0, 26.0, 0.0, 24.0, 29.0, 2.0, WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
   }
 }

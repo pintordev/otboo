@@ -158,7 +158,7 @@ class WeatherGridRepositoryTest {
       testEntityManager.persist(Weather.create(forecastedGrid, forecastedAt,
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
           0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK, 28.0,
-          PrecipitationType.NONE, 0.0, 0.0));
+          PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0));
       testEntityManager.flush();
       testEntityManager.clear();
 
@@ -177,7 +177,7 @@ class WeatherGridRepositoryTest {
       testEntityManager.persist(Weather.create(grid, Instant.parse("2026-07-27T08:00:00Z"),
           Instant.parse("2026-07-27T00:00:00Z"), SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
           0.0, 65.0, 0.0, 28.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK, 28.0,
-          PrecipitationType.NONE, 0.0, 0.0));
+          PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0));
       testEntityManager.flush();
       testEntityManager.clear();
 

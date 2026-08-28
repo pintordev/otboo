@@ -96,13 +96,13 @@ class WeatherSuddenChangeChunkProcessorTest {
       double baselineTemperature, double currentTemperature) {
     return Weather.create(grid, D0, forecastAt, SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
         0.0, 65.0, 0.0, currentTemperature, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK,
-        baselineTemperature, PrecipitationType.NONE, 0.0, 0.0);
+        baselineTemperature, PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
   }
 
   private Weather weatherWithNullBaseline(WeatherGrid grid, Instant forecastAt) {
     return Weather.create(grid, D0, forecastAt, SkyStatus.CLEAR, PrecipitationType.NONE, 0.0,
         0.0, 65.0, 0.0, 25.0, 0.0, 25.0, 31.0, 2.5, WindStrength.WEAK,
-        null, PrecipitationType.NONE, 0.0, 0.0);
+        null, PrecipitationType.NONE, 0.0, 0.0, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
   }
 
   @Nested

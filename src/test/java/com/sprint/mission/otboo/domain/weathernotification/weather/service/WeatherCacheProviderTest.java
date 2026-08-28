@@ -74,7 +74,7 @@ class WeatherCacheProviderTest implements RedisTestContainerSupport {
   private static Weather weatherWithForecastedAt(WeatherGrid weatherGrid, Instant forecastedAt) {
     return Weather.create(weatherGrid, forecastedAt, Instant.parse("2026-08-25T00:00:00Z"),
         SkyStatus.CLEAR, PrecipitationType.NONE, 0.0, 0.0, 40.0, null, 25.0, null, 20.0, 28.0,
-        2.0, WindStrength.WEAK, null, null, null, null);
+        2.0, WindStrength.WEAK, null, null, null, null, SkyStatus.CLEAR, PrecipitationType.NONE, 50.0);
   }
 
   @Nested
