@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.global.file.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sprint.mission.otboo.global.config.AwsClientConfig;
 import com.sprint.mission.otboo.global.file.storage.FileStorageService;
 import com.sprint.mission.otboo.global.file.storage.impl.LocalFileStorageService;
 import com.sprint.mission.otboo.global.file.storage.impl.S3FileStorageService;
@@ -15,7 +16,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class FileStorageConfigTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-      .withUserConfiguration(FileStorageConfig.class, FileValidator.class)
+      .withUserConfiguration(
+          FileStorageConfig.class, AwsClientConfig.class, FileValidator.class)
       .withPropertyValues(
           "otboo.file.public-base-url=http://localhost:8080/uploads",
           "otboo.file.max-size-bytes=5242880",
