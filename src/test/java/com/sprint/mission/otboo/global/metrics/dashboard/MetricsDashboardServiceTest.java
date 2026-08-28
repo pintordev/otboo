@@ -10,12 +10,13 @@ import com.sprint.mission.otboo.global.metrics.dashboard.config.MetricsDashboard
 import com.sprint.mission.otboo.global.metrics.dashboard.dto.MetricsTimeseriesDto;
 import com.sprint.mission.otboo.global.metrics.dashboard.exception.MetricsDashboardNotWhitelistedException;
 import com.sprint.mission.otboo.global.metrics.dashboard.filter.MetricsDashboardWhitelist;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +24,7 @@ import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricDataRequest;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricDataResponse;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDataResult;
+import software.amazon.awssdk.services.cloudwatch.model.MetricStat;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MetricsDashboardService")
@@ -59,7 +61,8 @@ class MetricsDashboardServiceTest {
     @DisplayName("화이트리스트에 있으면 GetMetricData 결과를 시계열 DTO로 변환한다")
     void 화이트리스트에_있으면_결과를_DTO로_변환한다() {
       // given
-      given(whitelist.matches("batch.weather-fetch.job.completed")).willReturn(true);
+      String metric = "batch.weather-fetch.job.completed";
+      given(whitelist.matches(metric)).willReturn(true);
       given(properties.namespace()).willReturn("otboo");
 
       Instant timestamp = Instant.parse("2026-08-28T00:00:00Z");
@@ -75,13 +78,23 @@ class MetricsDashboardServiceTest {
           .willReturn(response);
 
       // when
-      MetricsTimeseriesDto actual =
-          metricsDashboardService.getTimeseries("batch.weather-fetch.job.completed", MetricsRange.ONE_HOUR);
+      MetricsTimeseriesDto actual = metricsDashboardService.getTimeseries(metric, MetricsRange.ONE_HOUR);
 
       // then
       assertThat(actual.values()).hasSize(1);
       assertThat(actual.values().get(0).timestamp()).isEqualTo(timestamp);
       assertThat(actual.values().get(0).value()).isEqualTo(3.0);
+
+      ArgumentCaptor<GetMetricDataRequest> requestCaptor =
+          ArgumentCaptor.forClass(GetMetricDataRequest.class);
+      then(cloudWatchClient).should().getMetricData(requestCaptor.capture());
+      GetMetricDataRequest request = requestCaptor.getValue();
+      MetricStat metricStat = request.metricDataQueries().get(0).metricStat();
+      assertThat(metricStat.metric().namespace()).isEqualTo("otboo");
+      assertThat(metricStat.metric().metricName()).isEqualTo(metric);
+      assertThat(metricStat.period()).isEqualTo((int) MetricsRange.ONE_HOUR.period().toSeconds());
+      assertThat(Duration.between(request.startTime(), request.endTime()))
+          .isEqualTo(MetricsRange.ONE_HOUR.lookback());
     }
   }
 }
