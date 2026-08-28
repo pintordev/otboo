@@ -4,6 +4,7 @@ import com.sprint.mission.otboo.global.file.properties.FileProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -21,5 +22,10 @@ public class AwsClientConfig {
   @Bean
   public CloudWatchLogsClient cloudWatchLogsClient(FileProperties fileProperties) {
     return CloudWatchLogsClient.builder().region(Region.of(fileProperties.s3().region())).build();
+  }
+
+  @Bean
+  public CloudWatchClient cloudWatchClient(FileProperties fileProperties) {
+    return CloudWatchClient.builder().region(Region.of(fileProperties.s3().region())).build();
   }
 }
