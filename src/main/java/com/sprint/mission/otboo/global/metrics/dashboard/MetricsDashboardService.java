@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
@@ -20,6 +21,7 @@ import software.amazon.awssdk.services.cloudwatch.model.MetricDataQuery;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDataResult;
 import software.amazon.awssdk.services.cloudwatch.model.MetricStat;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MetricsDashboardService {
@@ -40,6 +42,7 @@ public class MetricsDashboardService {
     try {
       response = cloudWatchClient.getMetricData(buildRequest(metric, range));
     } catch (SdkException e) {
+      log.error("CloudWatch 메트릭 조회 실패: metric={}", metric, e);
       throw MetricsDashboardQueryFailedException.wrap(e);
     }
 

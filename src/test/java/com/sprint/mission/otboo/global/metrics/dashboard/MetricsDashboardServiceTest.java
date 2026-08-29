@@ -2,6 +2,7 @@ package com.sprint.mission.otboo.global.metrics.dashboard;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -21,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.CloudWatchException;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricDataRequest;
@@ -116,10 +118,16 @@ class MetricsDashboardServiceTest {
           .build();
       given(cloudWatchClient.getMetricData(any(GetMetricDataRequest.class))).willThrow(cause);
 
-      // when & then
-      assertThatThrownBy(() -> metricsDashboardService.getTimeseries(metric, MetricsRange.ONE_HOUR))
-          .isInstanceOf(MetricsDashboardQueryFailedException.class)
-          .hasCause(cause);
+      // when
+      MetricsDashboardQueryFailedException exception = catchThrowableOfType(
+          MetricsDashboardQueryFailedException.class,
+          () -> metricsDashboardService.getTimeseries(metric, MetricsRange.ONE_HOUR));
+
+      // then
+      assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
+      assertThat(exception.getMessage()).isEqualTo("메트릭 조회에 실패했습니다.");
+      assertThat(exception.getDetails()).isEmpty();
+      assertThat(exception.getCause()).isEqualTo(cause);
     }
   }
 }
