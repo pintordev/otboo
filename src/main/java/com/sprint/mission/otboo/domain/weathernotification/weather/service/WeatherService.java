@@ -81,7 +81,7 @@ public class WeatherService {
               // 그 스레드에서 동기 DB 조회를 돌리면 다른 타임아웃 처리까지 지연시킬 수 있다.
               // 전용 executor로 넘겨서 실행한다.
               .exceptionallyAsync(ex -> {
-                log.warn("날씨 재조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
+                log.error("날씨 재조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
                 return weatherRepository
                     .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
               }, weatherRefreshExecutor);
@@ -90,7 +90,7 @@ public class WeatherService {
               .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
               .orTimeout(5, TimeUnit.SECONDS)
               .exceptionally(ex -> {
-                log.warn("위치명 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
+                log.error("위치명 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
                 return List.of();
               });
 
