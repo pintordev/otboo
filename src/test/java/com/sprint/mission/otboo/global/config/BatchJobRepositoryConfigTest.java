@@ -6,6 +6,7 @@ import com.sprint.mission.otboo.domain.weathernotification.notification.kafka.No
 import com.sprint.mission.otboo.external.kma.KmaForecastFetcher;
 import com.sprint.mission.otboo.global.testcontainers.IntegrationTestSupport;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.test.JobOperatorTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,24 +75,32 @@ class BatchJobRepositoryConfigTest extends IntegrationTestSupport {
       List<Throwable> failures = new CopyOnWriteArrayList<>();
       List<JobExecution> executions = new CopyOnWriteArrayList<>();
 
-      // when - 서로 다른 JobParameters로 CONCURRENT_JOB_COUNT개 Job을 동시에 시작한다
-      List<Future<Object>> futures = IntStream.range(0, CONCURRENT_JOB_COUNT)
-          .<Future<Object>>mapToObj(i -> executor.submit(() -> {
-            ready.countDown();
-            try {
-              start.await();
-              executions.add(jobOperatorTestUtils.startJob(
-                  jobOperatorTestUtils.getUniqueJobParameters()));
-            } catch (Throwable e) {
-              failures.add(e);
-            }
-            return null;
-          }))
-          .toList();
-      ready.await();
-      start.countDown();
-      for (Future<Object> future : futures) {
-        future.get(30, TimeUnit.SECONDS);
+      try {
+        // when - 서로 다른 JobParameters(UUID 포함)로 CONCURRENT_JOB_COUNT개 Job을 동시에 시작한다.
+        // getUniqueJobParameters()는 SecureRandom.nextLong() 하나뿐이라 동시 호출 간 고유성을
+        // 보장하지 않는다 - UUID를 직접 넣어 JobInstance 충돌 가능성을 없앤다
+        List<Future<Object>> futures = IntStream.range(0, CONCURRENT_JOB_COUNT)
+            .<Future<Object>>mapToObj(i -> executor.submit(() -> {
+              ready.countDown();
+              try {
+                start.await();
+                JobParametersBuilder jobParameters = new JobParametersBuilder()
+                    .addString("uuid", UUID.randomUUID().toString());
+                executions.add(jobOperatorTestUtils.startJob(jobParameters.toJobParameters()));
+              } catch (Throwable e) {
+                failures.add(e);
+              }
+              return null;
+            }))
+            .toList();
+        ready.await();
+        start.countDown();
+        for (Future<Object> future : futures) {
+          future.get(30, TimeUnit.SECONDS);
+        }
+      } finally {
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.SECONDS);
       }
 
       // then - jobOperator.start() 자체가 SERIALIZABLE 충돌(CannotAcquireLockException)로
