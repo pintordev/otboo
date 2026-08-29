@@ -8,6 +8,7 @@ import com.sprint.mission.otboo.global.metrics.dashboard.exception.MetricsDashbo
 import com.sprint.mission.otboo.global.metrics.dashboard.filter.MetricsDashboardWhitelist;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import software.amazon.awssdk.services.cloudwatch.model.Metric;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDataQuery;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDataResult;
 import software.amazon.awssdk.services.cloudwatch.model.MetricStat;
+import software.amazon.awssdk.services.cloudwatch.model.ScanBy;
 
 @Slf4j
 @Service
@@ -77,6 +79,7 @@ public class MetricsDashboardService {
         .startTime(start)
         .endTime(end)
         .metricDataQueries(query)
+        .scanBy(ScanBy.TIMESTAMP_ASCENDING)
         .build();
   }
 
@@ -87,6 +90,7 @@ public class MetricsDashboardService {
     for (int i = 0; i < timestamps.size(); i++) {
       points.add(new MetricsDataPointDto(timestamps.get(i), values.get(i)));
     }
+    points.sort(Comparator.comparing(MetricsDataPointDto::timestamp));
     return points;
   }
 }
