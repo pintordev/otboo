@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
 
 @Configuration
 public class BatchJobRepositoryConfig {
@@ -18,6 +19,7 @@ public class BatchJobRepositoryConfig {
     JdbcJobRepositoryFactoryBean factory = new JdbcJobRepositoryFactoryBean();
     factory.setDataSource(dataSource);
     factory.setTransactionManager(transactionManager);
+    factory.setIsolationLevelForCreateEnum(Isolation.READ_COMMITTED);
     factory.afterPropertiesSet();
     return factory.getObject();
   }
