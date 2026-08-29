@@ -600,5 +600,58 @@ class WeatherServiceTest {
       // 빈 값으로 대체되지 않고 그대로 매퍼에 전달돼야 한다
       assertThat(result).containsExactly(expectedDto);
     }
+
+    @Test
+    @DisplayName("위치명_조회만_실패해도_이미_성공한_날씨_슬롯은_유지된다")
+    void 위치명_조회만_실패해도_이미_성공한_날씨_슬롯은_유지된다() {
+      // given
+      double latitude = 37.5674783;
+      double longitude = 126.9884121;
+      WeatherGrid weatherGrid = WeatherGrid.create(60, 127);
+      given(locationResolver.resolveWeatherGrid(new KmaGridPoint(60, 127)))
+          .willReturn(weatherGrid);
+
+      Instant freshForecastedAt = Instant.parse("2026-07-27T08:00:00Z");
+      Weather cachedSlot = ENTITY_FIXTURE_MONKEY.giveMeBuilder(Weather.class)
+          .set("weatherGrid", weatherGrid)
+          .set("forecastedAt", freshForecastedAt)
+          .set("forecastAt", Instant.parse("2026-07-27T09:00:00Z"))
+          .set("skyStatus", SkyStatus.CLEAR)
+          .set("precipitationType", PrecipitationType.NONE)
+          .set("precipitationAmount", 0.0)
+          .set("precipitationProbability", 10.0)
+          .set("humidityCurrent", 65.0)
+          .set("humidityCompared", 0.0)
+          .set("temperatureCurrent", 28.0)
+          .set("temperatureCompared", 0.0)
+          .set("temperatureMin", 25.0)
+          .set("temperatureMax", 31.0)
+          .set("windSpeed", 2.0)
+          .set("windAsWord", WindStrength.WEAK)
+          .set("baselineTemperatureCurrent", null)
+          .set("baselinePrecipitationType", null)
+          .set("baselinePrecipitationProbability", null)
+          .set("baselinePrecipitationAmount", null)
+          .sample();
+      given(weatherCacheProvider.findCachedSlots(weatherGrid)).willReturn(List.of(cachedSlot));
+
+      // 위치명 조회(Kakao)는 실패한다
+      given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
+          .willReturn(CompletableFuture.failedFuture(new RuntimeException("카카오 호출 실패")));
+
+      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
+          .set("skyStatus", SkyStatus.CLEAR)
+          .sample();
+      given(weatherMapper.toDto(cachedSlot, weatherGrid, latitude, longitude, List.of(), true))
+          .willReturn(expectedDto);
+
+      // when
+      List<WeatherDto> result = weatherService.getWeatherAsync(latitude, longitude).join();
+
+      // then - 위치명 조회만 실패했으므로 빈 위치명으로 폴백하되, 이미 성공한 날씨 슬롯(캐시)은
+      // DB 재조회 없이 그대로 매퍼에 전달돼야 한다
+      assertThat(result).containsExactly(expectedDto);
+      verifyNoInteractions(weatherRepository, weatherRefresher);
+    }
   }
 }
