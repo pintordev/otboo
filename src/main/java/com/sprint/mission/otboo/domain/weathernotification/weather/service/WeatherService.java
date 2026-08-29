@@ -68,35 +68,37 @@ public class WeatherService {
 
     return supplyOnExecutor(() -> locationResolver.resolveWeatherGrid(grid), weatherRefreshExecutor)
         .thenCompose(weatherGrid -> {
+          // 날씨/위치 조회를 독립적으로 실패 처리한다 - 한쪽이 실패했다고 이미 성공한
+          // 다른 쪽 결과까지 버리면 안 된다(예: 기상청 재조회만 실패해도 이미 잘 조회된
+          // 위치명까지 빈 값으로 날아가던 문제).
           CompletableFuture<List<Weather>> weatherFuture = CompletableFuture
               .supplyAsync(() -> weatherCacheProvider.findCachedSlots(weatherGrid),
                   weatherRefreshExecutor)
               .thenCompose(cachedSlots -> isStale(cachedSlots, today, latestBaseTime)
                   ? fetchFreshAsync(weatherGrid, grid, latestBaseTime, from, today)
-                  : CompletableFuture.completedFuture(cachedSlots));
-
-          CompletableFuture<List<String>> locationFuture = locationResolver
-              .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
-              .orTimeout(5, TimeUnit.SECONDS);
-
-          return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
-                  representativesFrom(slots, today).stream()
-                      .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
-                          locationNames, toForecastDate(w).equals(today)))
-                      .toList())
+                  : CompletableFuture.completedFuture(cachedSlots))
               // orTimeout의 타임아웃 완료는 JDK 공유 delay scheduler 스레드에서 실행될 수 있어,
               // 그 스레드에서 동기 DB 조회를 돌리면 다른 타임아웃 처리까지 지연시킬 수 있다.
               // 전용 executor로 넘겨서 실행한다.
               .exceptionallyAsync(ex -> {
-                log.warn("날씨/위치 조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
-                List<Weather> fallbackSlots = weatherRepository
+                log.warn("날씨 재조회 타임아웃 또는 실패, DB 값으로 폴백", ex);
+                return weatherRepository
                     .findAllByWeatherGridAndForecastAtGreaterThanEqual(weatherGrid, from);
-                List<String> fallbackNames = List.of();
-                return representativesFrom(fallbackSlots, today).stream()
-                    .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
-                        fallbackNames, toForecastDate(w).equals(today)))
-                    .toList();
               }, weatherRefreshExecutor);
+
+          CompletableFuture<List<String>> locationFuture = locationResolver
+              .resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor)
+              .orTimeout(5, TimeUnit.SECONDS)
+              .exceptionally(ex -> {
+                log.warn("위치명 조회 타임아웃 또는 실패, 빈 지역명으로 폴백", ex);
+                return List.of();
+              });
+
+          return weatherFuture.thenCombine(locationFuture, (slots, locationNames) ->
+              representativesFrom(slots, today).stream()
+                  .map(w -> weatherMapper.toDto(w, weatherGrid, latitude, longitude,
+                      locationNames, toForecastDate(w).equals(today)))
+                  .toList());
         });
   }
 
