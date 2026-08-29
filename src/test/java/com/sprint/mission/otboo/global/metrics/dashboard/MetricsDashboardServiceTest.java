@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.sprint.mission.otboo.global.metrics.dashboard.config.MetricsDashboardProperties;
+import com.sprint.mission.otboo.global.metrics.dashboard.dto.MetricsDataPointDto;
 import com.sprint.mission.otboo.global.metrics.dashboard.dto.MetricsTimeseriesDto;
 import com.sprint.mission.otboo.global.metrics.dashboard.exception.MetricsDashboardNotWhitelistedException;
 import com.sprint.mission.otboo.global.metrics.dashboard.exception.MetricsDashboardQueryFailedException;
@@ -99,6 +100,38 @@ class MetricsDashboardServiceTest {
       assertThat(metricStat.period()).isEqualTo((int) MetricsRange.ONE_HOUR.period().toSeconds());
       assertThat(Duration.between(request.startTime(), request.endTime()))
           .isEqualTo(MetricsRange.ONE_HOUR.lookback());
+    }
+
+    @Test
+    @DisplayName("CloudWatch가 최신순으로 응답해도 timestamp 오름차순으로 정렬해서 반환한다")
+    void CloudWatch가_최신순으로_응답해도_timestamp_오름차순으로_정렬해서_반환한다() {
+      // given
+      String metric = "batch.weather-fetch.job.completed";
+      given(whitelist.matches(metric)).willReturn(true);
+      given(properties.namespace()).willReturn("otboo");
+
+      Instant older = Instant.parse("2026-08-28T00:00:00Z");
+      Instant newer = Instant.parse("2026-08-28T01:00:00Z");
+      // CloudWatch GetMetricData 기본 응답 순서(ScanBy 미지정 시 TimestampDescending)를
+      // 재현 - 최신 타임스탬프가 배열 앞에 온다
+      MetricDataResult result = MetricDataResult.builder()
+          .id("metric")
+          .timestamps(newer, older)
+          .values(2.0, 1.0)
+          .build();
+      GetMetricDataResponse response = GetMetricDataResponse.builder()
+          .metricDataResults(result)
+          .build();
+      given(cloudWatchClient.getMetricData(any(GetMetricDataRequest.class)))
+          .willReturn(response);
+
+      // when
+      MetricsTimeseriesDto actual = metricsDashboardService.getTimeseries(metric, MetricsRange.ONE_HOUR);
+
+      // then
+      assertThat(actual.values())
+          .extracting(MetricsDataPointDto::timestamp)
+          .containsExactly(older, newer);
     }
   }
 
