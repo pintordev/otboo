@@ -639,9 +639,12 @@ class WeatherServiceTest {
       given(locationResolver.resolveLocationNamesAsync(latitude, longitude, kakaoLocationExecutor))
           .willReturn(CompletableFuture.failedFuture(new RuntimeException("카카오 호출 실패")));
 
-      WeatherDto expectedDto = FIXTURE_MONKEY.giveMeBuilder(WeatherDto.class)
-          .set("skyStatus", SkyStatus.CLEAR)
-          .sample();
+      WeatherDto expectedDto = new WeatherDto(
+          cachedSlot.getId(), cachedSlot.getForecastedAt(), cachedSlot.getForecastAt(),
+          new LocationDto(latitude, longitude, weatherGrid.getX(), weatherGrid.getY(), List.of()),
+          SkyStatus.CLEAR, new PrecipitationDto(PrecipitationType.NONE, 0.0, 10.0),
+          new HumidityDto(65.0, 0.0), new TemperatureDto(28.0, 0.0, 25.0, 31.0),
+          new WindSpeedDto(2.0, WindStrength.WEAK));
       given(weatherMapper.toDto(cachedSlot, weatherGrid, latitude, longitude, List.of(), true))
           .willReturn(expectedDto);
 
