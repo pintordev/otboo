@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.infrastructure.item.Chunk;
@@ -28,7 +27,6 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @StepScope
-@RequiredArgsConstructor
 @Component
 public class FeedReindexWriter implements ItemWriter<Feed> {
 
@@ -40,11 +38,24 @@ public class FeedReindexWriter implements ItemWriter<Feed> {
   private final EntityManager entityManager;
   private final FeedReindexMetrics feedReindexMetrics;
 
-  @Value("#{stepExecution.stepName}")
   private final String stepName;
-
-  @Value("#{jobParameters['targetIndex']}")
   private final String targetIndex;
+
+  public FeedReindexWriter(
+      ElasticsearchClient elasticsearchClient,
+      FeedSearchRepository feedSearchRepository,
+      EntityManager entityManager,
+      FeedReindexMetrics feedReindexMetrics,
+      @Value("#{stepExecution.stepName}") String stepName,
+      @Value("#{jobParameters['targetIndex']}") String targetIndex
+  ) {
+    this.elasticsearchClient = elasticsearchClient;
+    this.feedSearchRepository = feedSearchRepository;
+    this.entityManager = entityManager;
+    this.feedReindexMetrics = feedReindexMetrics;
+    this.stepName = stepName;
+    this.targetIndex = targetIndex;
+  }
 
   // Reader가 읽은 뒤 Writer가 쓰기 전에 사용자가 수정하면 오래된 문서가 최신을 덮을 수 있다.
   // FeedDocument에 updatedAt 기반 외부 버전(EXTERNAL_GTE)을 실어 ES가 거부하게 했고,
